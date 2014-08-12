@@ -19,6 +19,6 @@ type Binding = (String, HsType)
 bindings :: [Binding]
 bindings =
   [ ("return", read "a -> m a")
-  , ("unsafe", read "a -> b")
+  --, ("unsafe", read "a -> b")
   , ("(>>=)", read "m a -> (a -> m b) -> m b")
   ]

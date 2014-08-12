@@ -7,13 +7,18 @@ import Type
 import Unify
 -- import qualified Data.Map as M
 import qualified Data.PQueue.Prio.Max as Q
-import Control.Arrow ( second )
+import qualified Data.Map as M
+import Control.Arrow ( first, second )
 import Data.Maybe ( maybeToList )
 
 import Control.DeepSeq
 import Data.DeriveTH
 import Debug.Hood.Observe
 import Debug.Trace
+
+import Text.PrettyPrint
+
+import Data.StableMemo
 
 
 
@@ -44,16 +49,50 @@ fillExprHole _ _ t = t
 type VarBinding = (TVarId, HsType)
 type FuncBinding = (String, HsType, [HsType]) -- name, result, params
 
+type TGoal = (VarBinding, [[VarBinding]])
+           -- goal,   list of scopes containing appliciable bindings
+
+newGoal :: VarBinding -> [VarBinding] -> [[VarBinding]] -> TGoal
+newGoal g b bs = (g,b:bs)
+
+goalApplySubst :: Substs -> TGoal -> TGoal
+goalApplySubst = memo2 f
+  where
+    f :: Substs -> TGoal -> TGoal
+    f ss ((v,t),binds) = ((v, applySubsts ss t), map (map $ second $ applySubsts ss) binds)
+
+
 data State = State
-  { goals :: [VarBinding]
-  , provided :: [VarBinding]
+  { goals :: [TGoal]
   , functions :: [FuncBinding]
   , expression :: Expression
   , nextVarId :: TVarId
   , maxTVarId :: TVarId
   , depth :: Float
   }
-  deriving Show
+
+instance Show State where
+  show (State goals functions expression nextVarId maxTVarId depth)
+    = show
+    $ text "State" <+> (
+          (text   "goals      ="
+           <+> brackets (vcat $ punctuate (text ", ") $ map tgoal goals)
+          )
+      $$  (text $ "expression = " ++ show expression)
+      $$  (parens $    (text $ "nextVarId="++show nextVarId)
+                   <+> (text $ "maxTVarId="++show maxTVarId)
+                   <+> (text $ "depth="++show depth))
+    )
+    where
+      tgoal :: TGoal -> Doc
+      tgoal (vt,binds) =    tVarType vt
+                         <> text " given "
+                         <> brackets (
+                              hcat $ punctuate (text ", ")
+                                               (map tVarType $ concat binds)
+                            )
+      tVarType :: (TVarId, HsType) -> Doc
+      tVarType (i, t) = text $ showVar i ++ " :: " ++ show t
 
 instance Observable State where
   observer state parent = observeOpaque (show state) state parent
@@ -63,8 +102,7 @@ type RatedStates = Q.MaxPQueue Float State
 findExpression :: HsType -> [(String, HsType)] -> [Expression]
 findExpression t funcs =
   findExpression' $ Q.singleton 100000.0 $ State
-        [(0, t)]
-        []
+        [((0, t), [])]
         (map splitFunctionType funcs)
         (ExpHole 0)
         1
@@ -78,7 +116,7 @@ findExpression' states =
     else
       let ((_,s), restStates) = Q.deleteFindMax states
       in if null (goals s)
-        then (expression s):findExpression' restStates
+        then traceShow s $ (expression s):findExpression' restStates
         else
           let resultStates = stateStep s
           in findExpression' $ foldr (uncurry Q.insert) restStates
@@ -90,15 +128,14 @@ rateState s = 0.0 - fromIntegral (length $ goals s) - depth s
 stateStep :: State -> [State]
 stateStep s = traceShow s $ if depth s > 13.0 then [] else
   let
-    ((var, goalType):gr) = goals s -- [] should not be possible
+    (((var, goalType),binds):gr) = goals s -- [] should not be possible
   in case goalType of
       (TypeArrow t1 t2) ->
         let v1 = nextVarId s
             v2 = v1+1
             newNext = v2+1
         in (:[]) $ State
-          ((v2, t2):gr)
-          ((v1, t1):provided s)
+          (newGoal (v2, t2) [(v1, t1)] binds:gr)
           (functions s)
           (fillExprHole var (ExpLambda v1 (ExpHole v2)) $ expression s)
           newNext
@@ -107,12 +144,11 @@ stateStep s = traceShow s $ if depth s > 13.0 then [] else
       t ->
         let
           byProvided = do
-            (provId, provT) <- provided s
+            (provId, provT) <- concat $ binds
             substs <- maybeToList $ unify goalType provT
             let bindingApply = map (second $ applySubsts substs)
             return $ State
-              (bindingApply gr)
-              (bindingApply $ provided s)
+              (map (goalApplySubst substs) gr)
               (functions s)
               (fillExprHole var (ExpVar provId) $ expression s)
               (nextVarId s)
@@ -121,7 +157,7 @@ stateStep s = traceShow s $ if depth s > 13.0 then [] else
           byFunction = do
             (funcId, funcR, funcParams) <- functions s
             let incF = incVarIds (+(1+maxTVarId s))
-            substs <- maybeToList $ unify goalType $ incF funcR
+            substs <- maybeToList $ unify (traceShowId goalType) $ traceShowId (incF funcR)
             let
               vBase = nextVarId s
               lit = ExpLit funcId
@@ -131,10 +167,11 @@ stateStep s = traceShow s $ if depth s > 13.0 then [] else
                 n -> foldl ExpApply lit (map ExpHole [vBase..vBase+n-1])
               substsApply = applySubsts substs
               bindingApply = map (second substsApply)
-              newGoals = zip [vBase..] $ map (substsApply.incF) funcParams
-            trace ("substs="++show substs) $ return $ State
-              (newGoals ++ bindingApply gr)
-              (bindingApply $ provided s)
+              newGoals = map (\g -> (g,map bindingApply binds))
+                       $ zip [vBase..]
+                       $ map (substsApply.incF) funcParams
+            trace ("substs="++show (map (first showVar) $ M.toList substs)) $ return $ State
+              (newGoals ++ map (goalApplySubst substs) gr)
               (functions s)
               (fillExprHole var expr $ expression s)
               (vBase + paramN)

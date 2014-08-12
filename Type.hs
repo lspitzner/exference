@@ -28,7 +28,7 @@ data HsType = TypeVar TVarId
             | TypeForall TVarId HsType
 
 showVar :: TVarId -> String
-showVar i = if i<26 then [chr (ord 'a' + i)] else "t"++show i
+showVar i = if i<26 then [chr (ord 'a' + i)] else "t"++show (i-26)
 
 instance Show HsType where
   showsPrec _ (TypeVar i) = showString $ showVar i

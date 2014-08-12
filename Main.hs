@@ -42,4 +42,4 @@ result2 = [(s1, s2, r) | (s1, t1) <- bindings, (s2, t2) <- bindings, r <- inflat
 
 result3 = applyN 1 typeId typeBind
 
-result4 = take 10 $ findExpression typeJoin bindings
+result4 = take 20 $ findExpression (read "a -> b -> b") bindings
