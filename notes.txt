@@ -1,0 +1,53 @@
+input: wanted type
+output: [expression with that type]
+
+turn any HsType into a list
+(HsType, [(Int, HsType)], HsExpression, [(Int, HsExpression)])
+ resultT, paramN paramT    expression     exprN expr
+
+
+example:
+
+join :: m (m a) -> m a
+
+goals     = [1 :: m a]
+provided  = [x :: m (m a)]
+functions = [bind :: m b -> (b -> m c) -> m c]
+partialExp = \x -> _1
+
+m a ~ n b -> (b -> n c) -> n c
+
+after 1==result of bind with c==a:
+
+goals     = [2 :: m b, 3 :: b -> m a]
+provided  = [x :: m (m a)]
+functions = ...
+partialExp = \x -> bind _2 _3
+
+after 2==x with b=m a 
+
+goals     = [3 :: m a -> m a]
+provided  = ...
+functions = ...
+partialExp = \x -> bind x _3
+
+functionGoalResolve
+
+goal      = [4 :: m a]
+provided  = [x :: m (m a), y :: m a]
+functions = ...
+partialExp = \x -> bind x (\y -> _4)
+
+after 4==y
+
+goal      = []
+provided  = ...
+functions = ...
+partialExp = \x -> bind x (\y -> y)
+
+after pointfree
+
+partialExp = (>>=id)
+
+
+
