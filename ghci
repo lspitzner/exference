@@ -1,0 +1,1 @@
+cabal exec -- ghci -Wall -fno-warn-missing-signatures -fno-warn-unused-imports Main
