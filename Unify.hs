@@ -73,6 +73,35 @@ unify ut1 ut2 = unify' $ UniState [(ut1, ut2)] M.empty
     uniStep (t1, TypeForall _ t2) = uniStep (t1, t2)
     uniStep x = Nothing
 
+-- treats the variables in the first parameter as constants, and returns
+-- the variable bindings for the second parameter that unify both types.
+unifyRight :: HsType -> HsType -> Maybe Substs
+unifyRight ut1 ut2 = unify' $ UniState [(ut1, ut2)] M.empty
+  where
+    unify' :: UniState -> Maybe Substs
+    unify' (UniState [] x) = Just x
+    unify' (UniState (x:xr) ss) = uniStep x >>= (
+      \r -> unify' $ case r of
+        Left subst -> let f = applySubst subst in UniState
+          [(f a, f b) | (a,b) <- xr]
+          ((uncurry M.insert) subst $ M.map f ss)
+        Right eqs -> UniState (eqs++xr) ss
+      )
+    uniStep :: (HsType, HsType) -> Maybe (Either Subst [TypeEq])
+    uniStep (TypeVar i1, TypeVar i2) | i1==i2 = Just (Right [])
+    uniStep (t1, TypeVar i2) = if occursIn i2 t1
+      then Nothing
+      else Just (Left (i2, t1))
+    uniStep (TypeVar _, _) = Nothing
+    uniStep (TypeCons s1, TypeCons s2) | s1==s2 = Just (Right [])
+    uniStep (TypeArrow t1 t2, TypeArrow t3 t4) = Just (Right [(t1,t3),(t2,t4)])
+    uniStep (TypeApp t1 t2, TypeApp t3 t4) = Just (Right [(t1, t3), (t2, t4)])
+    -- TODO TypeForall unification
+    -- THIS IS WRONG; WE IGNORE FORALLS FOR THE MOMENT
+    uniStep (TypeForall _ t1, t2) = uniStep (t1, t2)
+    uniStep (t1, TypeForall _ t2) = uniStep (t1, t2)
+    uniStep x = Nothing
+
 unifyDist :: HsType -> HsType -> Maybe Substs
 unifyDist t1 t2 = unify t1 $ distinctify t1 t2
 
