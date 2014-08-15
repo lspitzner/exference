@@ -26,9 +26,13 @@ data HsType = TypeVar TVarId
             | TypeArrow HsType HsType
             | TypeApp   HsType HsType
             | TypeForall TVarId HsType
+  deriving (Ord, Eq)
 
 showVar :: TVarId -> String
 showVar i = if i<26 then [chr (ord 'a' + i)] else "t"++show (i-26)
+
+badReadVar :: String -> TVarId
+badReadVar [c] = ord c - ord 'a'
 
 instance Show HsType where
   showsPrec _ (TypeVar i) = showString $ showVar i
@@ -49,11 +53,15 @@ instance Read HsType where
 parseType :: String -> Maybe (HsType, String)
 parseType s = either (const Nothing) Just
             $ runParser (    (,)
-                         <$> parseAll
+                         <$> typeParser
                          <*> (many anyChar))
                         ()
                         ""
                         s
+  where
+
+typeParser :: Parser HsType
+typeParser = parseAll
   where
     parseAll :: Parser HsType
     parseAll = parseUn >>= parseBin
@@ -71,6 +79,7 @@ parseType s = either (const Nothing) Just
         <|>
         (spaces *> return left)
 
+
 arrowDepth :: HsType -> Int
 arrowDepth (TypeVar _) = 1
 arrowDepth (TypeCons _) = 1
@@ -84,6 +93,9 @@ freeVars (TypeCons _) = S.empty
 freeVars (TypeArrow t1 t2) = S.union (freeVars t1) (freeVars t2)
 freeVars (TypeApp t1 t2) = S.union (freeVars t1) (freeVars t2)
 freeVars (TypeForall i t) = S.delete i $ freeVars t
+
+containsVar :: TVarId -> HsType -> Bool
+containsVar i = S.member i . freeVars
 
 -- binds everything in Foralls, so there are no free variables anymore.
 forallify :: HsType -> HsType
