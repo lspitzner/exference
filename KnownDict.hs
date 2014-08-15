@@ -21,4 +21,6 @@ bindings =
   [ ("return", read "a -> m a")
   --, ("unsafe", read "a -> b")
   , ("(>>=)", read "m a -> (a -> m b) -> m b")
+  , ("map", read "(a->b) -> List a -> List b")
+  , ("show", read "a -> String")
   ]
