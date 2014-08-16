@@ -1,4 +1,4 @@
-{-# LANGUAGE TemplateHaskell #-}
+-- {-# LANGUAGE TemplateHaskell #-}
 module Infression where
 
 
@@ -33,7 +33,7 @@ data Expression = ExpVar TVarId
                 | ExpApply Expression Expression
                 | ExpHole TVarId
 
-$( derive makeNFData ''Expression )
+-- $( derive makeNFData ''Expression )
 
 instance Show Expression where
   showsPrec _ (ExpVar i) = showString $ showVar i
