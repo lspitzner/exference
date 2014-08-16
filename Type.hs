@@ -28,6 +28,9 @@ data HsType = TypeVar TVarId
             | TypeForall TVarId HsType
   deriving (Ord, Eq)
 
+type Subst  = (TVarId, HsType)
+type Substs = M.Map TVarId HsType
+
 showVar :: TVarId -> String
 showVar i = if i<26 then [chr (ord 'a' + i)] else "t"++show (i-26)
 
@@ -130,10 +133,26 @@ incVarIds _ t = t
 
 largestId :: HsType -> TVarId
 largestId (TypeVar i)       = i
-largestId (TypeCons _)      = 0
+largestId (TypeCons _)      = -1
 largestId (TypeArrow t1 t2) = largestId t1 `max` largestId t2
 largestId (TypeApp t1 t2)   = largestId t1 `max` largestId t2
 largestId (TypeForall _ t)  = largestId t
 
 distinctify :: HsType -> HsType -> HsType
 distinctify a b = let x = largestId a in incVarIds (+(x+1)) b
+
+applySubst :: Subst -> HsType -> HsType
+applySubst (i, t) v@(TypeVar j) = if i==j then t else v
+applySubst _ c@(TypeCons _) = c
+applySubst s (TypeArrow t1 t2) = TypeArrow (applySubst s t1) (applySubst s t2)
+applySubst s (TypeApp t1 t2) = TypeApp (applySubst s t1) (applySubst s t2)
+applySubst s@(i,_) f@(TypeForall j t) = if i==j then f else TypeForall j (applySubst s t)
+
+applySubsts :: Substs -> HsType -> HsType
+applySubsts s v@(TypeVar i) = case M.lookup i s of
+  Nothing -> v
+  Just t -> t
+applySubsts _ c@(TypeCons _) = c
+applySubsts s (TypeArrow t1 t2) = TypeArrow (applySubsts s t1) (applySubsts s t2)
+applySubsts s (TypeApp t1 t2) = TypeApp (applySubsts s t1) (applySubsts s t2)
+applySubsts s (TypeForall j t) = TypeForall j $ applySubsts (M.delete j s) t

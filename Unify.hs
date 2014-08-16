@@ -14,30 +14,12 @@ import Debug.Trace
 instance (Show k, Show v) => Observable (M.Map k v) where
   observer x parent = observeOpaque (show x) x parent
 
-type Subst  = (TVarId, HsType)
-type Substs = M.Map TVarId HsType
 type TypeEq = (HsType, HsType)
 
 largestSubstsId :: Substs -> TVarId
 largestSubstsId = M.foldl' (\a b -> a `max` largestId b) 0
 
 data UniState = UniState [TypeEq] Substs
-
-applySubst :: Subst -> HsType -> HsType
-applySubst (i, t) v@(TypeVar j) = if i==j then t else v
-applySubst _ c@(TypeCons _) = c
-applySubst s (TypeArrow t1 t2) = TypeArrow (applySubst s t1) (applySubst s t2)
-applySubst s (TypeApp t1 t2) = TypeApp (applySubst s t1) (applySubst s t2)
-applySubst s@(i,_) f@(TypeForall j t) = if i==j then f else TypeForall j (applySubst s t)
-
-applySubsts :: Substs -> HsType -> HsType
-applySubsts s v@(TypeVar i) = case M.lookup i s of
-  Nothing -> v
-  Just t -> t
-applySubsts _ c@(TypeCons _) = c
-applySubsts s (TypeArrow t1 t2) = TypeArrow (applySubsts s t1) (applySubsts s t2)
-applySubsts s (TypeApp t1 t2) = TypeApp (applySubsts s t1) (applySubsts s t2)
-applySubsts s (TypeForall j t) = TypeForall j $ applySubsts (M.delete j s) t
 
 occursIn :: TVarId -> HsType -> Bool
 occursIn i (TypeVar j) = i==j
