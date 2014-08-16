@@ -42,13 +42,13 @@ instance Show Expression where
     showParen (d>0) $ showString ("\\" ++ showVar i ++ " -> ") . showsPrec 1 e
   showsPrec d (ExpApply e1 e2) =
     showParen (d>1) $ showsPrec 2 e1 . showString " " . showsPrec 2 e2
-  showsPrec d (ExpHole i) = showString $ "_" ++ showVar i
+  showsPrec _ (ExpHole i) = showString $ "_" ++ showVar i
 
 fillExprHole :: TVarId -> Expression -> Expression -> Expression
-fillExprHole id t (ExpHole j) | id==j = t
-fillExprHole id t (ExpLambda i ty) = ExpLambda i $ fillExprHole id t ty
-fillExprHole id t (ExpApply e1 e2) = ExpApply (fillExprHole id t e1)
-                                              (fillExprHole id t e2)
+fillExprHole vid t (ExpHole j) | vid==j = t
+fillExprHole vid t (ExpLambda i ty) = ExpLambda i $ fillExprHole vid t ty
+fillExprHole vid t (ExpApply e1 e2) = ExpApply (fillExprHole vid t e1)
+                                              (fillExprHole vid t e2)
 fillExprHole _ _ t = t
 
 type VarBinding = (TVarId, HsType)
@@ -92,17 +92,17 @@ data State = State
   }
 
 instance Show State where
-  show (State goals functions context expression nextVarId maxTVarId depth _)
+  show (State sgoals _sfuncs scontext sexpression snextVarId smaxTVarId sdepth _prev)
     = show
     $ text "State" <+> (
           (text   "goals      ="
-           <+> brackets (vcat $ punctuate (text ", ") $ map tgoal goals)
+           <+> brackets (vcat $ punctuate (text ", ") $ map tgoal sgoals)
           )
-      $$  (text $ "context    = " ++ show context)
-      $$  (text $ "expression = " ++ show expression)
-      $$  (parens $    (text $ "nextVarId="++show nextVarId)
-                   <+> (text $ "maxTVarId="++show maxTVarId)
-                   <+> (text $ "depth="++show depth))
+      $$  (text $ "context    = " ++ show scontext)
+      $$  (text $ "expression = " ++ show sexpression)
+      $$  (parens $    (text $ "nextVarId="++show snextVarId)
+                   <+> (text $ "maxTVarId="++show smaxTVarId)
+                   <+> (text $ "depth="++show sdepth))
     )
     where
       tgoal :: TGoal -> Doc
@@ -153,7 +153,7 @@ findExpression' n states =
           let resultStates = stateStep s
           in findExpression' (n+1)
                $ foldr (uncurry Q.insert) restStates
-               $ [(r, s) | s <- resultStates, let r = rateState s]
+               $ [(r, newS) | newS <- resultStates, let r = rateState newS]
 
 rateState :: State -> Float
 rateState s = 0.0 - fromIntegral (length $ goals s) - depth s
@@ -177,7 +177,7 @@ stateStep s = -- traceShow s $
           (maxTVarId s)
           (depth s + 0.5)
           (Just s)
-      t ->
+      _ ->
         let
           byProvided = do
             (provId, provT, provPs) <- concat $ binds

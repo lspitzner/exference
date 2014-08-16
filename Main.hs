@@ -37,7 +37,7 @@ printFindExpression name typeStr = do
 
 main = runO $ do
   --print $ result1
-  let (DynContext a b _) = testDynContext
+  let (DynContext _a b _) = testDynContext
   print $ b
   printFindExpression "showmap" "(Show B) => (A -> B) -> List A -> List String"
   printFindExpression "ffbind" "(A -> T -> B) -> (T -> A) -> (T -> B)"

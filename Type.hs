@@ -36,10 +36,11 @@ showVar i = if i<26 then [chr (ord 'a' + i)] else "t"++show (i-26)
 
 badReadVar :: String -> TVarId
 badReadVar [c] = ord c - ord 'a'
+badReadVar _ = undefined
 
 instance Show HsType where
   showsPrec _ (TypeVar i) = showString $ showVar i
-  showsPrec d (TypeCons s) = showString s
+  showsPrec _ (TypeCons s) = showString s
   showsPrec d (TypeArrow t1 t2) =
     showParen (d> -2) $ showsPrec (-1) t1 . showString " -> " . showsPrec (-1) t2
   showsPrec d (TypeApp t1 t2) =
@@ -113,7 +114,7 @@ reduceIds t = evalState (f t) (M.empty, 0)
     f c@(TypeCons _) = return c
     f (TypeArrow t1 t2) = TypeArrow <$> f t1 <*> f t2
     f (TypeApp t1 t2) = TypeApp <$> f t1 <*> f t2
-    f (TypeForall i t) = TypeForall <$> (g i) <*> f t
+    f (TypeForall i t1) = TypeForall <$> (g i) <*> f t1
     g :: TVarId -> State (M.Map TVarId TVarId, TVarId) TVarId
     g i = do
       (mapping, next) <- get

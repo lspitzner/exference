@@ -50,7 +50,7 @@ unify ut1 ut2 = unify' $ UniState [(ut1, ut2)] M.empty
     -- THIS IS WRONG; WE IGNORE FORALLS FOR THE MOMENT
     uniStep (TypeForall _ t1, t2) = uniStep (t1, t2)
     uniStep (t1, TypeForall _ t2) = uniStep (t1, t2)
-    uniStep x = Nothing
+    uniStep _ = Nothing
 
 -- treats the variables in the first parameter as constants, and returns
 -- the variable bindings for the second parameter that unify both types.
@@ -79,7 +79,7 @@ unifyRight ut1 ut2 = unify' $ UniState [(ut1, ut2)] M.empty
     -- THIS IS WRONG; WE IGNORE FORALLS FOR THE MOMENT
     uniStep (TypeForall _ t1, t2) = uniStep (t1, t2)
     uniStep (t1, TypeForall _ t2) = uniStep (t1, t2)
-    uniStep x = Nothing
+    uniStep _ = Nothing
 
 unifyDist :: HsType -> HsType -> Maybe Substs
 unifyDist t1 t2 = unify t1 $ distinctify t1 t2

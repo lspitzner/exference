@@ -84,7 +84,7 @@ constraintApplySubsts :: Substs -> Constraint -> Constraint
 constraintApplySubsts ss (Constraint c ps) = Constraint c $ map (applySubsts ss) ps
 
 inflateConstraints :: StaticContext -> S.Set Constraint -> S.Set Constraint
-inflateConstraints context = inflate (S.fromList . f)
+inflateConstraints _context = inflate (S.fromList . f)
   where
     f :: Constraint -> [Constraint]
     f (Constraint (HsTypeClass _ ids constrs) ps) =
@@ -121,9 +121,9 @@ constraintMatches dcontext constrVar providedType =
 inflate :: (Ord a, Show a) => (a -> S.Set a) -> S.Set a -> S.Set a
 inflate f = fold . S.fromList . iterateWhileNonempty (foldMap f)
   where
-    iterateWhileNonempty f x = if S.null x
+    iterateWhileNonempty g x = if S.null x
       then []
-      else x : iterateWhileNonempty f (f x)
+      else x : iterateWhileNonempty g (g x)
 
 isProvable :: DynContext -> [Constraint] -> Bool
 isProvable _ [] = True
