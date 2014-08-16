@@ -52,7 +52,10 @@ constrainedTypeParser c = spaces *>
     HsConstrainedType [] <$> typeParser
   )
   where
-    parseConstraints = char '(' *> spaces *> sepBy parseConstraint (spaces >> string "," >> spaces)
+    parseConstraints =
+      char '(' *> spaces *>
+      sepBy parseConstraint (spaces >> string "," >> spaces)
+      <* spaces <* char ')'
     parseConstraint :: Parser Constraint
     parseConstraint = Constraint
       <$> ( do 
@@ -62,3 +65,9 @@ constrainedTypeParser c = spaces *>
           Just x -> return x
         )
       <*> many1 typeParser
+
+constrainedTypeApplySubsts :: Substs -> HsConstrainedType -> HsConstrainedType
+constrainedTypeApplySubsts ss (HsConstrainedType cs t) =
+  HsConstrainedType
+    (map (constraintApplySubsts ss) cs)
+    (applySubsts ss t)
