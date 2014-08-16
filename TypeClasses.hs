@@ -61,41 +61,13 @@ instance Observable Constraint where
 instance Observable DynContext where
   observer x parent = observeOpaque (show x) x parent
 
-emptyContext :: StaticContext
-emptyContext = StaticContext {
-  context_tclasses = [],
-  context_instances = []
-}
-
 constraintMapTypes :: (HsType -> HsType) -> Constraint -> Constraint
 constraintMapTypes f (Constraint a ts) = Constraint a (map f ts)
-
-defaultContext :: StaticContext
-defaultContext = StaticContext {
-  context_tclasses = [c_show, c_functor, c_applicative, c_monad],
-  context_instances = [list_show, list_functor, list_applicative, list_monad]
-  --context_redirects = M.Map TVarId TVarId
-}
-
-c_show           = HsTypeClass "Show" [badReadVar "a"] []
-c_functor        = HsTypeClass "Functor" [badReadVar "f"] []
-c_applicative    = HsTypeClass "Applicative" [badReadVar "f"]
-                                             [Constraint c_functor [read "f"]]
-c_monad          = HsTypeClass "Monad" [badReadVar "m"]
-                                       [Constraint c_applicative [read "m"]]
-c_monadState     = HsTypeClass
-                     "MonadState"
-                     [badReadVar "s", badReadVar "m"]
-                     [Constraint c_monad [read "m"]]
-list_show        = HsInstance [Constraint c_show [read "a"]] c_show [read "List a"]
-list_functor     = HsInstance [] c_functor     [read "List a"]
-list_applicative = HsInstance [] c_applicative [read "List a"]
-list_monad       = HsInstance [] c_monad       [read "List a"]
 
 
 mkDynContext :: StaticContext -> [Constraint] -> DynContext
 mkDynContext staticContext constrs = DynContext {
-  dynContext_context = defaultContext,
+  dynContext_context = staticContext,
   dynContext_constraints = csSet,
   dynContext_varConstraints = helper constrs
 }
@@ -107,16 +79,6 @@ mkDynContext staticContext constrs = DynContext {
           ids = fold $ freeVars <$> (constraint_params =<< cs)
       in M.fromSet (flip filterConstraintsByVarId
                     $ inflateConstraints staticContext csSet) ids
-
-testDynContext = mkDynContext defaultContext
-    [ Constraint c_show [read "v"]
-    , Constraint c_show [read "w"]
-    , Constraint c_functor [read "x"]
-    , Constraint c_monad   [read "y"]
-    , Constraint c_monadState [read "s", read "z"]
-    , Constraint c_show [read "MyFoo"]
-    , Constraint c_show [read "B"]
-    ]
 
 constraintApplySubsts :: Substs -> Constraint -> Constraint
 constraintApplySubsts ss (Constraint c ps) = Constraint c $ map (applySubsts ss) ps

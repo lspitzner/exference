@@ -28,3 +28,41 @@ bindings =
   -- , ("map", readConstrainedType defaultContext "(a->b) -> List a -> List b")
   , ("show", readConstrainedType defaultContext "(Show a) => a -> String")
   ]
+
+emptyContext :: StaticContext
+emptyContext = StaticContext {
+  context_tclasses = [],
+  context_instances = []
+}
+
+defaultContext :: StaticContext
+defaultContext = StaticContext {
+  context_tclasses = [c_show, c_functor, c_applicative, c_monad],
+  context_instances = [list_show, list_functor, list_applicative, list_monad]
+  --context_redirects = M.Map TVarId TVarId
+}
+
+c_show           = HsTypeClass "Show" [badReadVar "a"] []
+c_functor        = HsTypeClass "Functor" [badReadVar "f"] []
+c_applicative    = HsTypeClass "Applicative" [badReadVar "f"]
+                                             [Constraint c_functor [read "f"]]
+c_monad          = HsTypeClass "Monad" [badReadVar "m"]
+                                       [Constraint c_applicative [read "m"]]
+c_monadState     = HsTypeClass
+                     "MonadState"
+                     [badReadVar "s", badReadVar "m"]
+                     [Constraint c_monad [read "m"]]
+list_show        = HsInstance [Constraint c_show [read "a"]] c_show [read "List a"]
+list_functor     = HsInstance [] c_functor     [read "List a"]
+list_applicative = HsInstance [] c_applicative [read "List a"]
+list_monad       = HsInstance [] c_monad       [read "List a"]
+
+testDynContext = mkDynContext defaultContext
+    [ Constraint c_show [read "v"]
+    , Constraint c_show [read "w"]
+    , Constraint c_functor [read "x"]
+    , Constraint c_monad   [read "y"]
+    , Constraint c_monadState [read "s", read "z"]
+    , Constraint c_show [read "MyFoo"]
+    , Constraint c_show [read "B"]
+    ]
