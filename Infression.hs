@@ -158,9 +158,6 @@ findExpression' n states =
 rateState :: State -> Float
 rateState s = 0.0 - fromIntegral (length $ goals s) - depth s
 
-traceM :: Monad m => String -> m ()
-traceM s = trace s $ return ()
-
 stateStep :: State -> [State]
 stateStep s = -- traceShow s $
   if depth s > 50.0 then [] else

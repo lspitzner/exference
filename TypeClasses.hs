@@ -151,27 +151,6 @@ constraintMatches dcontext constrVar providedType =
   can v1 be replaced by v2 without breaking the constraints?
   i.e. are the constraints for v1 a subset of the
     constraints for v2?
-
-
-f :: Show a => a -> String
-g :: Show b => [b]
-is (f g) valid?
-
-f :: Functor f => f x -> f ()
-g :: Monad m => m Bool
-is (f g) valid? YES (m ambiguous)
-
-f :: Applicative f => f x -> f ()
-g :: MonadState String m => m ()
-is (f g) valid? YES (but m is ambiguous)
-
-f :: Monad (WriterT w m) => WriterT w m () -> WriterT w m ()
-g :: MonadState Bool m => WriterT w m ()
-is (f g) valid?   NO
-
-f :: Functor f, Show x => f x -> f String
-g :: Monad m, Show y => m [y]
-is (f g) valid?
 -}
 
 -- uses f to find new elements. adds these new elements, and recursively

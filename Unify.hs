@@ -11,9 +11,6 @@ import Debug.Trace
 
 
 
-instance (Show k, Show v) => Observable (M.Map k v) where
-  observer x parent = observeOpaque (show x) x parent
-
 type TypeEq = (HsType, HsType)
 
 largestSubstsId :: Substs -> TVarId

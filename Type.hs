@@ -61,7 +61,6 @@ parseType s = either (const Nothing) Just
                         ()
                         ""
                         s
-  where
 
 typeParser :: Parser HsType
 typeParser = parseAll
