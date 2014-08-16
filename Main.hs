@@ -5,7 +5,6 @@ module Main where
 import Type
 import ConstrainedType
 import Unify
-import Match
 import KnownDict
 import Debug.Hood.Observe
 import Control.Arrow ( second )
@@ -38,7 +37,6 @@ printFindExpression name typeStr = do
 
 main = runO $ do
   --print $ result1
-  --print $ result3
   let (DynContext a b _) = testDynContext
   print $ b
   printFindExpression "showmap" "(Show B) => (A -> B) -> List A -> List String"
@@ -69,8 +67,6 @@ pointful s = (!!0) <$> lines <$> readProcess "pointful" [s] ""
 
 result1 = unify (TypeArrow (TypeVar 0) (TypeCons "Blub"))
                (TypeArrow (TypeCons "Foo") (TypeVar 1))
-
-result3 = applyN 1 typeId typeBind
 
 result4 = take 10 $ findExpression
   -- (readConstrainedType defaultContext "(Show B) => B -> String")
