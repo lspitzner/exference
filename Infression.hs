@@ -7,6 +7,7 @@ import Type
 import Unify
 import TypeClasses
 import ConstrainedType
+import ConstraintSolver
 
 import qualified Data.PQueue.Prio.Max as Q
 import qualified Data.Map as M
