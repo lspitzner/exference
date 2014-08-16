@@ -4,17 +4,17 @@ module Infression where
 
 
 import Type
+import Expression
 import Unify
 import TypeClasses
 import ConstrainedType
 import ConstraintSolver
+import InfressionState
 
 import qualified Data.PQueue.Prio.Max as Q
 import qualified Data.Map as M
 import qualified Data.Set as S
 
-import Text.PrettyPrint
-import Data.StableMemo
 import Control.DeepSeq
 
 import Data.Maybe ( maybeToList )
@@ -26,105 +26,6 @@ import Debug.Hood.Observe
 import Debug.Trace
 
 
-
-data Expression = ExpVar TVarId
-                | ExpLit String
-                | ExpLambda TVarId Expression
-                | ExpApply Expression Expression
-                | ExpHole TVarId
-
--- $( derive makeNFData ''Expression )
-
-instance Show Expression where
-  showsPrec _ (ExpVar i) = showString $ showVar i
-  showsPrec _ (ExpLit s) = showString s
-  showsPrec d (ExpLambda i e) =
-    showParen (d>0) $ showString ("\\" ++ showVar i ++ " -> ") . showsPrec 1 e
-  showsPrec d (ExpApply e1 e2) =
-    showParen (d>1) $ showsPrec 2 e1 . showString " " . showsPrec 2 e2
-  showsPrec _ (ExpHole i) = showString $ "_" ++ showVar i
-
-fillExprHole :: TVarId -> Expression -> Expression -> Expression
-fillExprHole vid t (ExpHole j) | vid==j = t
-fillExprHole vid t (ExpLambda i ty) = ExpLambda i $ fillExprHole vid t ty
-fillExprHole vid t (ExpApply e1 e2) = ExpApply (fillExprHole vid t e1)
-                                              (fillExprHole vid t e2)
-fillExprHole _ _ t = t
-
-type VarBinding = (TVarId, HsType)
-type FuncBinding = (String, HsType, [HsType], [Constraint]) -- name, result, params
-type VarPBinding = (TVarId, HsType, [HsType]) -- var, result, constraints, params
-
-varBindingApplySubsts :: Substs -> VarBinding -> VarBinding
-varBindingApplySubsts = second . applySubsts
-
-varPBindingApplySubsts :: Substs -> VarPBinding -> VarPBinding
-varPBindingApplySubsts ss (a,b,c) =
-  ( a
-  , applySubsts ss b
-  , map (applySubsts ss) c
-  )
-
-type TGoal = (VarBinding, [[VarPBinding]])
-           -- goal,   list of scopes containing appliciable bindings
-
-newGoal :: VarBinding -> [VarBinding] -> [[VarPBinding]] -> TGoal
-newGoal g b bs = (g,map splitBinding b:bs)
-
-goalApplySubst :: Substs -> TGoal -> TGoal
-goalApplySubst = memo2 f
-  where
-    f :: Substs -> TGoal -> TGoal
-    f ss ((v,t),binds) = ( (v, applySubsts ss t)
-                         , map (map $ varPBindingApplySubsts ss) binds
-                         )
-
-
-data State = State
-  { goals      :: [TGoal]
-  , functions  :: [FuncBinding]
-  , context    :: DynContext
-  , expression :: Expression
-  , nextVarId  :: TVarId
-  , maxTVarId  :: TVarId
-  , depth      :: Float
-  , previousState :: Maybe State
-  }
-
-instance Show State where
-  show (State sgoals _sfuncs scontext sexpression snextVarId smaxTVarId sdepth _prev)
-    = show
-    $ text "State" <+> (
-          (text   "goals      ="
-           <+> brackets (vcat $ punctuate (text ", ") $ map tgoal sgoals)
-          )
-      $$  (text $ "context    = " ++ show scontext)
-      $$  (text $ "expression = " ++ show sexpression)
-      $$  (parens $    (text $ "nextVarId="++show snextVarId)
-                   <+> (text $ "maxTVarId="++show smaxTVarId)
-                   <+> (text $ "depth="++show sdepth))
-    )
-    where
-      tgoal :: TGoal -> Doc
-      tgoal (vt,binds) =    tVarType vt
-                         <> text " given "
-                         <> brackets (
-                              hcat $ punctuate (text ", ")
-                                               (map tVarPType $ concat binds)
-                            )
-      tVarType :: (TVarId, HsType) -> Doc
-      tVarType (i, t) = text $ showVar i ++ " :: " ++ show t
-      tVarPType :: (TVarId, HsType, [HsType]) -> Doc
-      tVarPType (i, t, ps) = tVarType (i, foldr TypeArrow t ps)
-
-showStateDevelopment :: State -> String
-showStateDevelopment s = maybe "" f (previousState s) ++ show s
-  where
-    f :: State -> String
-    f x = showStateDevelopment x ++ "\n"
-
-instance Observable State where
-  observer state = observeOpaque (show state) state
 
 type RatedStates = Q.MaxPQueue Float State
 
@@ -237,9 +138,3 @@ splitFunctionType (a,HsConstrainedType constrs b) = let (c,d) = f b in (a,c,d,co
     f (TypeArrow t1 t2) = let (c',d') = f t2 in (c', t1:d')
     f t = (t, [])
 
-splitBinding :: (a, HsType) -> (a, HsType, [HsType])
-splitBinding (a,b) = let (c,d) = f b in (a,c,d)
-  where
-    f :: HsType -> (HsType, [HsType])
-    f (TypeArrow t1 t2) = let (c',d') = f t2 in (c', t1:d')
-    f t = (t, [])
