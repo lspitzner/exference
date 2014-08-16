@@ -10,6 +10,7 @@ import ConstrainedType
 
 import qualified Data.PQueue.Prio.Max as Q
 import qualified Data.Map as M
+import qualified Data.Set as S
 import Control.Arrow ( first, second )
 import Data.Maybe ( maybeToList )
 
@@ -19,7 +20,7 @@ import Debug.Hood.Observe
 import Debug.Trace
 
 import Control.Arrow ( (***) )
-
+import Control.Monad ( guard )
 import Text.PrettyPrint
 
 import Data.StableMemo
@@ -51,20 +52,24 @@ fillExprHole id t (ExpApply e1 e2) = ExpApply (fillExprHole id t e1)
 fillExprHole _ _ t = t
 
 type VarBinding = (TVarId, HsType)
-type FuncBinding = (String, HsType, [HsType]) -- name, result, params
-type VarPBinding = (TVarId, HsType, [HsType]) -- var,  result, params
+type FuncBinding = (String, HsType, [HsType], [Constraint]) -- name, result, params
+type VarPBinding = (TVarId, HsType, [HsType]) -- var, result, constraints, params
 
 varBindingApplySubsts :: Substs -> VarBinding -> VarBinding
 varBindingApplySubsts = second . applySubsts
 
 varPBindingApplySubsts :: Substs -> VarPBinding -> VarPBinding
-varPBindingApplySubsts ss (a,b,c) = (a, applySubsts ss b, map (applySubsts ss) c)
+varPBindingApplySubsts ss (a,b,c) =
+  ( a
+  , applySubsts ss b
+  , map (applySubsts ss) c
+  )
 
 type TGoal = (VarBinding, [[VarPBinding]])
            -- goal,   list of scopes containing appliciable bindings
 
 newGoal :: VarBinding -> [VarBinding] -> [[VarPBinding]] -> TGoal
-newGoal g b bs = (g,map splitFunctionType b:bs)
+newGoal g b bs = (g,map splitBinding b:bs)
 
 goalApplySubst :: Substs -> TGoal -> TGoal
 goalApplySubst = memo2 f
@@ -83,10 +88,11 @@ data State = State
   , nextVarId  :: TVarId
   , maxTVarId  :: TVarId
   , depth      :: Float
+  , previousState :: Maybe State
   }
 
 instance Show State where
-  show (State goals functions context expression nextVarId maxTVarId depth)
+  show (State goals functions context expression nextVarId maxTVarId depth _)
     = show
     $ text "State" <+> (
           (text   "goals      ="
@@ -111,12 +117,18 @@ instance Show State where
       tVarPType :: (TVarId, HsType, [HsType]) -> Doc
       tVarPType (i, t, ps) = tVarType (i, foldr TypeArrow t ps)
 
+showStateDevelopment :: State -> String
+showStateDevelopment s = maybe "" f (previousState s) ++ show s
+  where
+    f :: State -> String
+    f x = showStateDevelopment x ++ "\n"
+
 instance Observable State where
   observer state parent = observeOpaque (show state) state parent
 
 type RatedStates = Q.MaxPQueue Float State
 
-findExpression :: HsConstrainedType -> [(String, HsType)] -> StaticContext -> [(Int, Expression)]
+findExpression :: HsConstrainedType -> [(String, HsConstrainedType)] -> StaticContext -> [(Int, Float, Expression)]
 findExpression (HsConstrainedType cs t) funcs staticContext =
   findExpression' 0 $ Q.singleton 100000.0 $ State
         [((0, t), [])]
@@ -126,16 +138,17 @@ findExpression (HsConstrainedType cs t) funcs staticContext =
         1
         (largestId t)
         0.0
+        Nothing
 
-findExpression' :: Int -> RatedStates -> [(Int,Expression)]
+findExpression' :: Int -> RatedStates -> [(Int,Float,Expression)]
 findExpression' n states =
   if Q.null states
     then []
     else
       let ((_,s), restStates) = Q.deleteFindMax states
       in if null (goals s)
-        then traceShow s
-          $ (n, expression s) : (findExpression' (n+1) restStates)
+        then -- trace (showStateDevelopment s) $
+          (n, depth s, expression s) : (findExpression' (n+1) restStates)
         else
           let resultStates = stateStep s
           in findExpression' (n+1)
@@ -145,8 +158,12 @@ findExpression' n states =
 rateState :: State -> Float
 rateState s = 0.0 - fromIntegral (length $ goals s) - depth s
 
+traceM :: Monad m => String -> m ()
+traceM s = trace s $ return ()
+
 stateStep :: State -> [State]
-stateStep s = traceShow s $ if depth s > 20.0 then [] else
+stateStep s = -- traceShow s $
+  if depth s > 50.0 then [] else
   let
     (((var, goalType),binds):gr) = goals s -- [] should not be possible
   in case goalType of
@@ -161,19 +178,33 @@ stateStep s = traceShow s $ if depth s > 20.0 then [] else
           (fillExprHole var (ExpLambda v1 (ExpHole v2)) $ expression s)
           newNext
           (maxTVarId s)
-          (depth s + 0.1)
+          (depth s + 0.5)
+          (Just s)
       t ->
         let
           byProvided = do
             (provId, provT, provPs) <- concat $ binds
-            byGenericUnify (ExpVar provId) provT provPs 1.0
+            byGenericUnify
+              (ExpVar provId)
+              provT
+              (S.toList $ dynContext_constraints $ context s)
+              provPs
+              0.1
           byFunction = do
-            (funcId, funcR, funcParams) <- functions s
+            (funcId, funcR, funcParams, funcConstrs) <- functions s
             let incF = incVarIds (+(1+maxTVarId s))
-            byGenericUnify (ExpLit funcId) (incF funcR) (map incF funcParams) 3.0
-          byGenericUnify :: Expression -> HsType -> [HsType] -> Float -> [State]
-          byGenericUnify coreExp provided dependencies depthMod = do
+            byGenericUnify
+              (ExpLit funcId)
+              (incF funcR)
+              (map (constraintMapTypes incF) funcConstrs)
+              (map incF funcParams)
+              3.0
+          byGenericUnify :: Expression -> HsType -> [Constraint] -> [HsType] -> Float -> [State]
+          byGenericUnify coreExp provided provConstrs dependencies depthMod = do
             substs <- maybeToList $ unify goalType provided
+            let contxt = context s
+                constrs = map (constraintApplySubsts substs) $ S.toList $ dynContext_constraints $ context s
+            guard $ isProvable contxt constrs                     
             let
               vBase = nextVarId s
               paramN = length dependencies
@@ -183,20 +214,30 @@ stateStep s = traceShow s $ if depth s > 20.0 then [] else
               newGoals = zip 
                            (zip [vBase..] $ map (applySubsts substs) dependencies)
                            (repeat $ map (map $ varPBindingApplySubsts substs) binds)
+              newConstraints = map (constraintApplySubsts substs) provConstrs
+              newContext = mkDynContext
+                (dynContext_context $ context s)
+                (newConstraints ++ (S.toList $ dynContext_constraints $ context s))
             return $ State
               (newGoals ++ map (goalApplySubst substs) gr)
               (functions s)
-              (context s)
+              newContext
               (fillExprHole var expr $ expression s)
               (vBase + paramN)
               (max (maxTVarId s) (largestSubstsId substs))
               (depth s + depthMod)
-        in trace ("provided="++show (length byProvided)
-                ++", functionApp="++show (length byFunction))
-          $ byProvided ++ byFunction
+              (Just s)
+        in byProvided ++ byFunction
 
-splitFunctionType :: (a, HsType) -> (a, HsType, [HsType])
-splitFunctionType (a,b) = let (c,d) = f b in (a,c,d)
+splitFunctionType :: (a, HsConstrainedType) -> (a, HsType, [HsType], [Constraint])
+splitFunctionType (a,HsConstrainedType constrs b) = let (c,d) = f b in (a,c,d,constrs)
+  where
+    f :: HsType -> (HsType, [HsType])
+    f (TypeArrow t1 t2) = let (c',d') = f t2 in (c', t1:d')
+    f t = (t, [])
+
+splitBinding :: (a, HsType) -> (a, HsType, [HsType])
+splitBinding (a,b) = let (c,d) = f b in (a,c,d)
   where
     f :: HsType -> (HsType, [HsType])
     f (TypeArrow t1 t2) = let (c',d') = f t2 in (c', t1:d')

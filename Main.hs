@@ -21,18 +21,30 @@ import Control.Arrow ( (***) )
 import Control.Monad ( when )
 
 
+
+printFindExpression :: String -> String -> IO ()
+printFindExpression name typeStr = do
+  let f (n,d,s) = do
+          let str = show s
+          pf <- pointfree $ str
+          putStrLn $ name ++ " = " ++ pf ++ "    FROM    " ++ name ++ " = " ++ str ++ " (depth " ++ show d ++ ", " ++ show n ++ " steps)"
+  let
+    r = take 10 $ findExpression
+      (readConstrainedType defaultContext typeStr)
+      bindings
+      defaultContext
+  when (null r) $ putStrLn $ "no results for "++name++"!"
+  mapM_ f $ r
+
 main = runO $ do
   --print $ result1
-  --print $ result2
   --print $ result3
-  let f (n,s) = do
-          let str = show s
-          pf <- (!!1) <$> lines <$> pointfree str
-          putStrLn $ pf ++ "    FROM    " ++ str ++ " (" ++ show n ++ " steps)"
-  mapM_ f $!! result4
-  when (null result4) $ putStrLn "no results!"
   let (DynContext a b _) = testDynContext
   print $ b
+  printFindExpression "showmap" "(Show B) => (A -> B) -> List A -> List String"
+  printFindExpression "ffbind" "(A -> T -> B) -> (T -> A) -> (T -> B)"
+  printFindExpression "join" "(Monad M) => M (M A) -> M A"
+  printFindExpression "fjoin" "(T -> (T -> A)) -> T -> A"
   --print $ inflateConstraints a b
   {-
   print $ constraintMatches testDynContext (badReadVar "y") (read "x")
@@ -50,17 +62,20 @@ main = runO $ do
   -}
 
 pointfree :: String -> IO String
-pointfree s = readProcess "pointfree" ["--verbose", s] ""
+pointfree s = (!!1) <$> lines <$> readProcess "pointfree" ["--verbose", s] ""
+
+pointful :: String -> IO String
+pointful s = (!!0) <$> lines <$> readProcess "pointful" [s] ""
 
 result1 = unify (TypeArrow (TypeVar 0) (TypeCons "Blub"))
                (TypeArrow (TypeCons "Foo") (TypeVar 1))
 
-result2 = [(s1, s2, r) | (s1, t1) <- bindings, (s2, t2) <- bindings, r <- inflateUnify t1 t2]
-
 result3 = applyN 1 typeId typeBind
 
 result4 = take 10 $ findExpression
-  (readConstrainedType defaultContext "(A -> B) -> List A -> List B")
+  -- (readConstrainedType defaultContext "(Show B) => B -> String")
+  (readConstrainedType defaultContext "(Show B) => (A -> B) -> List A -> List String")
+  -- (readConstrainedType defaultContext "(A -> B) -> List A -> List B")
   bindings
   defaultContext
   
