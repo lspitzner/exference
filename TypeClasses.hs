@@ -13,6 +13,7 @@ import Debug.Trace
 import Data.Maybe ( fromMaybe )
 import Control.Applicative ( (<$>) )
 import Control.Monad ( mplus, guard )
+import Data.Functor.Identity ( Identity(runIdentity) )
 
 import Debug.Hood.Observe
 
@@ -48,12 +49,16 @@ data DynContext = DynContext
   , dynContext_constraints :: S.Set Constraint
   , dynContext_varConstraints :: M.Map TVarId (S.Set Constraint)
   }
-  deriving Show
 
 instance Show Constraint where
   show (Constraint c ps) = intercalate " " $ tclass_name c : map show ps
 
+instance Show DynContext where
+  show (DynContext _ cs _) = "(DynContext _ " ++ show cs ++ " _)"
 instance Observable Constraint where
+  observer x parent = observeOpaque (show x) x parent
+
+instance Observable DynContext where
   observer x parent = observeOpaque (show x) x parent
 
 emptyContext :: StaticContext
@@ -61,6 +66,9 @@ emptyContext = StaticContext {
   context_tclasses = [],
   context_instances = []
 }
+
+constraintMapTypes :: (HsType -> HsType) -> Constraint -> Constraint
+constraintMapTypes f (Constraint a ts) = Constraint a (map f ts)
 
 defaultContext :: StaticContext
 defaultContext = StaticContext {
@@ -107,6 +115,7 @@ testDynContext = mkDynContext defaultContext
     , Constraint c_monad   [read "y"]
     , Constraint c_monadState [read "s", read "z"]
     , Constraint c_show [read "MyFoo"]
+    , Constraint c_show [read "B"]
     ]
 
 constraintApplySubsts :: Substs -> Constraint -> Constraint
@@ -180,10 +189,12 @@ isProvable _ [] = True
 isProvable dcontext (c1:constraints) =
   let
     provableFromContext :: Constraint -> Bool
-    provableFromContext c =
-      S.member c $ inflateConstraints
-                              (dynContext_context dcontext)
-                              (dynContext_constraints dcontext)
+    provableFromContext c = and
+      [ S.member c $ inflateConstraints
+                                (dynContext_context dcontext)
+                                (dynContext_constraints dcontext)
+      , isProvable dcontext constraints
+      ]
     provableFromInstance :: Constraint -> Bool
     provableFromInstance (Constraint c ps) = or $ do
       HsInstance instConstrs inst instParams <- context_instances 
@@ -195,6 +206,10 @@ isProvable dcontext (c1:constraints) =
         Nothing     -> []
         Just substs ->
           return $ isProvable dcontext
-                 $ [constraintApplySubsts substs instC | instC <- instConstrs]
+                 $ [constraintApplySubsts substs instC | instC <- instConstrs] ++ constraints
   in
     provableFromContext c1 || provableFromInstance c1
+
+dynContextAddConstraints :: [Constraint] -> DynContext -> DynContext
+dynContextAddConstraints cs (DynContext a b _) =
+  mkDynContext a (cs ++ S.toList b)
