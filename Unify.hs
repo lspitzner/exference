@@ -23,7 +23,7 @@ occursIn i (TypeVar j) = i==j
 occursIn _ (TypeCons _) = False
 occursIn i (TypeArrow t1 t2) = occursIn i t1 || occursIn i t2
 occursIn i (TypeApp t1 t2)   = occursIn i t1 || occursIn i t2
-occursIn i (TypeForall j t)  = if i==j then False else occursIn i t
+occursIn i (TypeForall j t)  = i/=j && occursIn i t
 
 unify :: HsType -> HsType -> Maybe Substs
 unify ut1 ut2 = unify' $ UniState [(ut1, ut2)] M.empty
@@ -34,7 +34,7 @@ unify ut1 ut2 = unify' $ UniState [(ut1, ut2)] M.empty
       \r -> unify' $ case r of
         Left subst -> let f = applySubst subst in UniState
           [(f a, f b) | (a,b) <- xr]
-          ((uncurry M.insert) subst $ M.map f ss)
+          (uncurry M.insert subst $ M.map f ss)
         Right eqs -> UniState (eqs++xr) ss
       )
     uniStep :: (HsType, HsType) -> Maybe (Either Subst [TypeEq])
@@ -63,7 +63,7 @@ unifyRight ut1 ut2 = unify' $ UniState [(ut1, ut2)] M.empty
       \r -> unify' $ case r of
         Left subst -> let f = applySubst subst in UniState
           [(f a, f b) | (a,b) <- xr]
-          ((uncurry M.insert) subst $ M.map f ss)
+          (uncurry M.insert subst $ M.map f ss)
         Right eqs -> UniState (eqs++xr) ss
       )
     uniStep :: (HsType, HsType) -> Maybe (Either Subst [TypeEq])
@@ -99,6 +99,6 @@ inflateUnify t1 t2 =
           types = l++[t]++r
       in foldr1 TypeArrow types
     f :: HsType -> [HsType] -> [HsType]
-    f ft1 ft2s = catMaybes $ [g ft1 (distinctify ft1 ft2) | ft2 <- ft2s]
+    f ft1 ft2s = catMaybes [g ft1 (distinctify ft1 ft2) | ft2 <- ft2s]
     g :: HsType -> HsType -> Maybe HsType
     g gt1 gt2 = fmap (\subst -> reduceIds $ applySubsts subst gt1) (unify gt1 gt2)

@@ -8,7 +8,6 @@ import qualified Data.Set as S
 import qualified Data.Map.Strict as M
 import Data.Foldable ( fold, foldMap )
 import Data.List ( intercalate )
-import Debug.Hood.Observe
 import Debug.Trace
 import Data.Maybe ( fromMaybe )
 import Control.Applicative ( (<$>) )
@@ -51,15 +50,15 @@ data DynContext = DynContext
   }
 
 instance Show Constraint where
-  show (Constraint c ps) = intercalate " " $ tclass_name c : map show ps
+  show (Constraint c ps) = unwords $ tclass_name c : map show ps
 
 instance Show DynContext where
   show (DynContext _ cs _) = "(DynContext _ " ++ show cs ++ " _)"
 instance Observable Constraint where
-  observer x parent = observeOpaque (show x) x parent
+  observer x = observeOpaque (show x) x
 
 instance Observable DynContext where
-  observer x parent = observeOpaque (show x) x parent
+  observer x = observeOpaque (show x) x
 
 constraintMapTypes :: (HsType -> HsType) -> Constraint -> Constraint
 constraintMapTypes f (Constraint a ts) = Constraint a (map f ts)
@@ -88,10 +87,10 @@ inflateConstraints _context = inflate (S.fromList . f)
   where
     f :: Constraint -> [Constraint]
     f (Constraint (HsTypeClass _ ids constrs) ps) =
-      (map (constraintApplySubsts $ M.fromList $ zip ids ps) constrs)
+      map (constraintApplySubsts $ M.fromList $ zip ids ps) constrs
 
 filterConstraintsByVarId :: TVarId -> S.Set Constraint -> S.Set Constraint
-filterConstraintsByVarId i = S.filter (\c -> or $ map (containsVar i) $ constraint_params c)
+filterConstraintsByVarId i = S.filter $ any (containsVar i) . constraint_params
 
 constraintMatches :: DynContext -> TVarId -> HsType -> Bool
 constraintMatches dcontext constrVar providedType =

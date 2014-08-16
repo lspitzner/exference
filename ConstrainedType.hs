@@ -24,11 +24,11 @@ data HsConstrainedType = HsConstrainedType [Constraint] HsType
 instance Show HsConstrainedType where
   showsPrec _ (HsConstrainedType cs t) =
     if null cs
-      then showsPrec 0 t
+      then shows t
       else 
           showParen True (\x -> foldr (++) x $ intersperse ", " $ map show cs)
         . showString " => "
-        . showsPrec 0 t
+        . shows t
 
 readConstrainedType :: StaticContext -> String -> HsConstrainedType
 readConstrainedType c s = case parseConstrainedType c s of
@@ -39,7 +39,7 @@ parseConstrainedType :: StaticContext -> String -> Maybe (HsConstrainedType, Str
 parseConstrainedType c s = either (const Nothing) Just
                          $ runParser (    (,)
                                       <$> constrainedTypeParser c
-                                      <*> (many anyChar))
+                                      <*> many anyChar)
                                      ()
                                      ""
                                      s

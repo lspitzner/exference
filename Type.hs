@@ -2,7 +2,7 @@ module Type where
 
 
 
-import Data.Char ( ord, chr )
+import Data.Char ( ord, chr, isLower, isUpper )
 import qualified Data.Set as S
 import qualified Data.Map as M
 import Control.Monad.Trans.State.Strict
@@ -11,8 +11,7 @@ import Control.Applicative ( (<$>), (<*>), (*>), (<*) )
 import Text.ParserCombinators.Parsec hiding (State)
 import Text.ParserCombinators.Parsec.Char
 
-import Data.Char ( isLower, isUpper )
-import Data.Maybe ( maybeToList )
+import Data.Maybe ( maybeToList, fromMaybe )
 
 import Debug.Hood.Observe
 import Debug.Trace
@@ -46,10 +45,10 @@ instance Show HsType where
   showsPrec d (TypeApp t1 t2) =
     showParen (d> -1) $ showsPrec 0 t1 . showString " " . showsPrec 0 t2
   showsPrec d (TypeForall i t) = showParen (d>0) $
-    (showString $ "forall " ++ showVar i ++ " . ") . showsPrec 0 t
+    showString ("forall " ++ showVar i ++ " . ") . showsPrec 0 t
 
 instance Observable HsType where
-  observer x parent = observeOpaque (show x) x parent
+  observer x = observeOpaque (show x) x
 
 instance Read HsType where
   readsPrec _ = maybeToList . parseType
@@ -58,7 +57,7 @@ parseType :: String -> Maybe (HsType, String)
 parseType s = either (const Nothing) Just
             $ runParser (    (,)
                          <$> typeParser
-                         <*> (many anyChar))
+                         <*> many anyChar)
                         ()
                         ""
                         s
@@ -112,15 +111,15 @@ reduceIds t = evalState (f t) (M.empty, 0)
     f :: HsType -> State (M.Map TVarId TVarId, TVarId) HsType
     f (TypeVar i) = TypeVar <$> g i
     f c@(TypeCons _) = return c
-    f (TypeArrow t1 t2) = TypeArrow <$> f t1 <*> f t2
-    f (TypeApp t1 t2) = TypeApp <$> f t1 <*> f t2
-    f (TypeForall i t1) = TypeForall <$> (g i) <*> f t1
+    f (TypeArrow t1 t2) = TypeArrow  <$> f t1 <*> f t2
+    f (TypeApp   t1 t2) = TypeApp    <$> f t1 <*> f t2
+    f (TypeForall i t1) = TypeForall <$> g i  <*> f t1
     g :: TVarId -> State (M.Map TVarId TVarId, TVarId) TVarId
     g i = do
       (mapping, next) <- get
       case M.lookup i mapping of
         Nothing -> do
-          put $ (M.insert i next mapping, next+1)
+          put (M.insert i next mapping, next+1)
           return next
         Just x -> return x
 
@@ -149,9 +148,7 @@ applySubst s (TypeApp t1 t2) = TypeApp (applySubst s t1) (applySubst s t2)
 applySubst s@(i,_) f@(TypeForall j t) = if i==j then f else TypeForall j (applySubst s t)
 
 applySubsts :: Substs -> HsType -> HsType
-applySubsts s v@(TypeVar i) = case M.lookup i s of
-  Nothing -> v
-  Just t -> t
+applySubsts s v@(TypeVar i) = fromMaybe v $ M.lookup i s
 applySubsts _ c@(TypeCons _) = c
 applySubsts s (TypeArrow t1 t2) = TypeArrow (applySubsts s t1) (applySubsts s t2)
 applySubsts s (TypeApp t1 t2) = TypeApp (applySubsts s t1) (applySubsts s t2)

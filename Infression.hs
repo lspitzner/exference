@@ -11,19 +11,18 @@ import ConstrainedType
 import qualified Data.PQueue.Prio.Max as Q
 import qualified Data.Map as M
 import qualified Data.Set as S
-import Control.Arrow ( first, second )
-import Data.Maybe ( maybeToList )
 
+import Text.PrettyPrint
+import Data.StableMemo
 import Control.DeepSeq
-import Data.DeriveTH
+
+import Data.Maybe ( maybeToList )
+import Control.Arrow ( first, second, (***) )
+import Control.Monad ( guard )
+
+-- import Data.DeriveTH
 import Debug.Hood.Observe
 import Debug.Trace
-
-import Control.Arrow ( (***) )
-import Control.Monad ( guard )
-import Text.PrettyPrint
-
-import Data.StableMemo
 
 
 
@@ -124,7 +123,7 @@ showStateDevelopment s = maybe "" f (previousState s) ++ show s
     f x = showStateDevelopment x ++ "\n"
 
 instance Observable State where
-  observer state parent = observeOpaque (show state) state parent
+  observer state = observeOpaque (show state) state
 
 type RatedStates = Q.MaxPQueue Float State
 
@@ -148,12 +147,16 @@ findExpression' n states =
       let ((_,s), restStates) = Q.deleteFindMax states
       in if null (goals s)
         then -- trace (showStateDevelopment s) $
-          (n, depth s, expression s) : (findExpression' (n+1) restStates)
+          (n, depth s, expression s) : findExpression' (n+1) restStates
         else
           let resultStates = stateStep s
           in findExpression' (n+1)
-               $ foldr (uncurry Q.insert) restStates
-               $ [(r, newS) | newS <- resultStates, let r = rateState newS]
+               $ foldr
+                   (uncurry Q.insert)
+                   restStates
+                   [ (r, newS)
+                   | newS <- resultStates
+                   , let r = rateState newS]
 
 rateState :: State -> Float
 rateState s = 0.0 - fromIntegral (length $ goals s) - depth s
@@ -180,7 +183,7 @@ stateStep s = -- traceShow s $
       _ ->
         let
           byProvided = do
-            (provId, provT, provPs) <- concat $ binds
+            (provId, provT, provPs) <- concat binds
             byGenericUnify
               (ExpVar provId)
               provT

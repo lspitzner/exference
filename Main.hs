@@ -7,7 +7,6 @@ import ConstrainedType
 import Unify
 import KnownDict
 import Debug.Hood.Observe
-import Control.Arrow ( second )
 import Infression
 import TypeClasses
 
@@ -16,7 +15,7 @@ import Control.DeepSeq
 import System.Process
 
 import Control.Applicative ( (<$>), (<*>) )
-import Control.Arrow ( (***) )
+import Control.Arrow ( second, (***) )
 import Control.Monad ( when )
 
 
@@ -33,12 +32,12 @@ printFindExpression name typeStr = do
       bindings
       defaultContext
   when (null r) $ putStrLn $ "no results for "++name++"!"
-  mapM_ f $ r
+  mapM_ f r
 
 main = runO $ do
   --print $ result1
-  let (DynContext _a b _) = testDynContext
-  print $ b
+  -- let (DynContext _a b _) = testDynContext
+  -- print b
   printFindExpression "showmap" "(Show B) => (A -> B) -> List A -> List String"
   printFindExpression "ffbind" "(A -> T -> B) -> (T -> A) -> (T -> B)"
   printFindExpression "join" "(Monad M) => M (M A) -> M A"
@@ -50,8 +49,8 @@ main = runO $ do
   print $ constraintMatches testDynContext (badReadVar "w") (read "MyFoo")
   print $ constraintMatches testDynContext (badReadVar "w") (read "MyBar")
   print $ constraintMatches testDynContext (badReadVar "y") (read "MyFoo")
-  -}
   print $ isProvable testDynContext [Constraint c_applicative [read "y"]]
+  -}
   -- putStrLn $ show n ++ " total steps"
   {-
   let t :: HsType
