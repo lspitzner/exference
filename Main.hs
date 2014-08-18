@@ -28,7 +28,9 @@ printFindExpression name typeStr = do
   let f (e, InfressionStats n d) = do
           let str = show e
           pf <- pointfree $ str
-          putStrLn $ name ++ " = " ++ pf ++ "    FROM    " ++ name ++ " = " ++ str ++ " (depth " ++ show d ++ ", " ++ show n ++ " steps)"
+          putStrLn $ name ++ " = " ++ pf
+                     ++ "    FROM    " ++ name ++ " = " ++ str
+                     ++ " (depth " ++ show d ++ ", " ++ show n ++ " steps)"
   let
     r = take 10 $ findExpressions
       (readConstrainedType defaultContext typeStr)
@@ -45,6 +47,7 @@ main = runO $ do
   printFindExpression "ffbind" "(A -> T -> B) -> (T -> A) -> (T -> B)"
   printFindExpression "join" "(Monad M) => M (M A) -> M A"
   printFindExpression "fjoin" "(T -> (T -> A)) -> T -> A"
+  printFindExpression "zipThingy" "List A -> B -> List (Tuple A B)"
   --print $ inflateConstraints a b
   {-
   print $ constraintMatches testDynContext (badReadVar "y") (read "x")

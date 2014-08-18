@@ -36,6 +36,9 @@ isProvable dcontext (c1:constraints) =
         Nothing     -> []
         Just substs ->
           return $ isProvable dcontext
-                 $ [constraintApplySubsts substs instC | instC <- instConstrs] ++ constraints
+                 $    [constraintApplySubsts substs instC
+                      | instC <- instConstrs
+                      ]
+                   ++ constraints
   in
     provableFromContext c1 || provableFromInstance c1

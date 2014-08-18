@@ -64,7 +64,14 @@ data State = State
   }
 
 instance Show State where
-  show (State sgoals _sfuncs scontext sexpression snextVarId smaxTVarId sdepth _prev)
+  show (State sgoals
+              _sfuncs
+              scontext
+              sexpression
+              snextVarId
+              smaxTVarId
+              sdepth
+              _prev)
     = show
     $ text "State" <+> (
           (text   "goals      ="

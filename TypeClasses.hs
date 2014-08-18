@@ -3,7 +3,9 @@ module TypeClasses
   , HsInstance (..)
   , Constraint (..)
   , StaticContext (..)
-  , DynContext (dynContext_context, dynContext_constraints, dynContext_varConstraints)
+  , DynContext ( dynContext_context
+               , dynContext_constraints
+               , dynContext_varConstraints )
   , constraintApplySubsts
   , mkDynContext
   , inflateConstraints
@@ -91,7 +93,8 @@ mkDynContext staticContext constrs = DynContext {
                     $ inflateConstraints staticContext csSet) ids
 
 constraintApplySubsts :: Substs -> Constraint -> Constraint
-constraintApplySubsts ss (Constraint c ps) = Constraint c $ map (applySubsts ss) ps
+constraintApplySubsts ss (Constraint c ps) =
+  Constraint c $ map (applySubsts ss) ps
 
 inflateConstraints :: StaticContext -> S.Set Constraint -> S.Set Constraint
 inflateConstraints _context = inflate (S.fromList . f)
@@ -107,7 +110,8 @@ constraintMatches :: DynContext -> TVarId -> HsType -> Bool
 constraintMatches dcontext constrVar providedType =
   let contextConstraints  = dynContext_constraints dcontext
       relevantConstraints = fromMaybe S.empty
-                          $ M.lookup constrVar $ dynContext_varConstraints dcontext
+                          $ M.lookup constrVar
+                          $ dynContext_varConstraints dcontext
       wantedConstraints   = S.map
             (constraintApplySubsts $ M.singleton constrVar providedType)
             relevantConstraints

@@ -39,7 +39,9 @@ readConstrainedType c s = case parseConstrainedType c s of
   Just (x,[]) -> x
   _ -> error "readHsConstrainedType: no parse"
 
-parseConstrainedType :: StaticContext -> String -> Maybe (HsConstrainedType, String)
+parseConstrainedType :: StaticContext
+                     -> String
+                     -> Maybe (HsConstrainedType, String)
 parseConstrainedType c s = either (const Nothing) Just
                          $ runParser (    (,)
                                       <$> constrainedTypeParser c
