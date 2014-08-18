@@ -70,9 +70,9 @@ c_monadState     = HsTypeClass
                      [badReadVar "s", badReadVar "m"]
                      [Constraint c_monad [read "m"]]
 list_show        = HsInstance [Constraint c_show [read "a"]] c_show [read "List a"]
-list_functor     = HsInstance [] c_functor     [read "List a"]
-list_applicative = HsInstance [] c_applicative [read "List a"]
-list_monad       = HsInstance [] c_monad       [read "List a"]
+list_functor     = HsInstance [] c_functor     [read "List"]
+list_applicative = HsInstance [] c_applicative [read "List"]
+list_monad       = HsInstance [] c_monad       [read "List"]
 
 testDynContext = mkDynContext defaultContext
     [ Constraint c_show [read "v"]
