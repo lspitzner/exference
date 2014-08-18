@@ -6,6 +6,6 @@ where
 
 
 data InfressionStats = InfressionStats
-  { steps :: Int
-  , complexityRating :: Float
+  { infression_steps :: Int
+  , infression_complexityRating :: Float
   }
