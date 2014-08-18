@@ -32,18 +32,24 @@ type Binding = (String, HsConstrainedType)
 
 bindings :: [Binding]
 bindings =
-  [ ("fmap",  readConstrainedType defaultContext
-              "(Functor f) => (a -> b) -> f a -> f b")
-  , ("(*)",   readConstrainedType defaultContext
-              "(Applicative f) => f (a->b) -> f a -> f b")
-  , ("pure",  readConstrainedType defaultContext
-              "(Applicative f) => a -> f a")
-  , ("(>>=)", readConstrainedType defaultContext
-              "(Monad m) => m a -> (a -> m b) -> m b")
-  -- , ("map",  readConstrainedType defaultContext
-  --            "(a->b) -> List a -> List b")
-  , ("show",  readConstrainedType defaultContext
-              "(Show a) => a -> String")
+  [ ("fmap",   readConstrainedType defaultContext
+               "(Functor f) => (a -> b) -> f a -> f b")
+  , ("(*)",    readConstrainedType defaultContext
+               "(Applicative f) => f (a->b) -> f a -> f b")
+  , ("pure",   readConstrainedType defaultContext
+               "(Applicative f) => a -> f a")
+  , ("(>>=)",  readConstrainedType defaultContext
+               "(Monad m) => m a -> (a -> m b) -> m b")
+  -- , ("map",   readConstrainedType defaultContext
+  --             "(a->b) -> List a -> List b")
+  , ("show",   readConstrainedType defaultContext
+               "(Show a) => a -> String")
+  , ("(,)",    readConstrainedType defaultContext
+               "a -> b -> Tuple a b")
+  , ("zip",    readConstrainedType defaultContext
+               "List a -> List b -> List (Tuple a b)")
+  , ("repeat", readConstrainedType defaultContext
+               "a -> List a")
   ]
 
 emptyContext :: StaticContext
