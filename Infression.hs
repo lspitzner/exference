@@ -1,6 +1,8 @@
 -- {-# LANGUAGE TemplateHaskell #-}
 module Infression
-  ( findExpression
+  ( findExpressions
+  , findOneExpression
+  , InfressionStats (..)
   )
 where
 
@@ -13,6 +15,7 @@ import TypeClasses
 import ConstrainedType
 import ConstraintSolver
 import InfressionState
+import InfressionStats
 
 import qualified Data.PQueue.Prio.Max as Q
 import qualified Data.Map as M
@@ -20,7 +23,7 @@ import qualified Data.Set as S
 
 import Control.DeepSeq
 
-import Data.Maybe ( maybeToList )
+import Data.Maybe ( maybeToList, listToMaybe )
 import Control.Arrow ( first, second, (***) )
 import Control.Monad ( guard )
 
@@ -32,9 +35,18 @@ import Debug.Trace
 
 type RatedStates = Q.MaxPQueue Float State
 
-findExpression :: HsConstrainedType -> [(String, HsConstrainedType)] -> StaticContext -> [(Int, Float, Expression)]
-findExpression (HsConstrainedType cs t) funcs staticContext =
-  findExpression' 0 $ Q.singleton 100000.0 $ State
+findOneExpression :: HsConstrainedType
+                  -> [(String, HsConstrainedType)]
+                  -> StaticContext
+                  -> Maybe (Expression, InfressionStats)
+findOneExpression t avail cont = listToMaybe $ findExpressions t avail cont
+
+findExpressions :: HsConstrainedType
+                -> [(String, HsConstrainedType)]
+                -> StaticContext
+                -> [(Expression, InfressionStats)]
+findExpressions (HsConstrainedType cs t) funcs staticContext =
+  let r = findExpression' 0 $ Q.singleton 100000.0 $ State
         [((0, t), [])]
         (map splitFunctionType funcs)
         (mkDynContext staticContext cs)
@@ -43,6 +55,7 @@ findExpression (HsConstrainedType cs t) funcs staticContext =
         (largestId t)
         0.0
         Nothing
+  in [(e, InfressionStats steps compl) | (steps, compl, e) <- r]
 
 findExpression' :: Int -> RatedStates -> [(Int,Float,Expression)]
 findExpression' n states =

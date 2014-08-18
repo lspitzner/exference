@@ -25,12 +25,12 @@ import Control.Monad ( when )
 
 printFindExpression :: String -> String -> IO ()
 printFindExpression name typeStr = do
-  let f (n,d,s) = do
-          let str = show s
+  let f (e, InfressionStats n d) = do
+          let str = show e
           pf <- pointfree $ str
           putStrLn $ name ++ " = " ++ pf ++ "    FROM    " ++ name ++ " = " ++ str ++ " (depth " ++ show d ++ ", " ++ show n ++ " steps)"
   let
-    r = take 10 $ findExpression
+    r = take 10 $ findExpressions
       (readConstrainedType defaultContext typeStr)
       bindings
       defaultContext
@@ -70,7 +70,7 @@ pointful s = (!!0) <$> lines <$> readProcess "pointful" [s] ""
 result1 = unify (TypeArrow (TypeVar 0) (TypeCons "Blub"))
                (TypeArrow (TypeCons "Foo") (TypeVar 1))
 
-result4 = take 10 $ findExpression
+result4 = take 10 $ findExpressions
   -- (readConstrainedType defaultContext "(Show B) => B -> String")
   (readConstrainedType defaultContext "(Show B) => (A -> B) -> List A -> List String")
   -- (readConstrainedType defaultContext "(A -> B) -> List A -> List B")
