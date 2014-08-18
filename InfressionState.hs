@@ -53,32 +53,38 @@ goalApplySubst = memo2 f
 
 
 data State = State
-  { goals      :: [TGoal]
-  , functions  :: [FuncBinding]
-  , context    :: DynContext
-  , expression :: Expression
-  , nextVarId  :: TVarId
-  , maxTVarId  :: TVarId
-  , depth      :: Float
-  , previousState :: Maybe State
+  { goals           :: [TGoal]
+  , constraintGoals :: [Constraint]
+  , functions       :: [FuncBinding]
+  , context         :: DynContext
+  , expression      :: Expression
+  , nextVarId       :: TVarId
+  , maxTVarId       :: TVarId
+  , depth           :: Float
+  , previousState   :: Maybe State
+  , lastStepReason  :: String
   }
 
 instance Show State where
   show (State sgoals
+              scgoals
               _sfuncs
               scontext
               sexpression
               snextVarId
               smaxTVarId
               sdepth
-              _prev)
+              _prev
+              reason)
     = show
     $ text "State" <+> (
           (text   "goals      ="
            <+> brackets (vcat $ punctuate (text ", ") $ map tgoal sgoals)
           )
+      $$  (text $ "constrGoals= " ++ show scgoals)
       $$  (text $ "context    = " ++ show scontext)
       $$  (text $ "expression = " ++ show sexpression)
+      $$  (text $ "reason     = " ++ reason)
       $$  (parens $    (text $ "nextVarId="++show snextVarId)
                    <+> (text $ "maxTVarId="++show smaxTVarId)
                    <+> (text $ "depth="++show sdepth))

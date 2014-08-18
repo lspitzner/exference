@@ -1,4 +1,5 @@
 -- {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TupleSections #-}
 module Infression
   ( findExpressions
   , findOneExpression
@@ -25,7 +26,7 @@ import Control.DeepSeq
 
 import Data.Maybe ( maybeToList, listToMaybe )
 import Control.Arrow ( first, second, (***) )
-import Control.Monad ( guard )
+import Control.Monad ( guard, mzero )
 
 -- import Data.DeriveTH
 import Debug.Hood.Observe
@@ -48,6 +49,7 @@ findExpressions :: HsConstrainedType
 findExpressions (HsConstrainedType cs t) funcs staticContext =
   let r = findExpression' 0 $ Q.singleton 100000.0 $ State
         [((0, t), [])]
+        []
         (map splitFunctionType funcs)
         (mkDynContext staticContext cs)
         (ExpHole 0)
@@ -55,6 +57,7 @@ findExpressions (HsConstrainedType cs t) funcs staticContext =
         (largestId t)
         0.0
         Nothing
+        ""
   in [(e, InfressionStats steps compl) | (steps, compl, e) <- r]
 
 findExpression' :: Int -> RatedStates -> [(Int,Float,Expression)]
@@ -64,8 +67,10 @@ findExpression' n states =
     else
       let ((_,s), restStates) = Q.deleteFindMax states
       in if null (goals s)
-        then -- trace (showStateDevelopment s) $
-          (n, depth s, expression s) : findExpression' (n+1) restStates
+        then if null (constraintGoals s)
+          then -- trace (showStateDevelopment s) $
+            (n, depth s, expression s) : findExpression' (n+1) restStates
+          else findExpression' (n+1) restStates
         else
           let resultStates = stateStep s
           in findExpression' (n+1)
@@ -81,7 +86,7 @@ rateState s = 0.0 - fromIntegral (length $ goals s) - depth s
 
 stateStep :: State -> [State]
 stateStep s = -- traceShow s $
-  if depth s > 50.0
+  if depth s > 12.0
     then []
     else case goalType of
       (TypeArrow t1 t2) -> arrowStep t1 t2
@@ -94,6 +99,7 @@ stateStep s = -- traceShow s $
           newNext = v2+1
       in (:[]) $ State
         (newGoal (v2, t2) [(v1, t1)] binds:gr)
+        (constraintGoals s)
         (functions s)
         (context s)
         (fillExprHole var (ExpLambda v1 (ExpHole v2)) $ expression s)
@@ -101,6 +107,7 @@ stateStep s = -- traceShow s $
         (maxTVarId s)
         (depth s + 0.5)
         (Just s)
+        "function goal transform"
     normalStep = byProvided ++ byFunction
       where
         byProvided = do
@@ -111,6 +118,7 @@ stateStep s = -- traceShow s $
             (S.toList $ dynContext_constraints $ context s)
             provPs
             0.1
+            ("inserting given value " ++ show provId ++ "::" ++ show provT)
         byFunction = do
           (funcId, funcR, funcParams, funcConstrs) <- functions s
           let incF = incVarIds (+(1+maxTVarId s))
@@ -120,47 +128,47 @@ stateStep s = -- traceShow s $
             (map (constraintMapTypes incF) funcConstrs)
             (map incF funcParams)
             3.0
+            ("applying function " ++ show funcId)
         byGenericUnify :: Expression
                        -> HsType
                        -> [Constraint]
                        -> [HsType]
                        -> Float
+                       -> String
                        -> [State]
-        byGenericUnify coreExp provided provConstrs dependencies depthMod = do
+        byGenericUnify coreExp provided provConstrs
+                       dependencies depthMod reasonPart = do
           substs <- maybeToList $ unify goalType provided
           let contxt = context s
-              constrs = map (constraintApplySubsts substs)
-                      $ S.toList
-                      $ dynContext_constraints
-                      $ context s
-          guard $ isProvable contxt constrs                     
-          let
-            vBase = nextVarId s
-            paramN = length dependencies
-            expr = case paramN of
-              0 -> coreExp
-              n -> foldl ExpApply coreExp (map ExpHole [vBase..vBase+n-1])
-            newGoals = zip 
-                         (zip [vBase..]
-                              (map (applySubsts substs) dependencies))
-                         ( repeat
-                         $ map (map (varPBindingApplySubsts substs))
-                         $ binds)
-            newConstraints = map (constraintApplySubsts substs) provConstrs
-            newContext = mkDynContext
-              (dynContext_context $ context s)
-              (   newConstraints
-               ++ (S.toList $ dynContext_constraints $ context s)
-              )
-          return $ State
-            (newGoals ++ map (goalApplySubst substs) gr)
-            (functions s)
-            newContext
-            (fillExprHole var expr $ expression s)
-            (vBase + paramN)
-            (max (maxTVarId s) (largestSubstsId substs))
-            (depth s + depthMod)
-            (Just s)
+              constrs1 = map (constraintApplySubsts substs)
+                       $ constraintGoals s
+              constrs2 = map (constraintApplySubsts substs)
+                       $ provConstrs
+          case isPossible contxt (constrs1++constrs2) of
+            Nothing -> []
+            Just newConstraints ->
+              let
+                substsTxt   = show substs ++ " unifies " ++ show goalType ++ " and " ++ show provided
+                provableTxt = "constraints (" ++ show (constrs1++constrs2) ++ ") are provable"
+                vBase = nextVarId s
+                paramN = length dependencies
+                expr = case paramN of
+                  0 -> coreExp
+                  n -> foldl ExpApply coreExp (map ExpHole [vBase..vBase+n-1])
+                newGoals = map (,map (map (varPBindingApplySubsts substs)) binds)
+                         $ zip [vBase..]
+                               (map (applySubsts substs) dependencies)
+              in return $ State
+                (newGoals ++ map (goalApplySubst substs) gr)
+                newConstraints
+                (functions s)
+                (context s)
+                (fillExprHole var expr $ expression s)
+                (vBase + paramN)
+                (max (maxTVarId s) (largestSubstsId substs))
+                (depth s + depthMod)
+                (Just s)
+                (reasonPart ++ ", because " ++ substsTxt ++ " and because " ++ provableTxt)
 
 splitFunctionType :: (a, HsConstrainedType)
                   -> (a, HsType, [HsType], [Constraint])
