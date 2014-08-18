@@ -1,4 +1,8 @@
-module Unify where
+module Unify
+  ( unify
+  , unifyRight
+  )
+where
 
 
 
@@ -12,9 +16,6 @@ import Debug.Trace
 
 
 type TypeEq = (HsType, HsType)
-
-largestSubstsId :: Substs -> TVarId
-largestSubstsId = M.foldl' (\a b -> a `max` largestId b) 0
 
 data UniState = UniState [TypeEq] Substs
 

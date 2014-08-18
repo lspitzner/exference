@@ -1,4 +1,8 @@
-module Expression where
+module Expression
+  ( Expression (..)
+  , fillExprHole
+  )
+where
 
 
 

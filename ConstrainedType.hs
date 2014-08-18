@@ -1,6 +1,10 @@
 {-# LANGUAGE FlexibleInstances #-}
 
-module ConstrainedType where
+module ConstrainedType
+  ( HsConstrainedType (..)
+  , readConstrainedType
+  )
+where
 
 
 

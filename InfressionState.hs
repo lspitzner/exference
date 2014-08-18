@@ -1,4 +1,12 @@
-module InfressionState where
+module InfressionState
+  ( State (..)
+  , varBindingApplySubsts
+  , varPBindingApplySubsts
+  , newGoal
+  , goalApplySubst
+  , showStateDevelopment
+  )
+where
 
 
 

@@ -1,4 +1,15 @@
-module TypeClasses where
+module TypeClasses
+  ( HsTypeClass (..)
+  , HsInstance (..)
+  , Constraint (..)
+  , StaticContext (..)
+  , DynContext (dynContext_context, dynContext_constraints, dynContext_varConstraints)
+  , constraintApplySubsts
+  , mkDynContext
+  , inflateConstraints
+  , constraintMapTypes
+  )
+where
 
 
 

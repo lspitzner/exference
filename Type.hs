@@ -1,4 +1,23 @@
-module Type where
+module Type
+  ( TVarId
+  , HsType (..)
+  , Subst
+  , Substs
+  , applySubst
+  , applySubsts
+  , reduceIds
+  , incVarIds
+  , largestId
+  , distinctify
+  , arrowDepth
+  , freeVars
+  , containsVar
+  , typeParser
+  , badReadVar
+  , showVar
+  , largestSubstsId
+  )
+where
 
 
 
@@ -153,3 +172,6 @@ applySubsts _ c@(TypeCons _) = c
 applySubsts s (TypeArrow t1 t2) = TypeArrow (applySubsts s t1) (applySubsts s t2)
 applySubsts s (TypeApp t1 t2) = TypeApp (applySubsts s t1) (applySubsts s t2)
 applySubsts s (TypeForall j t) = TypeForall j $ applySubsts (M.delete j s) t
+
+largestSubstsId :: Substs -> TVarId
+largestSubstsId = M.foldl' (\a b -> a `max` largestId b) 0

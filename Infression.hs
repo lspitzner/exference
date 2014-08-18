@@ -1,5 +1,8 @@
 -- {-# LANGUAGE TemplateHaskell #-}
-module Infression where
+module Infression
+  ( findExpression
+  )
+where
 
 
 

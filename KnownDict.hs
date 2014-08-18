@@ -1,4 +1,15 @@
-module KnownDict where
+module KnownDict
+  ( bindings
+  , emptyContext
+  , defaultContext
+  , testDynContext
+  , typeId
+  , typeReturn
+  , typeUnsafe
+  , typeBind
+  , typeJoin
+  )
+where
 
 
 
