@@ -10,6 +10,7 @@ module TypeClasses
   , mkDynContext
   , inflateConstraints
   , constraintMapTypes
+  , constraintContainsVariables
   )
 where
 
@@ -142,3 +143,6 @@ inflate f = fold . S.fromList . iterateWhileNonempty (foldMap f)
 dynContextAddConstraints :: [Constraint] -> DynContext -> DynContext
 dynContextAddConstraints cs (DynContext a b _) =
   mkDynContext a (cs ++ S.toList b)
+
+constraintContainsVariables :: Constraint -> Bool
+constraintContainsVariables = any ((-1/=).largestId) . constraint_params
