@@ -3,6 +3,7 @@
 module ConstrainedType
   ( HsConstrainedType (..)
   , readConstrainedType
+  , parseConstrainedType
   )
 where
 
