@@ -26,7 +26,7 @@ import Debug.Trace
 import Data.Maybe ( fromMaybe )
 import Control.Applicative ( (<$>) )
 import Control.Monad ( mplus, guard )
-import Data.Functor.Identity ( Identity(runIdentity) )
+import Control.Monad.Identity ( Identity(runIdentity) )
 
 import Debug.Hood.Observe
 

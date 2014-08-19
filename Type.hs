@@ -24,7 +24,7 @@ where
 import Data.Char ( ord, chr, isLower, isUpper )
 import qualified Data.Set as S
 import qualified Data.Map as M
-import Control.Monad.Trans.State.Strict
+import Control.Monad.State.Strict
 import Control.Applicative ( (<$>), (<*>), (*>), (<*) )
 
 import Text.ParserCombinators.Parsec hiding (State)
