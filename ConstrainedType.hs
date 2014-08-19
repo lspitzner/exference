@@ -20,6 +20,8 @@ import Data.Char ( isLower, isUpper )
 
 import Control.Applicative ( (<$>), (<*>), (*>), (<*) )
 
+import Debug.Hood.Observe
+
 
 
 data HsConstrainedType = HsConstrainedType [Constraint] HsType
@@ -33,6 +35,9 @@ instance Show HsConstrainedType where
           showParen True (\x -> foldr (++) x $ intersperse ", " $ map show cs)
         . showString " => "
         . shows t
+
+instance Observable HsConstrainedType where
+  observer state = observeOpaque (show state) state
 
 readConstrainedType :: StaticContext -> String -> HsConstrainedType
 readConstrainedType c s = case parseConstrainedType c s of
