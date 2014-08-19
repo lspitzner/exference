@@ -13,8 +13,16 @@ Library
                -j
                -fno-warn-unused-imports
                -fno-warn-orphans
-  exposed-modules: Infression, Type, TypeClasses, KnownDict
-  other-modules: Unify, ConstraintSolver
+  exposed-modules: Infression,
+                   Type,
+                   ConstrainedType,
+                   TypeClasses,
+                   KnownDict,
+                   InfressionStats
+  other-modules: Unify,
+                 ConstraintSolver,
+                 InfressionState,
+                 Expression
   extensions: NoMonomorphismRestriction
   hs-source-dirs: .
   Build-Depends:
