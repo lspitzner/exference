@@ -43,11 +43,11 @@ main = runO $ do
   --print $ result1
   -- let (DynContext _a b _) = testDynContext
   -- print b
-  printFindExpression "showmap" "(Show B) => (A -> B) -> List A -> List String"
-  printFindExpression "ffbind" "(A -> T -> B) -> (T -> A) -> (T -> B)"
-  printFindExpression "join" "(Monad M) => M (M A) -> M A"
-  printFindExpression "fjoin" "(T -> (T -> A)) -> T -> A"
-  printFindExpression "zipThingy" "List A -> B -> List (Tuple A B)"
+  printFindExpression "showmap" "(Show b) => (a -> b) -> List a -> List String"
+  printFindExpression "ffbind" "(a -> t -> b) -> (t -> a) -> (t -> b)"
+  printFindExpression "join" "(Monad m) => m (m a) -> m a"
+  printFindExpression "fjoin" "(t -> (t -> a)) -> t -> a"
+  printFindExpression "zipThingy" "List a -> b -> List (Tuple a b)"
   --print $ inflateConstraints a b
   {-
   print $ constraintMatches testDynContext (badReadVar "y") (read "x")

@@ -46,8 +46,9 @@ findExpressions :: HsConstrainedType
                 -> [(String, HsConstrainedType)]
                 -> StaticContext
                 -> [(Expression, InfressionStats)]
-findExpressions (HsConstrainedType cs t) funcs staticContext =
-  let r = findExpression' 0 $ Q.singleton 100000.0 $ State
+findExpressions rawCType funcs staticContext =
+  let (HsConstrainedType cs t) = ctConstantifyVars rawCType
+      r = findExpression' 0 $ Q.singleton 100000.0 $ State
         [((0, t), [])]
         []
         (map splitFunctionType funcs)
@@ -59,6 +60,23 @@ findExpressions (HsConstrainedType cs t) funcs staticContext =
         Nothing
         ""
   in [(e, InfressionStats steps compl) | (steps, compl, e) <- r]
+
+ctConstantifyVars :: HsConstrainedType -> HsConstrainedType
+ctConstantifyVars (HsConstrainedType a b) =
+  HsConstrainedType
+    (map (\(Constraint c d) -> Constraint c $ map tConstantifyVars d) a)
+    (tConstantifyVars b)
+
+tConstantifyVars :: HsType -> HsType
+tConstantifyVars (TypeVar i)        = TypeCons $ "INF" ++ showVar i
+tConstantifyVars c@(TypeCons _)     = c
+tConstantifyVars (TypeArrow t1 t2)  = TypeArrow
+                                       (tConstantifyVars t1)
+                                       (tConstantifyVars t2)
+tConstantifyVars (TypeApp t1 t2)    = TypeApp
+                                       (tConstantifyVars t1)
+                                       (tConstantifyVars t2)
+tConstantifyVars f@(TypeForall _ _) = f
 
 findExpression' :: Int -> RatedStates -> [(Int,Float,Expression)]
 findExpression' n states =
