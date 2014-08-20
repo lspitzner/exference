@@ -30,26 +30,25 @@ typeJoin   = read "m (m a) -> m a"
 
 type Binding = (String, HsConstrainedType)
 
+toBindings :: [(String, String)] -> [(String, HsConstrainedType)]
+toBindings = map (second $ readConstrainedType defaultContext)
+
 bindings :: [Binding]
-bindings =
-  [ ("fmap",   readConstrainedType defaultContext
-               "(Functor f) => (a -> b) -> f a -> f b")
-  , ("(*)",    readConstrainedType defaultContext
-               "(Applicative f) => f (a->b) -> f a -> f b")
-  , ("pure",   readConstrainedType defaultContext
-               "(Applicative f) => a -> f a")
-  , ("(>>=)",  readConstrainedType defaultContext
-               "(Monad m) => m a -> (a -> m b) -> m b")
-  -- , ("map",   readConstrainedType defaultContext
-  --             "(a->b) -> List a -> List b")
-  , ("show",   readConstrainedType defaultContext
-               "(Show a) => a -> String")
-  , ("(,)",    readConstrainedType defaultContext
-               "a -> b -> Tuple a b")
-  , ("zip",    readConstrainedType defaultContext
-               "List a -> List b -> List (Tuple a b)")
-  , ("repeat", readConstrainedType defaultContext
-               "a -> List a")
+bindings = toBindings
+  [ ("fmap",   "(Functor f) => (a -> b) -> f a -> f b")
+  , ("(*)",    "(Applicative f) => f (a->b) -> f a -> f b")
+  , ("pure",   "(Applicative f) => a -> f a")
+  , ("(>>=)",  "(Monad m) => m a -> (a -> m b) -> m b")
+  -- , ("map",   "(a->b) -> List a -> List b")
+  , ("show",   "(Show a) => a -> String")
+  , ("(,)",    "a -> b -> Tuple a b")
+  , ("zip",    "List a -> List b -> List (Tuple a b)")
+  , ("repeat", "a -> List a")
+  , ("fst",    "Tuple a b -> a")
+  , ("snd",    "Tuple a b -> b")
+  , ("runState", "State s a -> s -> Tuple a s")
+  , ("()",     "Unit")
+  , ("State",  "(s -> Tuple a s) -> State s a")
   ]
 
 emptyContext :: StaticContext
