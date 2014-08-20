@@ -65,9 +65,12 @@ constrainedTypeParser c = spaces *>
   )
   where
     parseConstraints =
-      char '(' *> spaces *>
-      sepBy parseConstraint (spaces >> string "," >> spaces)
-      <* spaces <* char ')'
+      try (char '(' *> spaces *>
+           sepBy parseConstraint (spaces >> string "," >> spaces)
+           <* spaces <* char ')'
+          )
+      <|>
+          sepBy1 parseConstraint (spaces >> string "," >> spaces)
     parseConstraint :: Parser Constraint
     parseConstraint = Constraint
       <$> ( do 
