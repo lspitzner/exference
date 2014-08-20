@@ -1,5 +1,6 @@
 -- {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TupleSections #-}
+{-# LANGUAGE MultiWayIf #-}
 module Infression
   ( findExpressions
   , findOneExpression
@@ -79,25 +80,21 @@ tConstantifyVars (TypeApp t1 t2)    = TypeApp
 tConstantifyVars f@(TypeForall _ _) = f
 
 findExpression' :: Int -> RatedStates -> [(Int,Float,Expression)]
-findExpression' n states =
-  if Q.null states
-    then []
-    else
-      let ((_,s), restStates) = Q.deleteFindMax states
-      in if null (goals s)
-        then if null (constraintGoals s)
-          then -- trace (showStateDevelopment s) $
-            (n, depth s, expression s) : findExpression' (n+1) restStates
-          else findExpression' (n+1) restStates
-        else
-          let resultStates = stateStep s
-          in findExpression' (n+1)
-               $ foldr
-                   (uncurry Q.insert)
-                   restStates
-                   [ (r, newS)
-                   | newS <- resultStates
-                   , let r = rateState newS]
+findExpression' n states
+  | Q.null states || n > 50000 = []
+  | ((_,s), restStates) <- Q.deleteFindMax states =
+    if
+      | not $ null (goals s) ->
+          findExpression' (n+1) $ foldr
+                                       (uncurry Q.insert)
+                                       restStates
+                                       [ (r, newS)
+                                       | newS <- stateStep s
+                                       , let r = rateState newS]
+      | not $ null (constraintGoals s) ->
+          findExpression' (n+1) restStates
+      | otherwise -> -- trace (showStateDevelopment s) $
+          (n, depth s, expression s) : findExpression' (n+1) restStates
 
 rateState :: State -> Float
 rateState s = 0.0 - fromIntegral (length $ goals s) - depth s
