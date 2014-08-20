@@ -183,7 +183,8 @@ stateStep s = -- traceShow s $
                 (context s)
                 (fillExprHole var expr $ expression s)
                 (vBase + paramN)
-                (max (maxTVarId s) (largestSubstsId substs))
+                (maxTVarId s `max` largestSubstsId substs
+                             `max` maximum (-1:map largestId dependencies))
                 (depth s + depthMod)
                 (Just s)
                 (reasonPart ++ ", because " ++ substsTxt ++ " and because " ++ provableTxt)
