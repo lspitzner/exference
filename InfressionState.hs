@@ -1,5 +1,5 @@
 module InfressionState
-  ( State (..)
+{-  ( State (..)
   , FuncBinding (..)
   , varBindingApplySubsts
   , varPBindingApplySubsts
@@ -7,7 +7,7 @@ module InfressionState
   , goalApplySubst
   , showStateDevelopment
   , TGoal
-  )
+  )-}
 where
 
 
@@ -15,6 +15,8 @@ where
 import Type
 import TypeClasses
 import Expression
+
+import qualified Data.Map.Strict as M
 
 import Text.PrettyPrint
 import Data.StableMemo
@@ -42,24 +44,57 @@ varPBindingApplySubsts ss (a,b,c) =
   , map (applySubsts ss) c
   )
 
-type TGoal = (VarBinding, [[VarPBinding]])
-           -- goal,   list of scopes containing appliciable bindings
+type ScopeId = Int
 
-newGoal :: VarBinding -> [VarBinding] -> [[VarPBinding]] -> TGoal
-newGoal g b bs = (g,map splitBinding b:bs)
+data Scope = Scope [VarPBinding] [ScopeId]
+            -- scope bindings,   superscopes
+data Scopes = Scopes ScopeId (M.Map ScopeId Scope)
+              -- next id     scopes
+
+initialScopes :: Scopes
+initialScopes = Scopes 1 (M.singleton 0 $ Scope [] [])
+
+scopeGetAllBindings :: Scopes -> Int -> [VarPBinding]
+scopeGetAllBindings ss@(Scopes _ scopeMap) sid =
+  case M.lookup sid scopeMap of
+    Nothing -> []
+    Just (Scope binds ids) -> binds ++ concatMap (scopeGetAllBindings ss) ids
+
+scopesApplySubsts :: Substs -> Scopes -> Scopes
+scopesApplySubsts substs (Scopes i scopeMap) = Scopes i $ M.map scopeF scopeMap
+  where
+    scopeF (Scope binds ids) = Scope (map bindF binds) ids
+    bindF = varPBindingApplySubsts substs
+
+type TGoal = (VarBinding, ScopeId)
+           -- goal,    id of innermost scope available
 
 goalApplySubst :: Substs -> TGoal -> TGoal
-goalApplySubst = memo2 f
-  where
-    f :: Substs -> TGoal -> TGoal
-    f ss ((v,t),binds) = ( (v, applySubsts ss t)
-                         , map (map $ varPBindingApplySubsts ss) binds
-                         )
+goalApplySubst = first . varBindingApplySubsts
 
+-- takes a new goal data, and a new set of provided stuff, and
+-- returns some actual goal/newScope pair
+addGoalProvided :: ScopeId
+                -> VarBinding   -- goal binding
+                -> [VarBinding] -- new-given-bindings
+                -> Scopes
+                -> (TGoal, Scopes)
+addGoalProvided sid goalBind givenBinds (Scopes nid sMap) =
+    ((goalBind, nid),Scopes (nid+1) newMap)
+  where
+    newMap = M.insert nid (Scope transformedBind [sid]) sMap
+    transformedBind = map splitBinding givenBinds
+
+
+mkGoals :: ScopeId
+        -> [VarBinding]
+        -> [TGoal]
+mkGoals sid vbinds = [(b,sid)|b<-vbinds]
 
 data State = State
   { goals           :: [TGoal]
   , constraintGoals :: [Constraint]
+  , providedScopes  :: Scopes
   , functions       :: [FuncBinding]
   , context         :: DynContext
   , expression      :: Expression
@@ -73,6 +108,7 @@ data State = State
 instance Show State where
   show (State sgoals
               scgoals
+              (Scopes _ scopeMap)
               _sfuncs
               scontext
               sexpression
@@ -87,6 +123,9 @@ instance Show State where
            <+> brackets (vcat $ punctuate (text ", ") $ map tgoal sgoals)
           )
       $$  (text $ "constrGoals= " ++ show scgoals)
+      $$  (text   "scopes     = "
+           <+> brackets (vcat $ punctuate (text ", ") $ map tScope $ M.toList scopeMap)
+          )
       $$  (text $ "context    = " ++ show scontext)
       $$  (text $ "expression = " ++ show sexpression)
       $$  (text $ "reason     = " ++ reason)
@@ -96,11 +135,15 @@ instance Show State where
     )
     where
       tgoal :: TGoal -> Doc
-      tgoal (vt,binds) =    tVarType vt
-                         <> text " given "
-                         <> brackets (
+      tgoal (vt,scopeId) =  tVarType vt
+                         <> text (" in " ++ show scopeId)
+      tScope :: (ScopeId, Scope) -> Doc
+      tScope (sid, Scope binds supers) =
+            text (show sid ++ " ")
+        <+> parens (text $ show $ supers)
+        <+> text " " <+> brackets (
                               hcat $ punctuate (text ", ")
-                                               (map tVarPType $ concat binds)
+                                               (map tVarPType binds)
                             )
       tVarType :: (TVarId, HsType) -> Doc
       tVarType (i, t) = text $ showVar i ++ " :: " ++ show t

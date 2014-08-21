@@ -1,6 +1,8 @@
 -- {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE MultiWayIf #-}
+{-# LANGUAGE PatternGuards #-}
+
 module Infression
   ( findExpressions
   , findOneExpression
@@ -51,8 +53,9 @@ findExpressions :: HsConstrainedType
 findExpressions rawCType funcs staticContext =
   let (HsConstrainedType cs t) = ctConstantifyVars rawCType
       r = findExpression' 0 $ Q.singleton 100000.0 $ State
-        [((0, t), [])]
+        [((0, t), 0)]
         []
+        initialScopes
         (map splitFunctionType funcs)
         (mkDynContext staticContext cs)
         (ExpHole 0)
@@ -108,14 +111,19 @@ stateStep s = -- traceShow s $
       (TypeArrow t1 t2) -> arrowStep t1 t2
       _                 -> normalStep
   where
-    (((var, goalType), binds):gr) = goals s
+    (((var, goalType), scopeId):gr) = goals s
     arrowStep t1 t2 = 
       let v1 = nextVarId s
           v2 = v1+1
           newNext = v2+1
+          (newGoal, newScopes) = addGoalProvided scopeId
+                                                 (v2,t2)
+                                                 [(v1,t1)]
+                                                 (providedScopes s)
       in (:[]) $ State
-        (newGoal (v2, t2) [(v1, t1)] binds:gr)
+        (newGoal:gr)
         (constraintGoals s)
+        newScopes
         (functions s)
         (context s)
         (fillExprHole var (ExpLambda v1 (ExpHole v2)) $ expression s)
@@ -127,7 +135,7 @@ stateStep s = -- traceShow s $
     normalStep = byProvided ++ byFunctionSimple ++ byMatching
       where
         byProvided = do
-          (provId, provT, provPs) <- concat binds
+          (provId, provT, provPs) <- scopeGetAllBindings (providedScopes s) scopeId
           byGenericUnify
             (ExpVar provId)
             provT
@@ -171,10 +179,12 @@ stateStep s = -- traceShow s $
                 expr = case paramN of
                   0 -> coreExp
                   n -> foldl ExpApply coreExp (map ExpHole [vBase..vBase+n-1])
-                newGoals = map (,binds) $ zip [vBase..] dependencies
+                -- newGoals = map (,binds) $ zip [vBase..] dependencies
+                newGoals = mkGoals scopeId $ zip [vBase..] dependencies
               in return $ State
                 (map (goalApplySubst substs) $ newGoals ++ gr)
                 newConstraints
+                (scopesApplySubsts substs $ providedScopes s)
                 (functions s)
                 (context s)
                 (fillExprHole var expr $ expression s)
@@ -197,14 +207,15 @@ stateStep s = -- traceShow s $
             vBase = vDep + 1
             vEnd = vBase + length resultTypes
             expr = ExpLetMatch matchId ([vBase..vEnd-1]) (ExpHole vDep) (ExpVar $ vBase+i)
-            newBinds = [(vid, bType, []) | (vid, bType) <- zip [vBase..] resultTypes]
-            newGoal :: TGoal
-            newGoal = ( (vDep,applySubsts substs inputType)
-                      , map (map (varPBindingApplySubsts substs)) $ newBinds:binds
-                      )
+            (newGoal, newScopes) = addGoalProvided scopeId
+                                                   (vDep,inputType)
+                                                   (zip [vBase..] resultTypes)
+                                                   (providedScopes s)
+
           return $ State
             (newGoal : map (goalApplySubst substs) gr)
             (map (constraintApplySubsts substs) $ constraintGoals s)
+            (scopesApplySubsts substs newScopes)
             (functions s)
             (context s)
             (fillExprHole var expr $ expression s)
