@@ -27,7 +27,7 @@ printFindExpression :: String -> String -> IO ()
 printFindExpression name typeStr = do
   let f (e, InfressionStats n d) = do
           let str = show e
-              doPf = False
+              doPf = True
           if doPf then do
             pf <- pointfree $ str
             putStrLn $ name ++ " = " ++ pf
@@ -48,13 +48,14 @@ main = runO $ do
   --print $ result1
   -- let (DynContext _a b _) = testDynContext
   -- print b
-  --printFindExpression "showmap" "(Show b) => (a -> b) -> List a -> List String"
-  --printFindExpression "ffbind" "(a -> t -> b) -> (t -> a) -> (t -> b)"
-  --printFindExpression "join" "(Monad m) => m (m a) -> m a"
-  --printFindExpression "fjoin" "(t -> (t -> a)) -> t -> a"
-  --printFindExpression "zipThingy" "List a -> b -> List (Tuple a b)"
-  --printFindExpression "stateRun" "State a b -> a -> b"
+  printFindExpression "showmap" "(Show b) => (a -> b) -> List a -> List String"
+  printFindExpression "ffbind" "(a -> t -> b) -> (t -> a) -> (t -> b)"
+  printFindExpression "join" "(Monad m) => m (m a) -> m a"
+  printFindExpression "fjoin" "(t -> (t -> a)) -> t -> a"
+  printFindExpression "zipThingy" "List a -> b -> List (Tuple a b)"
+  printFindExpression "stateRun" "State a b -> a -> b"
   printFindExpression "fst" "Tuple a b -> a"
+  printFindExpression "liftBlub" "Monad m => m a -> m b -> (a -> b -> m c) -> m c"
   --print $ inflateConstraints a b
   {-
   print $ constraintMatches testDynContext (badReadVar "y") (read "x")
