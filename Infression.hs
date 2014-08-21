@@ -171,11 +171,9 @@ stateStep s = -- traceShow s $
                 expr = case paramN of
                   0 -> coreExp
                   n -> foldl ExpApply coreExp (map ExpHole [vBase..vBase+n-1])
-                newGoals = map (,map (map (varPBindingApplySubsts substs)) binds)
-                         $ zip [vBase..]
-                               (map (applySubsts substs) dependencies)
+                newGoals = map (,binds) $ zip [vBase..] dependencies
               in return $ State
-                (newGoals ++ map (goalApplySubst substs) gr)
+                (map (goalApplySubst substs) $ newGoals ++ gr)
                 newConstraints
                 (functions s)
                 (context s)
