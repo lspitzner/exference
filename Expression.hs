@@ -7,7 +7,7 @@ where
 
 
 import Type
-
+import Data.List ( intercalate )
 
 
 data Expression = ExpVar TVarId
@@ -15,6 +15,7 @@ data Expression = ExpVar TVarId
                 | ExpLambda TVarId Expression
                 | ExpApply Expression Expression
                 | ExpHole TVarId
+                | ExpLetMatch String [TVarId] Expression Expression
 
 -- $( derive makeNFData ''Expression )
 
@@ -26,10 +27,16 @@ instance Show Expression where
   showsPrec d (ExpApply e1 e2) =
     showParen (d>1) $ showsPrec 2 e1 . showString " " . showsPrec 2 e2
   showsPrec _ (ExpHole i) = showString $ "_" ++ showVar i
+  showsPrec d (ExpLetMatch n vars bindExp inExp) =
+      showParen (d>2)
+    $ showString ("let ("++n++" "++intercalate " " (map showVar vars) ++ ") = ")
+    . shows bindExp . showString " in " . showsPrec 3 inExp
 
 fillExprHole :: TVarId -> Expression -> Expression -> Expression
 fillExprHole vid t (ExpHole j) | vid==j = t
 fillExprHole vid t (ExpLambda i ty) = ExpLambda i $ fillExprHole vid t ty
 fillExprHole vid t (ExpApply e1 e2) = ExpApply (fillExprHole vid t e1)
-                                              (fillExprHole vid t e2)
+                                               (fillExprHole vid t e2)
+fillExprHole vid t (ExpLetMatch n vars bindExp inExp) =
+  ExpLetMatch n vars (fillExprHole vid t bindExp) (fillExprHole vid t inExp)
 fillExprHole _ _ t = t

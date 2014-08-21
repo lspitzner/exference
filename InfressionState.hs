@@ -1,10 +1,12 @@
 module InfressionState
   ( State (..)
+  , FuncBinding (..)
   , varBindingApplySubsts
   , varPBindingApplySubsts
   , newGoal
   , goalApplySubst
   , showStateDevelopment
+  , TGoal
   )
 where
 
@@ -24,8 +26,11 @@ import Debug.Hood.Observe
 
 
 type VarBinding = (TVarId, HsType)
-type FuncBinding = (String, HsType, [HsType], [Constraint]) -- name, result, params
-type VarPBinding = (TVarId, HsType, [HsType]) -- var, result, constraints, params
+data FuncBinding = SimpleBinding String HsType [HsType] [Constraint]
+                               -- name, results, params constraints
+                 | MatchBinding  String [HsType] HsType
+  deriving Show
+type VarPBinding = (TVarId, HsType, [HsType]) -- var, result, params
 
 varBindingApplySubsts :: Substs -> VarBinding -> VarBinding
 varBindingApplySubsts = second . applySubsts
