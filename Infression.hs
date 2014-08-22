@@ -101,7 +101,19 @@ findExpression' n states
           (n, depth s, expression s) : findExpression' (n+1) restStates
 
 rateState :: State -> Float
-rateState s = 0.0 - fromIntegral (length $ goals s) - depth s
+rateState s = 0.0 - 3.0*rateGoals (goals s) - depth s
+
+rateGoals :: [TGoal] -> Float
+rateGoals = sum . map rateGoal
+  where
+    rateGoal ((_,t),_) = tComplexity t
+    -- TODO: actually measure performance with different values,
+    --       use derived values instead of (arbitrarily) chosen ones.
+    tComplexity (TypeVar _) = 1.0
+    tComplexity (TypeCons _) = 0.3
+    tComplexity (TypeArrow t1 t2) = 1.6 + tComplexity t1 + tComplexity t2
+    tComplexity (TypeApp t1 t2) = 0.8 + tComplexity t1 + tComplexity t2
+    tComplexity (TypeForall _ t1) = tComplexity t1
 
 stateStep :: State -> [State]
 stateStep s = -- traceShow s $
