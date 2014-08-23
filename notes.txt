@@ -1,53 +1,41 @@
 input: wanted type
 output: [expression with that type]
 
-turn any HsType into a list
-(HsType, [(Int, HsType)], HsExpression, [(Int, HsExpression)])
- resultT, paramN paramT    expression     exprN expr
+hard queries:
+1) State s a -> (a -> State s b) -> State s b
+   (s -> (a,s)) -> (a -> s -> (b,s)) -> s -> (b,s)
+2) (b->c) -> (a->b) -> (a->c)
+3) (a->b) -> (b->c) -> (a->c)
+4) (a->(b,c)) -> a -> b
+5) (a->(b,c)) -> (b->d) -> (c->e) -> a -> (d,e)
+6) (b->d) -> (c->e) -> a -> (d,e); a->(b,c) in env
+7) (a->b->c) -> a -> (b,b) -> (c,c)
+8) (a->f b) -> List a -> f (List b)
 
+hard because
+1) multiple s (each should be used), tuples (needs pattern matching)
+2/3) on of these breaks with non-permuted eager function application
+4) tuple matching, unused binding
+5) late function application leads to double-application and unused binds
+6) non-obvious function application from env
+7) both eager and lazy function application is undesirable in this case
+   (want early _partial_ function application).
+   also, ambiguity (two equally valid solutions)
+8) needs multiple functions from env (pure, [], <$>, <*>, foldr, (:))
 
-example:
+optimal solution:
+1) f g h x = let (a,y) = g x; (b,z) = h a y in (b,z)
+2) f g h x = g (h x)
+3) f g h x = h (g x)
+4) f g x = let (a,_) = g x in a
+5) f g h i x = let (a,b)=g x in (h a, i b)
+6) similar to 5)
+7) f g x (a,b) = let h = g x in (h a, h b)
+     OR        = let h = g x in (h b, h a)
+8) f g xs = foldr (\a b -> (:) <$> g a <*> b) (pure []) xs
 
-join :: m (m a) -> m a
-
-goals     = [1 :: m a]
-provided  = [x :: m (m a)]
-functions = [bind :: m b -> (b -> m c) -> m c]
-partialExp = \x -> _1
-
-m a ~ n b -> (b -> n c) -> n c
-
-after 1==result of bind with c==a:
-
-goals     = [2 :: m b, 3 :: b -> m a]
-provided  = [x :: m (m a)]
-functions = ...
-partialExp = \x -> bind _2 _3
-
-after 2==x with b=m a 
-
-goals     = [3 :: m a -> m a]
-provided  = ...
-functions = ...
-partialExp = \x -> bind x _3
-
-functionGoalResolve
-
-goal      = [4 :: m a]
-provided  = [x :: m (m a), y :: m a]
-functions = ...
-partialExp = \x -> bind x (\y -> _4)
-
-after 4==y
-
-goal      = []
-provided  = ...
-functions = ...
-partialExp = \x -> bind x (\y -> y)
-
-after pointfree
-
-partialExp = (>>=id)
-
-
+f :: a -> b
+let r = f ? in ?
+given = +b
+goal  = +a
 
