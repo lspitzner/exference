@@ -32,7 +32,10 @@ data FuncBinding = SimpleBinding String HsType [HsType] [Constraint]
                                -- name, results, params constraints
                  | MatchBinding  String [HsType] HsType
   deriving Show
-type VarPBinding = (TVarId, HsType, [HsType]) -- var, result, params
+
+type VarPBinding = (TVarId, HsType, [HsType])
+                -- var, result, params
+
 
 varBindingApplySubsts :: Substs -> VarBinding -> VarBinding
 varBindingApplySubsts = second . applySubsts
@@ -66,6 +69,14 @@ scopesApplySubsts substs (Scopes i scopeMap) = Scopes i $ M.map scopeF scopeMap
     scopeF (Scope binds ids) = Scope (map bindF binds) ids
     bindF = varPBindingApplySubsts substs
 
+scopesAddBinding :: ScopeId -> VarBinding -> Scopes -> Scopes
+scopesAddBinding sid binding (Scopes nid sMap) = Scopes nid newMap
+  where
+    newMap = M.adjust addBinding sid sMap
+    addBinding :: Scope -> Scope
+    addBinding (Scope vbinds ids) = Scope (pbinding:vbinds) ids
+    pbinding = splitBinding binding
+
 type TGoal = (VarBinding, ScopeId)
            -- goal,    id of innermost scope available
 
@@ -82,9 +93,14 @@ addGoalProvided :: ScopeId
 addGoalProvided sid goalBind givenBinds (Scopes nid sMap) =
     ((goalBind, nid),Scopes (nid+1) newMap)
   where
-    newMap = M.insert nid (Scope transformedBind [sid]) sMap
-    transformedBind = map splitBinding givenBinds
+    newMap = M.insert nid (Scope transformedBinds [sid]) sMap
+    transformedBinds = map splitBinding givenBinds
 
+addNewScopeGoal :: ScopeId -> VarBinding -> Scopes -> (TGoal, ScopeId, Scopes)
+addNewScopeGoal sid goalBind (Scopes nid sMap) =
+    ((goalBind, nid), nid, Scopes (nid+1) newMap)
+  where
+    newMap = M.insert nid (Scope [] [sid]) sMap
 
 mkGoals :: ScopeId
         -> [VarBinding]

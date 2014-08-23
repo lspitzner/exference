@@ -27,7 +27,7 @@ printFindExpression :: String -> String -> IO ()
 printFindExpression name typeStr = do
   let f (e, InfressionStats n d) = do
           let str = show e
-              doPf = True
+              doPf = False
           if doPf then do
             pf <- pointfree $ str
             putStrLn $ name ++ " = " ++ pf
@@ -37,7 +37,7 @@ printFindExpression name typeStr = do
             putStrLn $ name ++ " = " ++ str
                        ++ " (depth " ++ show d ++ ", " ++ show n ++ " steps)"
   let
-    r = take 10 $ findExpressions
+    r = take 6 $ findExpressions
       (readConstrainedType defaultContext typeStr)
       bindings
       defaultContext
@@ -55,6 +55,8 @@ main = runO $ do
   printFindExpression "zipThingy" "List a -> b -> List (Tuple a b)"
   printFindExpression "stateRun" "State a b -> a -> b"
   printFindExpression "fst" "Tuple a b -> a"
+  printFindExpression "ffst" "(a -> Tuple b c) -> a -> b"
+  printFindExpression "fswap" "(a -> Tuple b c) -> a -> Tuple c b"
   printFindExpression "liftBlub" "Monad m => m a -> m b -> (a -> b -> m c) -> m c"
   --print $ inflateConstraints a b
   {-

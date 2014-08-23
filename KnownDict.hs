@@ -54,7 +54,7 @@ bindings = toBindings
   , ("State",  "(s -> Tuple a s) -> State s a")
   , ("empty",  "List a")
   , ("(:)",    "a -> List a -> List a")
-  --, ("(,)",    "Tuple a b -> INFPATTERN a b")
+  , ("(,)",    "Tuple a b -> INFPATTERN a b")
   ]
 
 emptyContext :: StaticContext
