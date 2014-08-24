@@ -46,15 +46,15 @@ factorGoalVar, factorGoalCons, factorGoalArrow, factorGoalApp,
  factorStepEnvGood, factorStepProvidedGood, factorStepProvidedBad,
  factorStepEnvBad, factorVarUsage :: Float
 
-factorGoalVar   = 5.0
+factorGoalVar   = 4.0
 factorGoalCons  = 0.55
 factorGoalArrow = 5.0
-factorGoalApp   = 1.95
-factorStepProvidedGood = 0.18
-factorStepProvidedBad  = 4.0
+factorGoalApp   = 1.9
+factorStepProvidedGood = 0.2
+factorStepProvidedBad  = 5.0
 factorStepEnvGood = 6.0
-factorStepEnvBad  = 19.0
-factorVarUsage = 11.0
+factorStepEnvBad  = 22.0
+factorVarUsage = 8.0
 
 type RatedStates = Q.MaxPQueue Float State
 

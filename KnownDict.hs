@@ -45,7 +45,7 @@ bindings = toBindings
   , ("pure",     3.0, "(Applicative f) => a -> f a")
   , ("(>>=)",    0.0, "(Monad m) => m a -> (a -> m b) -> m b")
   , ("show",     3.0, "(Show a) => a -> String")
-  , ("(,)",      3.0, "a -> b -> Tuple a b")
+  , ("(,)",      5.0, "a -> b -> Tuple a b")
   , ("zip",      0.0, "List a -> List b -> List (Tuple a b)")
   , ("repeat",   5.0, "a -> List a")
   , ("foldr",    5.0, "(a -> b -> b) -> b -> List a -> b")
