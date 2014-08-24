@@ -60,7 +60,7 @@ type RatedStates = Q.MaxPQueue Float State
 
 -- returns the first found solution (not necessarily the best overall)
 findOneExpression :: HsConstrainedType
-                  -> [(String, HsConstrainedType)]
+                  -> [(String, Float, HsConstrainedType)]
                   -> StaticContext
                   -> Maybe (Expression, InfressionStats)
 findOneExpression t avail cont = listToMaybe $ findExpressions t avail cont
@@ -68,7 +68,7 @@ findOneExpression t avail cont = listToMaybe $ findExpressions t avail cont
 -- calculates at most n solutions, and returns them sorted by their rating
 findSortNExpressions :: Int
                      -> HsConstrainedType
-                     -> [(String, HsConstrainedType)]
+                     -> [(String, Float, HsConstrainedType)]
                      -> StaticContext
                      -> [(Expression, InfressionStats)]
 findSortNExpressions n t avail cont = sortBy (comparing g) $ take n $ r
@@ -77,7 +77,7 @@ findSortNExpressions n t avail cont = sortBy (comparing g) $ take n $ r
     g (_,InfressionStats _ f) = f
 
 findExpressions :: HsConstrainedType
-                -> [(String, HsConstrainedType)]
+                -> [(String, Float, HsConstrainedType)]
                 -> StaticContext
                 -> [(Expression, InfressionStats)]
 findExpressions rawCType funcs staticContext =
@@ -87,7 +87,7 @@ findExpressions rawCType funcs staticContext =
         []
         initialScopes
         M.empty
-        (map splitFunctionType funcs)
+        (map splitEnvElement funcs)
         (mkDynContext staticContext cs)
         (ExpHole 0)
         1
@@ -202,15 +202,15 @@ stateStep2 s
         (factorStepProvidedBad + usageRating)
         ("inserting given value " ++ show provId ++ "::" ++ show provT)
     byFunctionSimple = do
-      SimpleBinding funcId funcR funcParams funcConstrs <- functions s
+      SimpleBinding funcId funcRating funcR funcParams funcConstrs <- functions s
       let incF = incVarIds (+(1+maxTVarId s))
       byGenericUnify
         (Left funcId)
         (incF funcR)
         (map (constraintMapTypes incF) funcConstrs)
         (map incF funcParams)
-        factorStepEnvGood
-        factorStepEnvBad
+        (factorStepEnvGood + funcRating)
+        (factorStepEnvBad + funcRating)
         ("applying function " ++ show funcId)
     byGenericUnify :: Either String TVarId
                    -> HsType
@@ -325,12 +325,12 @@ addScopePatternMatch vid sid bindings state = foldr helper state bindings where
           }
 
 
-splitFunctionType :: (String, HsConstrainedType)
+splitEnvElement :: (String, Float, HsConstrainedType)
                   -> FuncBinding
                   --  name resultType paramTypes constraints
-splitFunctionType (a,HsConstrainedType constrs b) =
+splitEnvElement (a,r,HsConstrainedType constrs b) =
   case f b of
-    (Left  t,  ps) -> SimpleBinding a t ps constrs
+    (Left  t,  ps) -> SimpleBinding a r t ps constrs
     (Right ts, [p]) -> if null constrs then MatchBinding a ts p
                                        else undefined
     _ -> undefined

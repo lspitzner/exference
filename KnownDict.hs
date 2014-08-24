@@ -30,31 +30,31 @@ typeUnsafe = read "a -> b"
 typeBind   = read "m a -> (a -> m b) -> m b"
 typeJoin   = read "m (m a) -> m a"
 
-type Binding = (String, HsConstrainedType)
+type Binding = (String, Float, HsConstrainedType)
 
-toBindings :: [(String, String)] -> [(String, HsConstrainedType)]
-toBindings = map (second $ readConstrainedType defaultContext)
+toBindings :: [(String, Float, String)] -> [(String, Float, HsConstrainedType)]
+toBindings = map (\(a,b,c) ->
+                   (a,b,readConstrainedType defaultContext c))
 
+-- function, penalty for using that function, type
+-- value ignored for pattern-matches
 bindings :: [Binding]
 bindings = toBindings
-  [ ("fmap",   "(Functor f) => (a -> b) -> f a -> f b")
-  , ("(*)",    "(Applicative f) => f (a->b) -> f a -> f b")
-  , ("pure",   "(Applicative f) => a -> f a")
-  , ("(>>=)",  "(Monad m) => m a -> (a -> m b) -> m b")
-  -- , ("map",   "(a->b) -> List a -> List b")
-  , ("show",   "(Show a) => a -> String")
-  , ("(,)",    "a -> b -> Tuple a b")
-  , ("zip",    "List a -> List b -> List (Tuple a b)")
-  , ("repeat", "a -> List a")
-  , ("foldr",  "(a -> b -> b) -> b -> List a -> b")
-  --, ("fst",    "Tuple a b -> a")
-  --, ("snd",    "Tuple a b -> b")
-  , ("runState", "State s a -> s -> Tuple a s")
-  , ("()",     "Unit")
-  , ("State",  "(s -> Tuple a s) -> State s a")
-  , ("empty",  "List a")
-  , ("(:)",    "a -> List a -> List a")
-  , ("(,)",    "Tuple a b -> INFPATTERN a b")
+  [ ("fmap",     3.0, "(Functor f) => (a -> b) -> f a -> f b")
+  , ("(*)",      3.0, "(Applicative f) => f (a->b) -> f a -> f b")
+  , ("pure",     3.0, "(Applicative f) => a -> f a")
+  , ("(>>=)",    0.0, "(Monad m) => m a -> (a -> m b) -> m b")
+  , ("show",     3.0, "(Show a) => a -> String")
+  , ("(,)",      3.0, "a -> b -> Tuple a b")
+  , ("zip",      0.0, "List a -> List b -> List (Tuple a b)")
+  , ("repeat",   5.0, "a -> List a")
+  , ("foldr",    5.0, "(a -> b -> b) -> b -> List a -> b")
+  , ("runState", 3.0, "State s a -> s -> Tuple a s")
+  , ("()",       9.9, "Unit")
+  , ("State",    0.0, "(s -> Tuple a s) -> State s a")
+  , ("empty",    9.9, "List a")
+  , ("(:)",      4.0, "a -> List a -> List a")
+  , ("(,)",      0.0, "Tuple a b -> INFPATTERN a b")
   ]
 
 emptyContext :: StaticContext

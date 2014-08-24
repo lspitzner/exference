@@ -1,4 +1,3 @@
-- add rating for functions in environment
 - need more complex test-cases
 - instead of guessing any function, use enflated result-types
   and only apply functions where one of the possible result-types

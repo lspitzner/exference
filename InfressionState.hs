@@ -28,7 +28,7 @@ import Debug.Hood.Observe
 
 
 type VarBinding = (TVarId, HsType)
-data FuncBinding = SimpleBinding String HsType [HsType] [Constraint]
+data FuncBinding = SimpleBinding String Float HsType [HsType] [Constraint]
                                -- name, results, params constraints
                  | MatchBinding  String [HsType] HsType
   deriving Show
