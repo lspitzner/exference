@@ -88,6 +88,8 @@ addScope parent (Scopes nid sMap) = (nid, Scopes (nid+1) newMap)
     newMap   = M.insert nid newScope sMap
     newScope = Scope [] [parent]
 
+type VarUsageMap = M.Map TVarId Int
+
 type TGoal = (VarBinding, ScopeId)
            -- goal,    id of innermost scope available
 
@@ -122,6 +124,7 @@ data State = State
   { goals           :: [TGoal]
   , constraintGoals :: [Constraint]
   , providedScopes  :: Scopes
+  , varUses         :: VarUsageMap
   , functions       :: [FuncBinding]
   , context         :: DynContext
   , expression      :: Expression
@@ -136,6 +139,7 @@ instance Show State where
   show (State sgoals
               scgoals
               (Scopes _ scopeMap)
+              _svarUses
               _sfuncs
               scontext
               sexpression

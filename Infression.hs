@@ -40,17 +40,19 @@ import Debug.Trace
 
 
 -- the heuristic input factor constant thingies:
-factorGoalVar, factorGoalCons, factorGoalArrow, factorGoalApp :: Float
-factorStepEnvGood, factorStepProvidedGood, factorStepProvidedBad, factorStepEnvBad :: Float
+factorGoalVar, factorGoalCons, factorGoalArrow, factorGoalApp,
+ factorStepEnvGood, factorStepProvidedGood, factorStepProvidedBad,
+ factorStepEnvBad, factorVarUsage :: Float
 
 factorGoalVar   = 5.0
 factorGoalCons  = 0.55
-factorGoalArrow = 5.5
+factorGoalArrow = 5.0
 factorGoalApp   = 1.95
-factorStepProvidedGood = 0.2
-factorStepProvidedBad  = 6.0
+factorStepProvidedGood = 0.18
+factorStepProvidedBad  = 4.0
 factorStepEnvGood = 6.0
-factorStepEnvBad  = 16.0
+factorStepEnvBad  = 19.0
+factorVarUsage = 11.0
 
 type RatedStates = Q.MaxPQueue Float State
 
@@ -70,6 +72,7 @@ findExpressions rawCType funcs staticContext =
         [((0, t), 0)]
         []
         initialScopes
+        M.empty
         (map splitFunctionType funcs)
         (mkDynContext staticContext cs)
         (ExpHole 0)
@@ -116,6 +119,7 @@ findExpression' n states
 
 rateState :: State -> Float
 rateState s = 0.0 - rateGoals (goals s) - depth s
+ -- + 0.6 * rateScopes (providedScopes s)
 
 rateGoals :: [TGoal] -> Float
 rateGoals = sum . map rateGoal
@@ -129,8 +133,15 @@ rateGoals = sum . map rateGoal
     tComplexity (TypeApp t1 t2)   = factorGoalApp + tComplexity t1 + tComplexity t2
     tComplexity (TypeForall _ t1) = tComplexity t1
 
+rateScopes :: Scopes -> Float
+rateScopes (Scopes _ sMap) = M.foldr' f 0.0 sMap
+  where
+    f (Scope binds _) x = x + fromIntegral (length binds)
+
 stateStep :: State -> [State]
-stateStep s = -- traceShow s $
+stateStep s = -- trace (show (depth s) ++ " " ++ show (rateGoals $ goals s)
+              --                      ++ " " ++ show (rateScopes $ providedScopes s)
+              --                      ++ " " ++ show (expression s)) $
   stateStep2 s
 
 stateStep2 :: State -> [State]
@@ -150,6 +161,7 @@ stateStep2 s
         (newGoal:gr)
         (constraintGoals s) 
         newScopes
+        (M.insert v1 0 $ varUses s)
         (functions s)
         (context s)
         (fillExprHole var (ExpLambda v1 (ExpHole v2)) $ expression s)
@@ -160,26 +172,28 @@ stateStep2 s
         "function goal transform"
     byProvided = do
       (provId, provT, provPs) <- scopeGetAllBindings (providedScopes s) scopeId
+      let usageFloat = fromIntegral $ (M.!) (varUses s) provId
+          usageRating = factorVarUsage * usageFloat * usageFloat
       byGenericUnify
-        (ExpVar provId)
+        (Right provId)
         provT
         (S.toList $ dynContext_constraints $ context s)
         provPs
-        factorStepProvidedGood
-        factorStepProvidedBad
+        (factorStepProvidedGood + usageRating)
+        (factorStepProvidedBad + usageRating)
         ("inserting given value " ++ show provId ++ "::" ++ show provT)
     byFunctionSimple = do
       SimpleBinding funcId funcR funcParams funcConstrs <- functions s
       let incF = incVarIds (+(1+maxTVarId s))
       byGenericUnify
-        (ExpLit funcId)
+        (Left funcId)
         (incF funcR)
         (map (constraintMapTypes incF) funcConstrs)
         (map incF funcParams)
         factorStepEnvGood
         factorStepEnvBad
         ("applying function " ++ show funcId)
-    byGenericUnify :: Expression
+    byGenericUnify :: Either String TVarId
                    -> HsType
                    -> [Constraint]
                    -> [HsType]
@@ -187,9 +201,10 @@ stateStep2 s
                    -> Float
                    -> String
                    -> [State]
-    byGenericUnify coreExp provided provConstrs
-                   dependencies depthModMatch depthModNoMatch reasonPart =
-      case unify goalType provided of
+    byGenericUnify applier provided provConstrs
+                   dependencies depthModMatch depthModNoMatch reasonPart
+      | coreExp <- either ExpLit ExpVar applier
+      = case unify goalType provided of
         -- _a
         -- let b = f _c in _a
         Nothing -> case dependencies of
@@ -208,6 +223,7 @@ stateStep2 s
               (paramGoal:newMainGoal:gr)
               provConstrs
               newScopesRaw
+              (M.insert vResult 0 $ varUses s)
               (functions s)
               (context s)
               (fillExprHole var expr $ expression s)
@@ -235,10 +251,14 @@ stateStep2 s
                 n -> foldl ExpApply coreExp (map ExpHole [vBase..vBase+n-1])
               -- newGoals = map (,binds) $ zip [vBase..] dependencies
               newGoals = mkGoals scopeId $ zip [vBase..] dependencies
+              newVarUses = case applier of
+                Left _ -> varUses s
+                Right i -> M.adjust (+1) i $ varUses s
           return $ State
             (map (goalApplySubst substs) $ newGoals ++ gr)
             newConstraints
             (scopesApplySubsts substs $ providedScopes s)
+            newVarUses
             (functions s)
             (context s)
             (fillExprHole var expr $ expression s)
@@ -273,8 +293,11 @@ addScopePatternMatch vid sid bindings state = foldr helper state bindings where
               newProvTypes = map (applySubsts substs) resultTypes
               newBinds = map splitBinding $ zip vars $ newProvTypes
               expr = ExpLetMatch matchId vars (ExpVar v) (ExpHole vid)
+              newVarUses =           varUses s
+                           `M.union` (M.fromList $ zip vars $ repeat 0)
           return $ addScopePatternMatch vid sid newBinds $ s {
             providedScopes = scopesAddPBinding sid b oldScopes,
+            varUses = newVarUses,
             expression = fillExprHole vid expr $ expression s,
             nextVarId = vEnd,
             maxTVarId = maximum (maxTVarId s:map largestId newProvTypes),
