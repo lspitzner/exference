@@ -6,6 +6,7 @@
 module Infression
   ( findExpressions
   , findOneExpression
+  , findSortNExpressions
   , InfressionStats (..)
   )
 where
@@ -31,7 +32,8 @@ import Data.Maybe ( maybeToList, listToMaybe, fromMaybe )
 import Control.Arrow ( first, second, (***) )
 import Control.Monad ( guard, mzero )
 import Control.Applicative ( (<$>), (<*>) )
-import Data.List ( partition )
+import Data.List ( partition, sortBy )
+import Data.Ord ( comparing )
 
 -- import Data.DeriveTH
 import Debug.Hood.Observe
@@ -56,11 +58,23 @@ factorVarUsage = 11.0
 
 type RatedStates = Q.MaxPQueue Float State
 
+-- returns the first found solution (not necessarily the best overall)
 findOneExpression :: HsConstrainedType
                   -> [(String, HsConstrainedType)]
                   -> StaticContext
                   -> Maybe (Expression, InfressionStats)
 findOneExpression t avail cont = listToMaybe $ findExpressions t avail cont
+
+-- calculates at most n solutions, and returns them sorted by their rating
+findSortNExpressions :: Int
+                     -> HsConstrainedType
+                     -> [(String, HsConstrainedType)]
+                     -> StaticContext
+                     -> [(Expression, InfressionStats)]
+findSortNExpressions n t avail cont = sortBy (comparing g) $ take n $ r
+  where
+    r = findExpressions t avail cont
+    g (_,InfressionStats _ f) = f
 
 findExpressions :: HsConstrainedType
                 -> [(String, HsConstrainedType)]
@@ -108,7 +122,7 @@ findExpression' n states
                                                   (stateStep s)
         out = [(n, d, e) | solution <- potentialSolutions,
                            null (constraintGoals solution),
-                           let d = depth solution,
+                           let d = depth solution + rateVarUsage (varUses solution),
                            let e = expression solution]
         rest = findExpression' (n+1) $ foldr 
                    (uncurry Q.insert)
@@ -138,8 +152,12 @@ rateScopes (Scopes _ sMap) = M.foldr' f 0.0 sMap
   where
     f (Scope binds _) x = x + fromIntegral (length binds)
 
+rateVarUsage :: VarUsageMap -> Float
+rateVarUsage m = fromIntegral $ length $ filter (==0) $ M.elems m
+
 stateStep :: State -> [State]
-stateStep s = -- trace (show (depth s) ++ " " ++ show (rateGoals $ goals s)
+stateStep s = -- traceShow (expression s) 
+              -- trace (show (depth s) ++ " " ++ show (rateGoals $ goals s)
               --                      ++ " " ++ show (rateScopes $ providedScopes s)
               --                      ++ " " ++ show (expression s)) $
   stateStep2 s
@@ -172,7 +190,8 @@ stateStep2 s
         "function goal transform"
     byProvided = do
       (provId, provT, provPs) <- scopeGetAllBindings (providedScopes s) scopeId
-      let usageFloat = fromIntegral $ (M.!) (varUses s) provId
+      let usageFloat, usageRating :: Float
+          usageFloat = fromIntegral $ (M.!) (varUses s) provId
           usageRating = factorVarUsage * usageFloat * usageFloat
       byGenericUnify
         (Right provId)
