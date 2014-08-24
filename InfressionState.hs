@@ -69,13 +69,24 @@ scopesApplySubsts substs (Scopes i scopeMap) = Scopes i $ M.map scopeF scopeMap
     scopeF (Scope binds ids) = Scope (map bindF binds) ids
     bindF = varPBindingApplySubsts substs
 
+{-
 scopesAddBinding :: ScopeId -> VarBinding -> Scopes -> Scopes
-scopesAddBinding sid binding (Scopes nid sMap) = Scopes nid newMap
+scopesAddBinding sid binding scopes =
+  scopesAddPBinding sid (splitBinding binding) scopes
+-}
+
+scopesAddPBinding :: ScopeId -> VarPBinding -> Scopes -> Scopes
+scopesAddPBinding sid binding (Scopes nid sMap) = Scopes nid newMap
   where
     newMap = M.adjust addBinding sid sMap
     addBinding :: Scope -> Scope
-    addBinding (Scope vbinds ids) = Scope (pbinding:vbinds) ids
-    pbinding = splitBinding binding
+    addBinding (Scope vbinds ids) = Scope (binding:vbinds) ids
+
+addScope :: ScopeId -> Scopes -> (ScopeId, Scopes)
+addScope parent (Scopes nid sMap) = (nid, Scopes (nid+1) newMap)
+  where
+    newMap   = M.insert nid newScope sMap
+    newScope = Scope [] [parent]
 
 type TGoal = (VarBinding, ScopeId)
            -- goal,    id of innermost scope available

@@ -16,6 +16,7 @@ data Expression = ExpVar TVarId
                 | ExpApply Expression Expression
                 | ExpHole TVarId
                 | ExpLetMatch String [TVarId] Expression Expression
+                | ExpLet TVarId Expression Expression
 
 -- $( derive makeNFData ''Expression )
 
@@ -31,12 +32,22 @@ instance Show Expression where
       showParen (d>2)
     $ showString ("let ("++n++" "++intercalate " " (map showVar vars) ++ ") = ")
     . shows bindExp . showString " in " . showsPrec 3 inExp
+  showsPrec d (ExpLet i bindExp inExp) =
+      showParen (d>2)
+    $ showString ("let " ++ showVar i ++ " = ")
+    . showsPrec 3 bindExp
+    . showString " in "
+    . showsPrec 3 inExp
 
 fillExprHole :: TVarId -> Expression -> Expression -> Expression
-fillExprHole vid t (ExpHole j) | vid==j = t
+fillExprHole vid t orig@(ExpHole j) | vid==j = t
+                                    | otherwise = orig
 fillExprHole vid t (ExpLambda i ty) = ExpLambda i $ fillExprHole vid t ty
 fillExprHole vid t (ExpApply e1 e2) = ExpApply (fillExprHole vid t e1)
                                                (fillExprHole vid t e2)
 fillExprHole vid t (ExpLetMatch n vars bindExp inExp) =
   ExpLetMatch n vars (fillExprHole vid t bindExp) (fillExprHole vid t inExp)
-fillExprHole _ _ t = t
+fillExprHole vid t (ExpLet i bindExp inExp) =
+  ExpLet i (fillExprHole vid t bindExp) (fillExprHole vid t inExp)
+fillExprHole _ _ t@(ExpLit _) = t
+fillExprHole _ _ t@(ExpVar _) = t

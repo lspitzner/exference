@@ -38,6 +38,19 @@ import Debug.Trace
 
 
 
+-- the heuristic input factor constant thingies:
+factorGoalVar, factorGoalCons, factorGoalArrow, factorGoalApp :: Float
+factorStepEnvGood, factorStepProvidedGood, factorStepProvidedBad, factorStepEnvBad :: Float
+
+factorGoalVar   = 5.0
+factorGoalCons  = 0.55
+factorGoalArrow = 5.5
+factorGoalApp   = 1.95
+factorStepProvidedGood = 0.2
+factorStepProvidedBad  = 6.0
+factorStepEnvGood = 6.0
+factorStepEnvBad  = 16.0
+
 type RatedStates = Q.MaxPQueue Float State
 
 findOneExpression :: HsConstrainedType
@@ -85,7 +98,7 @@ tConstantifyVars f@(TypeForall _ _) = f
 
 findExpression' :: Int -> RatedStates -> [(Int,Float,Expression)]
 findExpression' n states
-  | Q.null states || n > 50000 = []
+  | Q.null states || n > 100000 = []
   | ((_,s), restStates) <- Q.deleteFindMax states =
     if
       | not $ null (goals s) ->
@@ -101,7 +114,7 @@ findExpression' n states
           (n, depth s, expression s) : findExpression' (n+1) restStates
 
 rateState :: State -> Float
-rateState s = 0.0 - 3.0*rateGoals (goals s) - depth s
+rateState s = 0.0 - rateGoals (goals s) - depth s
 
 rateGoals :: [TGoal] -> Float
 rateGoals = sum . map rateGoal
@@ -109,10 +122,10 @@ rateGoals = sum . map rateGoal
     rateGoal ((_,t),_) = tComplexity t
     -- TODO: actually measure performance with different values,
     --       use derived values instead of (arbitrarily) chosen ones.
-    tComplexity (TypeVar _) = 1.0
-    tComplexity (TypeCons _) = 0.3
-    tComplexity (TypeArrow t1 t2) = 1.6 + tComplexity t1 + tComplexity t2
-    tComplexity (TypeApp t1 t2) = 0.8 + tComplexity t1 + tComplexity t2
+    tComplexity (TypeVar _)       = factorGoalVar
+    tComplexity (TypeCons _)      = factorGoalCons
+    tComplexity (TypeArrow t1 t2) = factorGoalArrow + tComplexity t1 + tComplexity t2
+    tComplexity (TypeApp t1 t2)   = factorGoalApp + tComplexity t1 + tComplexity t2
     tComplexity (TypeForall _ t1) = tComplexity t1
 
 stateStep :: State -> [State]
@@ -121,7 +134,7 @@ stateStep s = -- traceShow s $
 
 stateStep2 :: State -> [State]
 stateStep2 s
-  | depth s > 50.0 = []
+  | depth s > 200.0 = []
   | (TypeArrow t1 t2) <- goalType = arrowStep t1 t2
   | otherwise = byProvided ++ byFunctionSimple
   where
@@ -132,7 +145,7 @@ stateStep2 s
           newNext = v2+1
           (newGoal, newScopeId, newScopes) = addNewScopeGoal scopeId (v2, t2)
                                            $ providedScopes s
-      in return $ addScopePatternMatch v2 newScopeId [(v1,t1)] $ State
+      in return $ addScopePatternMatch v2 newScopeId [splitBinding (v1,t1)] $ State
         (newGoal:gr)
         (constraintGoals s) 
         newScopes
@@ -151,7 +164,8 @@ stateStep2 s
         provT
         (S.toList $ dynContext_constraints $ context s)
         provPs
-        0.2
+        factorStepProvidedGood
+        factorStepProvidedBad
         ("inserting given value " ++ show provId ++ "::" ++ show provT)
     byFunctionSimple = do
       SimpleBinding funcId funcR funcParams funcConstrs <- functions s
@@ -161,80 +175,111 @@ stateStep2 s
         (incF funcR)
         (map (constraintMapTypes incF) funcConstrs)
         (map incF funcParams)
-        5.0
+        factorStepEnvGood
+        factorStepEnvBad
         ("applying function " ++ show funcId)
     byGenericUnify :: Expression
                    -> HsType
                    -> [Constraint]
                    -> [HsType]
                    -> Float
+                   -> Float
                    -> String
                    -> [State]
     byGenericUnify coreExp provided provConstrs
-                   dependencies depthMod reasonPart = do
-      substs <- maybeToList $ unify goalType provided
-      let contxt = context s
-          constrs1 = map (constraintApplySubsts substs)
-                   $ constraintGoals s
-          constrs2 = map (constraintApplySubsts substs)
-                   $ provConstrs
-      newConstraints <- maybeToList $ isPossible contxt (constrs1++constrs2)
-      let substsTxt   = show substs ++ " unifies " ++ show goalType
-                                    ++ " and " ++ show provided
-          provableTxt = "constraints (" ++ show (constrs1++constrs2)
-                                        ++ ") are provable"
-          vBase = nextVarId s
-          paramN = length dependencies
-          expr = case paramN of
-            0 -> coreExp
-            n -> foldl ExpApply coreExp (map ExpHole [vBase..vBase+n-1])
-          -- newGoals = map (,binds) $ zip [vBase..] dependencies
-          newGoals = mkGoals scopeId $ zip [vBase..] dependencies
-      return $ State
-        (map (goalApplySubst substs) $ newGoals ++ gr)
-        newConstraints
-        (scopesApplySubsts substs $ providedScopes s)
-        (functions s)
-        (context s)
-        (fillExprHole var expr $ expression s)
-        (vBase + paramN)
-        (maximum $ maxTVarId s
-                 : largestSubstsId substs
-                 : map largestId dependencies)
-        (depth s + depthMod)
-        (Just s)
-        (reasonPart ++ ", because " ++ substsTxt ++ " and because " ++ provableTxt)
+                   dependencies depthModMatch depthModNoMatch reasonPart =
+      case unify goalType provided of
+        -- _a
+        -- let b = f _c in _a
+        Nothing -> case dependencies of
+          [] -> []
+          (d:ds) ->
+            let vResult = nextVarId s
+                vParam = vResult + 1
+                vEnd = vParam + 1
+                expr = ExpLet vResult (ExpApply coreExp $ ExpHole vParam) (ExpHole var)
+                newBinding = (vResult, provided, ds)
+                (newScopeId, newScopesRaw) = addScope scopeId $ providedScopes s
+                paramGoal = ((vParam, d), scopeId)
+                newMainGoal = ((var, goalType), newScopeId)
+                --newScopes = scopesAddPBinding newScopeId newBinding newScopesRaw
+            in return $ addScopePatternMatch var newScopeId [newBinding] $ State
+              (paramGoal:newMainGoal:gr)
+              provConstrs
+              newScopesRaw
+              (functions s)
+              (context s)
+              (fillExprHole var expr $ expression s)
+              vEnd
+              (maximum $ maxTVarId s
+                       : map largestId dependencies)
+              (depth s + depthModNoMatch) -- constant penalty for wild-guessing..
+              (Just s)
+              ("randomly trying to apply function " ++ show coreExp)
+        Just substs -> do
+          let contxt = context s
+              constrs1 = map (constraintApplySubsts substs)
+                       $ constraintGoals s
+              constrs2 = map (constraintApplySubsts substs)
+                       $ provConstrs
+          newConstraints <- maybeToList $ isPossible contxt (constrs1++constrs2)
+          let substsTxt   = show substs ++ " unifies " ++ show goalType
+                                        ++ " and " ++ show provided
+              provableTxt = "constraints (" ++ show (constrs1++constrs2)
+                                            ++ ") are provable"
+              vBase = nextVarId s
+              paramN = length dependencies
+              expr = case paramN of
+                0 -> coreExp
+                n -> foldl ExpApply coreExp (map ExpHole [vBase..vBase+n-1])
+              -- newGoals = map (,binds) $ zip [vBase..] dependencies
+              newGoals = mkGoals scopeId $ zip [vBase..] dependencies
+          return $ State
+            (map (goalApplySubst substs) $ newGoals ++ gr)
+            newConstraints
+            (scopesApplySubsts substs $ providedScopes s)
+            (functions s)
+            (context s)
+            (fillExprHole var expr $ expression s)
+            (vBase + paramN)
+            (maximum $ maxTVarId s
+                     : largestSubstsId substs
+                     : map largestId dependencies)
+            (depth s + depthModMatch)
+            (Just s)
+            (reasonPart ++ ", because " ++ substsTxt ++ " and because " ++ provableTxt)
 
-addScopePatternMatch :: Int -> ScopeId -> [VarBinding] -> State -> State
+addScopePatternMatch :: Int -> ScopeId -> [VarPBinding] -> State -> State
 addScopePatternMatch vid sid bindings state = foldr helper state bindings where
-  oldScopes = providedScopes state
-  helper :: VarBinding -> State -> State
-  helper b@(v,vt) s
-    | defaultRes <- s { providedScopes = scopesAddBinding sid b oldScopes }
-    = case vt of
-      TypeVar _     -> defaultRes -- dont pattern-match on variables, even if it unifies
-      TypeArrow _ _ -> defaultRes
-      TypeForall _ _ -> undefined -- todo when we do RankNTypes
-      _ -> fromMaybe defaultRes $ listToMaybe $ do
-        MatchBinding matchId matchRs matchParam <- functions s
-        let incF = incVarIds (+(1+maxTVarId s))
-            resultTypes = map incF matchRs
-            inputType = incF matchParam
-        substs <- maybeToList $ unifyRight vt inputType
-        let vBase = nextVarId s
-            vEnd = vBase + length resultTypes
-            vars = [vBase .. vEnd-1]
-            newProvTypes = map (applySubsts substs) resultTypes
-            newBinds = zip vars $ newProvTypes
-            expr = ExpLetMatch matchId vars (ExpVar v) (ExpHole vid)
-        return $ addScopePatternMatch vid sid newBinds $ s {
-          providedScopes = scopesAddBinding sid b oldScopes,
-          expression = fillExprHole vid expr $ expression s,
-          nextVarId = vEnd,
-          maxTVarId = maximum (maxTVarId s:map largestId newProvTypes),
-          previousState = Just s,
-          lastStepReason = "pattern matching on " ++ show vt
-        }
+  helper :: VarPBinding -> State -> State
+  helper b@(v,vtResult,vtParams) s
+    | oldScopes <- providedScopes s,
+      defaultRes <- s { providedScopes = scopesAddPBinding sid b oldScopes }
+    = if not $ null vtParams then defaultRes
+      else case vtResult of
+        TypeVar _     -> defaultRes -- dont pattern-match on variables, even if it unifies
+        TypeArrow _ _ -> undefined  -- should never happen, given a pbinding..
+        TypeForall _ _ -> undefined -- todo when we do RankNTypes
+        _ -> fromMaybe defaultRes $ listToMaybe $ do
+          MatchBinding matchId matchRs matchParam <- functions s
+          let incF = incVarIds (+(1+maxTVarId s))
+              resultTypes = map incF matchRs
+              inputType = incF matchParam
+          substs <- maybeToList $ unifyRight vtResult inputType
+          let vBase = nextVarId s
+              vEnd = vBase + length resultTypes
+              vars = [vBase .. vEnd-1]
+              newProvTypes = map (applySubsts substs) resultTypes
+              newBinds = map splitBinding $ zip vars $ newProvTypes
+              expr = ExpLetMatch matchId vars (ExpVar v) (ExpHole vid)
+          return $ addScopePatternMatch vid sid newBinds $ s {
+            providedScopes = scopesAddPBinding sid b oldScopes,
+            expression = fillExprHole vid expr $ expression s,
+            nextVarId = vEnd,
+            maxTVarId = maximum (maxTVarId s:map largestId newProvTypes),
+            previousState = Just s,
+            lastStepReason = "pattern matching on " ++ showVar v
+          }
 
 
 splitFunctionType :: (String, HsConstrainedType)
