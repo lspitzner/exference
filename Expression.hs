@@ -26,18 +26,18 @@ instance Show Expression where
   showsPrec d (ExpLambda i e) =
     showParen (d>0) $ showString ("\\" ++ showVar i ++ " -> ") . showsPrec 1 e
   showsPrec d (ExpApply e1 e2) =
-    showParen (d>1) $ showsPrec 2 e1 . showString " " . showsPrec 2 e2
+    showParen (d>1) $ showsPrec 2 e1 . showString " " . showsPrec 3 e2
   showsPrec _ (ExpHole i) = showString $ "_" ++ showVar i
   showsPrec d (ExpLetMatch n vars bindExp inExp) =
       showParen (d>2)
     $ showString ("let ("++n++" "++intercalate " " (map showVar vars) ++ ") = ")
-    . shows bindExp . showString " in " . showsPrec 3 inExp
+    . shows bindExp . showString " in " . showsPrec 0 inExp
   showsPrec d (ExpLet i bindExp inExp) =
       showParen (d>2)
     $ showString ("let " ++ showVar i ++ " = ")
     . showsPrec 3 bindExp
     . showString " in "
-    . showsPrec 3 inExp
+    . showsPrec 0 inExp
 
 fillExprHole :: TVarId -> Expression -> Expression -> Expression
 fillExprHole vid t orig@(ExpHole j) | vid==j = t
