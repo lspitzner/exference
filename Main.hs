@@ -12,6 +12,7 @@ import KnownDict
 import Debug.Hood.Observe
 import Infression
 import TypeClasses
+import Expression
 
 import Control.DeepSeq
 
@@ -19,7 +20,7 @@ import System.Process
 
 import Control.Applicative ( (<$>), (<*>) )
 import Control.Arrow ( second, (***) )
-import Control.Monad ( when )
+import Control.Monad ( when, forM_ )
 
 
 
@@ -44,21 +45,74 @@ printFindExpression name typeStr = do
   when (null r) $ putStrLn $ "no results for "++name++"!"
   mapM_ f r
 
+testInput :: [(String, String)]
+testInput = 
+  [ (,) "showmap"   "(Show b) => (a -> b) -> List a -> List String"
+  , (,) "ffbind"    "(a -> t -> b) -> (t -> a) -> (t -> b)"
+  , (,) "join"      "(Monad m) => m (m a) -> m a"
+  , (,) "fjoin"     "(t -> (t -> a)) -> t -> a"
+  , (,) "zipThingy" "List a -> b -> List (Tuple a b)"
+  , (,) "stateRun"  "State a b -> a -> b"
+  , (,) "fst"       "Tuple a b -> a"
+  , (,) "ffst"      "(a -> Tuple b c) -> a -> b"
+  , (,) "snd"       "Tuple a b -> b"
+  , (,) "fswap"     "(a -> Tuple b c) -> a -> Tuple c b"
+  , (,) "liftBlub"  "Monad m => m a -> m b -> (a -> b -> m c) -> m c"
+  , (,) "stateBind" "State s a -> (a -> State s b) -> State s b"
+  ]
+
+testOutput :: [[(Expression, InfressionStats)]]
+testOutput = map f testInput
+  where
+    f (_,s) = take 6 $ findExpressions
+                (readConstrainedType defaultContext s)
+                bindings
+                defaultContext
+
+testInOut = zip testInput testOutput
+
+printAndStuff = mapM_ f testInOut
+  where
+    f ((name, _), []) = putStrLn $ "no results for "++name++"!"
+    f ((name, _), results) = mapM_ g results
+      where
+        g (expr, InfressionStats n d) = do
+          let str = show expr
+              doPf = False
+          if doPf then do
+            pf <- pointfree $ str
+            putStrLn $ name ++ " = " ++ pf
+                       ++ "    FROM    " ++ name ++ " = " ++ str
+                       ++ " (depth " ++ show d ++ ", " ++ show n ++ " steps)"
+           else
+            putStrLn $ name ++ " = " ++ str
+                       ++ " (depth " ++ show d ++ ", " ++ show n ++ " steps)"
+
+printStatistics = mapM_ f testInOut
+  where
+    f ((name, _), [])      = putStrLn ("---")
+    f ((name, _), results) =
+      let (min, avg, max, n) = getStats results
+      in putStrLn $ name ++ " min=" ++ show min
+                         ++ " avg=" ++ show avg
+                         ++ " max=" ++ show max
+                         ++ " n = " ++ show n
+    getStats results =
+      let steps = map (infression_steps.snd) results
+      in ( minimum steps
+         --, fromIntegral (sum steps) / fromIntegral (length steps)
+         , sum steps `div` length steps
+         , maximum steps
+         , length steps
+         )
+
 main = runO $ do
   --print $ result1
   -- let (DynContext _a b _) = testDynContext
   -- print b
-  printFindExpression "showmap" "(Show b) => (a -> b) -> List a -> List String"
-  printFindExpression "ffbind" "(a -> t -> b) -> (t -> a) -> (t -> b)"
-  printFindExpression "join" "(Monad m) => m (m a) -> m a"
-  printFindExpression "fjoin" "(t -> (t -> a)) -> t -> a"
-  printFindExpression "zipThingy" "List a -> b -> List (Tuple a b)"
-  printFindExpression "stateRun" "State a b -> a -> b"
-  printFindExpression "fst" "Tuple a b -> a"
-  printFindExpression "ffst" "(a -> Tuple b c) -> a -> b"
-  printFindExpression "fswap" "(a -> Tuple b c) -> a -> Tuple c b"
-  printFindExpression "liftBlub" "Monad m => m a -> m b -> (a -> b -> m c) -> m c"
-  --print $ inflateConstraints a b
+  printAndStuff
+  printStatistics
+  -- print $ inflateConstraints a b
   {-
   print $ constraintMatches testDynContext (badReadVar "y") (read "x")
   print $ constraintMatches testDynContext (badReadVar "x") (read "y")
