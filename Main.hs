@@ -21,6 +21,8 @@ import System.Process
 import Control.Applicative ( (<$>), (<*>) )
 import Control.Arrow ( second, (***) )
 import Control.Monad ( when, forM_ )
+import Data.List ( sortBy )
+import Data.Ord ( comparing )
 import Text.Printf
 
 
@@ -45,7 +47,7 @@ testInput =
 testOutput :: [[(Expression, InfressionStats)]]
 testOutput = map f testInput
   where
-    f (_,s) = take 10 $ findExpressions
+    f (_,s) = findSortNExpressions 5
                 (readConstrainedType defaultContext s)
                 bindings
                 defaultContext
@@ -73,14 +75,14 @@ printStatistics = mapM_ f testInOut
   where
     f ((name, _), [])      = putStrLn ("---")
     f ((name, _), results) =
-      let (min, avg, max, n) = getStats results
-      in putStrLn $ printf "%10s: min=%6d avg=%6d max=%6d %s" name min avg max
+      let (hd, avg, min, max, n) = getStats results
+      in putStrLn $ printf "%10s: head=%6d avg=%6d min=%6d max=%6d %s" name hd avg min max
                                      (if n==6 then "" else " n = " ++ show n)
     getStats results =
       let steps = map (infression_steps.snd) results
-      in ( minimum steps
-         --, fromIntegral (sum steps) / fromIntegral (length steps)
+      in ( head steps
          , sum steps `div` length steps
+         , minimum steps
          , maximum steps
          , length steps
          )
