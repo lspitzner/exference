@@ -21,29 +21,9 @@ import System.Process
 import Control.Applicative ( (<$>), (<*>) )
 import Control.Arrow ( second, (***) )
 import Control.Monad ( when, forM_ )
+import Text.Printf
 
 
-
-printFindExpression :: String -> String -> IO ()
-printFindExpression name typeStr = do
-  let f (e, InfressionStats n d) = do
-          let str = show e
-              doPf = False
-          if doPf then do
-            pf <- pointfree $ str
-            putStrLn $ name ++ " = " ++ pf
-                       ++ "    FROM    " ++ name ++ " = " ++ str
-                       ++ " (depth " ++ show d ++ ", " ++ show n ++ " steps)"
-           else
-            putStrLn $ name ++ " = " ++ str
-                       ++ " (depth " ++ show d ++ ", " ++ show n ++ " steps)"
-  let
-    r = take 6 $ findExpressions
-      (readConstrainedType defaultContext typeStr)
-      bindings
-      defaultContext
-  when (null r) $ putStrLn $ "no results for "++name++"!"
-  mapM_ f r
 
 testInput :: [(String, String)]
 testInput = 
@@ -56,6 +36,7 @@ testInput =
   , (,) "fst"       "Tuple a b -> a"
   , (,) "ffst"      "(a -> Tuple b c) -> a -> b"
   , (,) "snd"       "Tuple a b -> b"
+  , (,) "quad"      "a -> Tuple (Tuple a a) (Tuple a a)"
   , (,) "fswap"     "(a -> Tuple b c) -> a -> Tuple c b"
   , (,) "liftBlub"  "Monad m => m a -> m b -> (a -> b -> m c) -> m c"
   , (,) "stateBind" "State s a -> (a -> State s b) -> State s b"
@@ -64,7 +45,7 @@ testInput =
 testOutput :: [[(Expression, InfressionStats)]]
 testOutput = map f testInput
   where
-    f (_,s) = take 6 $ findExpressions
+    f (_,s) = take 10 $ findExpressions
                 (readConstrainedType defaultContext s)
                 bindings
                 defaultContext
@@ -93,10 +74,8 @@ printStatistics = mapM_ f testInOut
     f ((name, _), [])      = putStrLn ("---")
     f ((name, _), results) =
       let (min, avg, max, n) = getStats results
-      in putStrLn $ name ++ " min=" ++ show min
-                         ++ " avg=" ++ show avg
-                         ++ " max=" ++ show max
-                         ++ " n = " ++ show n
+      in putStrLn $ printf "%10s: min=%6d avg=%6d max=%6d %s" name min avg max
+                                     (if n==6 then "" else " n = " ++ show n)
     getStats results =
       let steps = map (infression_steps.snd) results
       in ( minimum steps
