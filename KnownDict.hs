@@ -49,12 +49,12 @@ bindings = toBindings
   , ("zip",      0.0, "List a -> List b -> List (Tuple a b)")
   , ("repeat",   5.0, "a -> List a")
   , ("foldr",    5.0, "(a -> b -> b) -> b -> List a -> b")
-  , ("runState", 3.0, "State s a -> s -> Tuple a s")
   , ("()",       9.9, "Unit")
   , ("State",    0.0, "(s -> Tuple a s) -> State s a")
   , ("empty",    9.9, "List a")
   , ("(:)",      4.0, "a -> List a -> List a")
   , ("(,)",      0.0, "Tuple a b -> INFPATTERN a b")
+  , ("State",    0.0, "State s a -> INFPATTERN (s -> Tuple a s)")
   ]
 
 emptyContext :: StaticContext
