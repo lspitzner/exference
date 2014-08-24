@@ -31,6 +31,7 @@ import Data.Maybe ( maybeToList, listToMaybe, fromMaybe )
 import Control.Arrow ( first, second, (***) )
 import Control.Monad ( guard, mzero )
 import Control.Applicative ( (<$>), (<*>) )
+import Data.List ( partition )
 
 -- import Data.DeriveTH
 import Debug.Hood.Observe
@@ -100,18 +101,18 @@ findExpression' :: Int -> RatedStates -> [(Int,Float,Expression)]
 findExpression' n states
   | Q.null states || n > 100000 = []
   | ((_,s), restStates) <- Q.deleteFindMax states =
-    if
-      | not $ null (goals s) ->
-          findExpression' (n+1) $ foldr
-                                       (uncurry Q.insert)
-                                       restStates
-                                       [ (r, newS)
-                                       | newS <- stateStep s
-                                       , let r = rateState newS]
-      | not $ null (constraintGoals s) ->
-          findExpression' (n+1) restStates
-      | otherwise -> -- trace (showStateDevelopment s) $
-          (n, depth s, expression s) : findExpression' (n+1) restStates
+    let (potentialSolutions, futures) = partition (null.goals) 
+                                                  (stateStep s)
+        out = [(n, d, e) | solution <- potentialSolutions,
+                           null (constraintGoals solution),
+                           let d = depth solution,
+                           let e = expression solution]
+        rest = findExpression' (n+1) $ foldr 
+                   (uncurry Q.insert)
+                   restStates
+                   [ (r, newS) | newS <- futures
+                               , let r = rateState newS ]
+    in out ++ rest
 
 rateState :: State -> Float
 rateState s = 0.0 - rateGoals (goals s) - depth s
