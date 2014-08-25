@@ -1,4 +1,5 @@
 {-# OPTIONS_GHC -fno-warn-missing-signatures #-}
+{-# LANGUAGE PatternGuards #-}
 
 module KnownDict
   ( bindings
@@ -18,6 +19,9 @@ where
 import Type
 import ConstrainedType
 import TypeClasses
+
+import qualified Data.Set as S
+import qualified Data.Map.Strict as M
 
 import Control.Arrow ( second )
 
@@ -98,7 +102,8 @@ defaultContext = StaticContext {
                      , c_enum
                      , c_num, c_real, c_integral
                      , c_fractional, c_realfrac, c_floating, c_realfloat],
-  context_instances = [ list_show, list_monad, maybe_monad, maybe_show, tuple_show]
+  context_instances = inflateInstances
+                     $ [ list_show, list_monad, maybe_monad, maybe_show, tuple_show]
                     ++ integral_instances
                     ++ realfloat_instances
   --context_redirects = M.Map TVarId TVarId
@@ -188,3 +193,16 @@ testDynContext = mkDynContext defaultContext
     , Constraint c_show [read "MyFoo"]
     , Constraint c_show [read "B"]
     ]
+
+inflateInstances :: [HsInstance] -> [HsInstance]
+inflateInstances is = S.toList $ S.unions $ map (S.fromList . f) is
+  where
+    f :: HsInstance -> [HsInstance]
+    f i@(HsInstance iconstrs tclass iparams)
+      | (HsTypeClass _ tparams tconstrs) <- tclass
+      , substs <- M.fromList $ zip tparams iparams
+      = let 
+          g :: Constraint -> HsInstance
+          g (Constraint ctclass cparams) =
+            HsInstance iconstrs ctclass $ map (applySubsts substs) cparams
+        in i : concatMap (f.g) tconstrs
