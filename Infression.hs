@@ -122,7 +122,7 @@ findExpression' n states
                                                   (stateStep s)
         out = [(n, d, e) | solution <- potentialSolutions,
                            null (constraintGoals solution),
-                           let d = depth solution + rateVarUsage (varUses solution),
+                           let d = depth solution + 50*rateVarUsage (varUses solution),
                            let e = -- trace (showStateDevelopment solution) $ 
                                      expression solution]
         rest = findExpression' (n+1) $ foldr 
