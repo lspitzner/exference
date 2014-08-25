@@ -42,6 +42,7 @@ testInput =
   , (,) "fswap"     "(a -> Tuple b c) -> a -> Tuple c b"
   , (,) "liftBlub"  "Monad m => m a -> m b -> (a -> b -> m c) -> m c"
   , (,) "stateBind" "State s a -> (a -> State s b) -> State s b"
+  , (,) "dbMaybe"   "Maybe a -> Maybe (Tuple a a)"
   ]
 
 testOutput :: [[(Expression, InfressionStats)]]
