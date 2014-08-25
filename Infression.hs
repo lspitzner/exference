@@ -157,7 +157,7 @@ rateVarUsage :: VarUsageMap -> Float
 rateVarUsage m = fromIntegral $ length $ filter (==0) $ M.elems m
 
 stateStep :: State -> [State]
-stateStep s = -- traceShow (expression s) 
+stateStep s = -- traceShow s
               -- trace (show (depth s) ++ " " ++ show (rateGoals $ goals s)
               --                      ++ " " ++ show (rateScopes $ providedScopes s)
               --                      ++ " " ++ show (expression s)) $

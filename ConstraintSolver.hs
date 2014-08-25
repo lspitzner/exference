@@ -14,6 +14,8 @@ import qualified Data.Set as S
 import Control.Monad ( mplus, guard, msum )
 import Control.Applicative ( (<$>), liftA2 )
 
+import Debug.Trace
+
 
 
 -- returns Nothing if one of the constraints is refutable

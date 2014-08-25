@@ -74,6 +74,9 @@ instance Observable Constraint where
 instance Observable DynContext where
   observer x = observeOpaque (show x) x
 
+instance Observable HsInstance where
+  observer x = observeOpaque (show x) x
+
 constraintMapTypes :: (HsType -> HsType) -> Constraint -> Constraint
 constraintMapTypes f (Constraint a ts) = Constraint a (map f ts)
 

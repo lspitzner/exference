@@ -21,6 +21,8 @@ import TypeClasses
 
 import Control.Arrow ( second )
 
+import Debug.Hood.Observe
+
 
 
 typeReturn, typeUnsafe, typeBind, typeJoin, typeId :: HsType
