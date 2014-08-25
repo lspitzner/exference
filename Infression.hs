@@ -123,7 +123,8 @@ findExpression' n states
         out = [(n, d, e) | solution <- potentialSolutions,
                            null (constraintGoals solution),
                            let d = depth solution + rateVarUsage (varUses solution),
-                           let e = expression solution]
+                           let e = -- trace (showStateDevelopment solution) $ 
+                                     expression solution]
         rest = findExpression' (n+1) $ foldr 
                    (uncurry Q.insert)
                    restStates
@@ -240,7 +241,7 @@ stateStep2 s
                 --newScopes = scopesAddPBinding newScopeId newBinding newScopesRaw
             in return $ addScopePatternMatch var newScopeId [newBinding] $ State
               (paramGoal:newMainGoal:gr)
-              provConstrs
+              (constraintGoals s ++ provConstrs)
               newScopesRaw
               (M.insert vResult 0 $ varUses s)
               (functions s)
