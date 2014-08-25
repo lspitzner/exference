@@ -7,6 +7,8 @@ module Infression
   ( findExpressions
   , findOneExpression
   , findSortNExpressions
+  , findBestNExpressions
+  , findFirstBestExpressions
   , InfressionStats (..)
   )
 where
@@ -32,8 +34,9 @@ import Data.Maybe ( maybeToList, listToMaybe, fromMaybe )
 import Control.Arrow ( first, second, (***) )
 import Control.Monad ( guard, mzero )
 import Control.Applicative ( (<$>), (<*>) )
-import Data.List ( partition, sortBy )
+import Data.List ( partition, sortBy, groupBy )
 import Data.Ord ( comparing )
+import Data.Function ( on )
 
 -- import Data.DeriveTH
 import Debug.Hood.Observe
@@ -75,6 +78,36 @@ findSortNExpressions n t avail cont = sortBy (comparing g) $ take n $ r
   where
     r = findExpressions t avail cont
     g (_,InfressionStats _ f) = f
+
+-- returns the first expressions with the best rating.
+-- best explained on examples:
+--   []      -> []
+--   [2,5,5] -> [2]
+--   [3,3,3,4,4,5,6,7] -> [3,3,3]
+--   [2,5,2] -> [2] -- will not look past worse ratings
+--   [4,3,2,2,2,3] -> [2,2,2] -- if directly next is better, switch to that
+findFirstBestExpressions :: HsConstrainedType
+                         -> [(String, Float, HsConstrainedType)]
+                         -> StaticContext
+                         -> [(Expression, InfressionStats)]
+findFirstBestExpressions t avail cont
+  | r <- findExpressions t avail cont
+  , f <- head . groupBy ((>=) `on` infression_complexityRating.snd)
+  = case r of
+    [] -> []
+    _  -> f $ reverse $ f $ r
+
+-- like findSortNExpressions, but retains only the best rating
+findBestNExpressions :: Int
+                     -> HsConstrainedType
+                     -> [(String, Float, HsConstrainedType)]
+                     -> StaticContext
+                     -> [(Expression, InfressionStats)]
+findBestNExpressions n t avail cont
+  | r <- findSortNExpressions n t avail cont
+  = case r of
+    [] -> []
+    _  -> head $ groupBy ((>=) `on` infression_complexityRating.snd) $ r
 
 findExpressions :: HsConstrainedType
                 -> [(String, Float, HsConstrainedType)]
