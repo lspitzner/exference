@@ -213,29 +213,34 @@ stateStep s = --traceShow (expression s)
 stateStep2 :: State -> [State]
 stateStep2 s
   | depth s > 200.0 = []
-  | (TypeArrow t1 t2) <- goalType = arrowStep t1 t2
+  | (TypeArrow _ _) <- goalType = arrowStep goalType [] (nextVarId s)
   | otherwise = byProvided ++ byFunctionSimple
   where
     (((var, goalType), scopeId):gr) = goals s
-    arrowStep t1 t2 = 
-      let v1 = nextVarId s
-          v2 = v1+1
-          newNext = v2+1
-          (newGoal, newScopeId, newScopes) = addNewScopeGoal scopeId (v2, t2)
+    arrowStep :: HsType -> [(TVarId, HsType)] -> TVarId -> [State]
+    arrowStep g ts nextId
+      | (TypeArrow t1 t2) <- g = arrowStep t2 ((nextId, t1):ts) (nextId+1)
+      | otherwise = let
+          vEnd = nextId + 1
+          (newGoal, newScopeId, newScopes) = addNewScopeGoal scopeId (nextId, g)
                                            $ providedScopes s
-      in return $ addScopePatternMatch v2 newScopeId [splitBinding (v1,t1)] $ State
-        (newGoal:gr)
-        (constraintGoals s) 
-        newScopes
-        (M.insert v1 0 $ varUses s)
-        (functions s)
-        (context s)
-        (fillExprHole var (ExpLambda v1 (ExpHole v2)) $ expression s)
-        newNext
-        (maxTVarId s)
-        (depth s + 0.8)
-        (Just s)
-        "function goal transform"
+          newVarUses = M.fromList (map (\(v,_) -> (v,0)) ts) `M.union` varUses s
+          lambdas = foldr ExpLambda (ExpHole nextId) $ reverse $ map fst ts
+          newExpr = fillExprHole var lambdas (expression s)
+          newBinds = map splitBinding ts
+        in return $ addScopePatternMatch nextId newScopeId newBinds $ State
+          (newGoal:gr)
+          (constraintGoals s)
+          newScopes
+          newVarUses
+          (functions s)
+          (context s)
+          newExpr
+          vEnd
+          (maxTVarId s)
+          (depth s + factorFunctionGoalTransform)
+          (Just s)
+          "function goal transform"
     byProvided = do
       (provId, provT, provPs) <- scopeGetAllBindings (providedScopes s) scopeId
       let usageFloat, usageRating :: Float
