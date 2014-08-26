@@ -171,7 +171,7 @@ findExpression' n states
                            null (constraintGoals solution),
                            let d = depth solution + factorUnusedVar*rateVarUsage (varUses solution),
                            let e = -- trace (showStateDevelopment solution) $ 
-                                     expression solution]
+                                     simplifyLets $ expression solution]
         rest = findExpression' (n+1) $ foldr 
                    (uncurry Q.insert)
                    restStates
