@@ -121,18 +121,18 @@ mkGoals :: ScopeId
 mkGoals sid vbinds = [(b,sid)|b<-vbinds]
 
 data State = State
-  { goals           :: [TGoal]
-  , constraintGoals :: [Constraint]
-  , providedScopes  :: Scopes
-  , varUses         :: VarUsageMap
-  , functions       :: [FuncBinding]
-  , context         :: DynContext
-  , expression      :: Expression
-  , nextVarId       :: TVarId
-  , maxTVarId       :: TVarId
-  , depth           :: Float
-  , previousState   :: Maybe State
-  , lastStepReason  :: String
+  { state_goals           :: [TGoal]
+  , state_constraintGoals :: [Constraint]
+  , state_providedScopes  :: Scopes
+  , state_varUses         :: VarUsageMap
+  , state_functions       :: [FuncBinding]
+  , state_context         :: DynContext
+  , state_expression      :: Expression
+  , state_nextVarId       :: TVarId
+  , state_maxTVarId       :: TVarId
+  , state_depth           :: Float
+  , state_previousState   :: Maybe State
+  , state_lastStepReason  :: String
   }
 
 instance Show State where
@@ -182,7 +182,7 @@ instance Show State where
       tVarPType (i, t, ps) = tVarType (i, foldr TypeArrow t ps)
 
 showStateDevelopment :: State -> String
-showStateDevelopment s = maybe "" f (previousState s) ++ show s
+showStateDevelopment s = maybe "" f (state_previousState s) ++ show s
   where
     f :: State -> String
     f x = showStateDevelopment x ++ "\n"
