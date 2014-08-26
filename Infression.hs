@@ -9,6 +9,7 @@ module Infression
   , findSortNExpressions
   , findBestNExpressions
   , findFirstBestExpressions
+  , takeFindSortNExpressions
   , InfressionStats (..)
   )
 where
@@ -67,6 +68,16 @@ findOneExpression :: HsConstrainedType
                   -> StaticContext
                   -> Maybe (Expression, InfressionStats)
 findOneExpression t avail cont = listToMaybe $ findExpressions t avail cont
+
+-- calculates at most n solutions, sorts by rating, returns the first m
+takeFindSortNExpressions :: Int
+                         -> Int
+                         -> HsConstrainedType
+                         -> [(String, Float, HsConstrainedType)]
+                         -> StaticContext
+                         -> [(Expression, InfressionStats)]
+takeFindSortNExpressions m n t avail cont =
+  take m $ findSortNExpressions n t avail cont
 
 -- calculates at most n solutions, and returns them sorted by their rating
 findSortNExpressions :: Int
