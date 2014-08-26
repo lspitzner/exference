@@ -48,7 +48,8 @@ import Debug.Trace
 -- the heuristic input factor constant thingies:
 factorGoalVar, factorGoalCons, factorGoalArrow, factorGoalApp,
  factorStepEnvGood, factorStepProvidedGood, factorStepProvidedBad,
- factorStepEnvBad, factorVarUsage :: Float
+ factorStepEnvBad, factorVarUsage, factorFunctionGoalTransform,
+ factorUnusedVar :: Float
 
 factorGoalVar   = 4.0
 factorGoalCons  = 0.55
@@ -59,6 +60,8 @@ factorStepProvidedBad  = 5.0
 factorStepEnvGood = 6.0
 factorStepEnvBad  = 22.0
 factorVarUsage = 8.0
+factorFunctionGoalTransform = 0.0
+factorUnusedVar = 20.0
 
 type RatedStates = Q.MaxPQueue Float State
 
@@ -126,7 +129,7 @@ findExpressions :: HsConstrainedType
                 -> [(Expression, InfressionStats)]
 findExpressions rawCType funcs staticContext =
   let (HsConstrainedType cs t) = ctConstantifyVars rawCType
-      r = findExpression' 0 $ Q.singleton 100000.0 $ State
+      r = findExpression' 0 $ Q.singleton 0.0 $ State
         [((0, t), 0)]
         []
         initialScopes
@@ -166,7 +169,7 @@ findExpression' n states
                                                   (stateStep s)
         out = [(n, d, e) | solution <- potentialSolutions,
                            null (constraintGoals solution),
-                           let d = depth solution + 50*rateVarUsage (varUses solution),
+                           let d = depth solution + factorUnusedVar*rateVarUsage (varUses solution),
                            let e = -- trace (showStateDevelopment solution) $ 
                                      expression solution]
         rest = findExpression' (n+1) $ foldr 
@@ -201,7 +204,7 @@ rateVarUsage :: VarUsageMap -> Float
 rateVarUsage m = fromIntegral $ length $ filter (==0) $ M.elems m
 
 stateStep :: State -> [State]
-stateStep s = -- traceShow s
+stateStep s = --traceShow (expression s)
               -- trace (show (depth s) ++ " " ++ show (rateGoals $ goals s)
               --                      ++ " " ++ show (rateScopes $ providedScopes s)
               --                      ++ " " ++ show (expression s)) $
