@@ -291,11 +291,14 @@ stateStep2 s
                 paramGoal = ((vParam, d), scopeId)
                 newMainGoal = ((var, goalType), newScopeId)
                 --newScopes = scopesAddPBinding newScopeId newBinding newScopesRaw
+                newVarUses = M.insert vResult 0 $ case applier of
+                  Left _ -> state_varUses s
+                  Right i -> M.adjust (+1) i $ state_varUses s
             in return $ addScopePatternMatch var newScopeId [newBinding] $ State
               (paramGoal:newMainGoal:gr)
               (state_constraintGoals s ++ provConstrs)
               newScopesRaw
-              (M.insert vResult 0 $ state_varUses s)
+              newVarUses
               (state_functions s)
               (state_context s)
               (fillExprHole var expr $ state_expression s)
@@ -365,7 +368,7 @@ addScopePatternMatch vid sid bindings state = foldr helper state bindings where
               newProvTypes = map (applySubsts substs) resultTypes
               newBinds = map splitBinding $ zip vars $ newProvTypes
               expr = ExpLetMatch matchId vars (ExpVar v) (ExpHole vid)
-              newVarUses =           state_varUses s
+              newVarUses = M.adjust (+1) v (state_varUses s)
                            `M.union` (M.fromList $ zip vars $ repeat 0)
           return $ addScopePatternMatch vid sid newBinds $ s {
             state_providedScopes = scopesAddPBinding sid b oldScopes,
