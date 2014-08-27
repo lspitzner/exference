@@ -10,6 +10,8 @@ module Infression
   , findBestNExpressions
   , findFirstBestExpressions
   , takeFindSortNExpressions
+  , ExferenceInput ( ExferenceInput )
+  , ExferenceOutputElement
   , InfressionStats (..)
   )
 where
@@ -63,34 +65,37 @@ factorVarUsage = 8.0
 factorFunctionGoalTransform = 0.0
 factorUnusedVar = 20.0
 
+data ExferenceInput = ExferenceInput
+  { goalType :: HsConstrainedType
+  , envFunctions :: [(String, Float, HsConstrainedType)]
+  , envContext :: StaticContext
+  , allowUnused :: Bool
+  }
+
+type ExferenceOutputElement = (Expression, InfressionStats)
+
 type RatedStates = Q.MaxPQueue Float State
 
 -- returns the first found solution (not necessarily the best overall)
-findOneExpression :: HsConstrainedType
-                  -> [(String, Float, HsConstrainedType)]
-                  -> StaticContext
-                  -> Maybe (Expression, InfressionStats)
-findOneExpression t avail cont = listToMaybe $ findExpressions t avail cont
+findOneExpression :: ExferenceInput
+                  -> Maybe ExferenceOutputElement
+findOneExpression input = listToMaybe $ findExpressions input
 
 -- calculates at most n solutions, sorts by rating, returns the first m
 takeFindSortNExpressions :: Int
                          -> Int
-                         -> HsConstrainedType
-                         -> [(String, Float, HsConstrainedType)]
-                         -> StaticContext
-                         -> [(Expression, InfressionStats)]
-takeFindSortNExpressions m n t avail cont =
-  take m $ findSortNExpressions n t avail cont
+                         -> ExferenceInput
+                         -> [ExferenceOutputElement]
+takeFindSortNExpressions m n input =
+  take m $ findSortNExpressions n input
 
 -- calculates at most n solutions, and returns them sorted by their rating
 findSortNExpressions :: Int
-                     -> HsConstrainedType
-                     -> [(String, Float, HsConstrainedType)]
-                     -> StaticContext
-                     -> [(Expression, InfressionStats)]
-findSortNExpressions n t avail cont = sortBy (comparing g) $ take n $ r
+                     -> ExferenceInput
+                     -> [ExferenceOutputElement]
+findSortNExpressions n input = sortBy (comparing g) $ take n $ r
   where
-    r = findExpressions t avail cont
+    r = findExpressions input
     g (_,InfressionStats _ f) = f
 
 -- returns the first expressions with the best rating.
@@ -100,12 +105,10 @@ findSortNExpressions n t avail cont = sortBy (comparing g) $ take n $ r
 --   [3,3,3,4,4,5,6,7] -> [3,3,3]
 --   [2,5,2] -> [2] -- will not look past worse ratings
 --   [4,3,2,2,2,3] -> [2,2,2] -- if directly next is better, switch to that
-findFirstBestExpressions :: HsConstrainedType
-                         -> [(String, Float, HsConstrainedType)]
-                         -> StaticContext
-                         -> [(Expression, InfressionStats)]
-findFirstBestExpressions t avail cont
-  | r <- findExpressions t avail cont
+findFirstBestExpressions :: ExferenceInput
+                         -> [ExferenceOutputElement]
+findFirstBestExpressions input
+  | r <- findExpressions input
   , f <- head . groupBy ((>=) `on` infression_complexityRating.snd)
   = case r of
     [] -> []
@@ -113,36 +116,57 @@ findFirstBestExpressions t avail cont
 
 -- like findSortNExpressions, but retains only the best rating
 findBestNExpressions :: Int
-                     -> HsConstrainedType
-                     -> [(String, Float, HsConstrainedType)]
-                     -> StaticContext
-                     -> [(Expression, InfressionStats)]
-findBestNExpressions n t avail cont
-  | r <- findSortNExpressions n t avail cont
+                     -> ExferenceInput
+                     -> [ExferenceOutputElement]
+findBestNExpressions n input
+  | r <- findSortNExpressions n input
   = case r of
     [] -> []
     _  -> head $ groupBy ((>=) `on` infression_complexityRating.snd) $ r
 
-findExpressions :: HsConstrainedType
-                -> [(String, Float, HsConstrainedType)]
-                -> StaticContext
-                -> [(Expression, InfressionStats)]
-findExpressions rawCType funcs staticContext =
-  let (HsConstrainedType cs t) = ctConstantifyVars rawCType
-      r = findExpression' 0 $ Q.singleton 0.0 $ State
-        [((0, t), 0)]
-        []
-        initialScopes
-        M.empty
-        (map splitEnvElement funcs)
-        (mkDynContext staticContext cs)
-        (ExpHole 0)
-        1
-        (largestId t)
-        0.0
-        Nothing
-        ""
-  in [(e, InfressionStats steps compl) | (steps, compl, e) <- r]
+findExpressions :: ExferenceInput
+                -> [ExferenceOutputElement]
+findExpressions (ExferenceInput rawCType funcs staticContext allowUnused) =
+  [(e, InfressionStats steps compl) | (steps, compl, e) <- r]
+  where
+    (HsConstrainedType cs t) = ctConstantifyVars rawCType
+    r = helper 0 $ Q.singleton 0.0 $ State
+      [((0, t), 0)]
+      []
+      initialScopes
+      M.empty
+      (map splitEnvElement funcs)
+      (mkDynContext staticContext cs)
+      (ExpHole 0)
+      1
+      (largestId t)
+      0.0
+      Nothing
+      ""
+    helper :: Int -> RatedStates -> [(Int,Float,Expression)]
+    helper n states
+      | Q.null states || n > 32768 = []
+      | ((_,s), restStates) <- Q.deleteFindMax states =
+        let (potentialSolutions, futures) = partition (null.state_goals) 
+                                                      (stateStep s)
+            out = [ (n, d, e)
+                  | solution <- potentialSolutions
+                  , null (state_constraintGoals solution)
+                  , let unusedVarCount = getUnusedVarCount
+                                           (state_varUses solution)
+                  , allowUnused || unusedVarCount==0
+                  , let d = state_depth solution
+                          + factorUnusedVar*(fromIntegral unusedVarCount)
+                  , let e = -- trace (showStateDevelopment solution) $ 
+                            simplifyLets $ state_expression solution
+                  ]
+            rest = helper (n+1) $ foldr 
+                       (uncurry Q.insert)
+                       restStates
+                       [ (r, newS) | newS <- futures
+                                   , let r = rateState newS ]
+        in out ++ rest
+
 
 ctConstantifyVars :: HsConstrainedType -> HsConstrainedType
 ctConstantifyVars (HsConstrainedType a b) =
@@ -151,7 +175,7 @@ ctConstantifyVars (HsConstrainedType a b) =
     (tConstantifyVars b)
 
 tConstantifyVars :: HsType -> HsType
-tConstantifyVars (TypeVar i)        = TypeCons $ "INF" ++ showVar i
+tConstantifyVars (TypeVar i)        = TypeCons $ "EXF" ++ showVar i
 tConstantifyVars c@(TypeCons _)     = c
 tConstantifyVars (TypeArrow t1 t2)  = TypeArrow
                                        (tConstantifyVars t1)
@@ -160,24 +184,6 @@ tConstantifyVars (TypeApp t1 t2)    = TypeApp
                                        (tConstantifyVars t1)
                                        (tConstantifyVars t2)
 tConstantifyVars f@(TypeForall _ _) = f
-
-findExpression' :: Int -> RatedStates -> [(Int,Float,Expression)]
-findExpression' n states
-  | Q.null states || n > 100000 = []
-  | ((_,s), restStates) <- Q.deleteFindMax states =
-    let (potentialSolutions, futures) = partition (null.state_goals) 
-                                                  (stateStep s)
-        out = [(n, d, e) | solution <- potentialSolutions,
-                           null (state_constraintGoals solution),
-                           let d = state_depth solution + factorUnusedVar*rateVarUsage (state_varUses solution),
-                           let e = -- trace (showStateDevelopment solution) $ 
-                                     simplifyLets $ state_expression solution]
-        rest = findExpression' (n+1) $ foldr 
-                   (uncurry Q.insert)
-                   restStates
-                   [ (r, newS) | newS <- futures
-                               , let r = rateState newS ]
-    in out ++ rest
 
 rateState :: State -> Float
 rateState s = 0.0 - rateGoals (state_goals s) - state_depth s
@@ -200,8 +206,8 @@ rateScopes (Scopes _ sMap) = M.foldr' f 0.0 sMap
   where
     f (Scope binds _) x = x + fromIntegral (length binds)
 
-rateVarUsage :: VarUsageMap -> Float
-rateVarUsage m = fromIntegral $ length $ filter (==0) $ M.elems m
+getUnusedVarCount :: VarUsageMap -> Int
+getUnusedVarCount m = length $ filter (==0) $ M.elems m
 
 stateStep :: State -> [State]
 stateStep s = --traceShow (state_expression s)

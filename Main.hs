@@ -20,45 +20,178 @@ import System.Process
 
 import Control.Applicative ( (<$>), (<*>) )
 import Control.Arrow ( second, (***) )
-import Control.Monad ( when, forM_ )
+import Control.Monad ( when, forM_, guard )
 import Data.List ( sortBy )
 import Data.Ord ( comparing )
 import Text.Printf
+import Data.Maybe ( listToMaybe )
 
 
 
-testInput :: [(String, String)]
+testInput :: [(String, Bool, String)]
 testInput = 
-  [ (,) "showmap"   "(Show b) => (a -> b) -> List a -> List String"
-  , (,) "ffbind"    "(a -> t -> b) -> (t -> a) -> (t -> b)"
-  , (,) "join"      "(Monad m) => m (m a) -> m a"
-  , (,) "fjoin"     "(t -> (t -> a)) -> t -> a"
-  , (,) "zipThingy" "List a -> b -> List (Tuple a b)"
-  , (,) "stateRun"  "State a b -> a -> b"
-  , (,) "fst"       "Tuple a b -> a"
-  , (,) "ffst"      "(a -> Tuple b c) -> a -> b"
-  , (,) "snd"       "Tuple a b -> b"
-  , (,) "quad"      "a -> Tuple (Tuple a a) (Tuple a a)"
-  , (,) "fswap"     "(a -> Tuple b c) -> a -> Tuple c b"
-  , (,) "liftBlub"  "Monad m => m a -> m b -> (a -> b -> m c) -> m c"
-  , (,) "stateBind" "State s a -> (a -> State s b) -> State s b"
-  , (,) "dbMaybe"   "Maybe a -> Maybe (Tuple a a)"
+  [ (,,) "showmap"    False "(Show b) => (a -> b) -> List a -> List String"
+  , (,,) "ffbind"     False "(a -> t -> b) -> (t -> a) -> (t -> b)"
+  , (,,) "join"       False "(Monad m) => m (m a) -> m a"
+  , (,,) "fjoin"      False "(t -> (t -> a)) -> t -> a"
+  , (,,) "zipThingy"  False "List a -> b -> List (Tuple a b)"
+  , (,,) "stateRun"   True  "State a b -> a -> b"
+  , (,,) "fst"        True  "Tuple a b -> a"
+  , (,,) "ffst"       True  "(a -> Tuple b c) -> a -> b"
+  , (,,) "snd"        True  "Tuple a b -> b"
+  , (,,) "quad"       False "a -> Tuple (Tuple a a) (Tuple a a)"
+  , (,,) "fswap"      False "(a -> Tuple b c) -> a -> Tuple c b"
+  , (,,) "liftBlub"   False "Monad m => m a -> m b -> (a -> b -> m c) -> m c"
+  , (,,) "stateBind"  False "State s a -> (a -> State s b) -> State s b"
+  , (,,) "dbMaybe"    False "Maybe a -> Maybe (Tuple a a)"
+  , (,,) "tupleShow"  False "Show a, Show b => Tuple a b -> String"
+  , (,,) "FloatToInt" False "Float -> Int"
   ]
+
+expected :: [(String, Expression)]
+expected =
+  [ (,) "showmap"
+    (ExpLambda 1
+      (ExpLambda 2
+        (ExpApply
+          (ExpApply
+            (ExpLit "fmap")
+            (ExpLambda 6
+              (ExpApply
+                (ExpLit "show")
+                (ExpApply (ExpVar 1) (ExpVar 6)))))
+          (ExpVar 2))))
+  , (,) "ffbind"
+    (ExpLambda 1
+      (ExpLambda 2
+        (ExpLambda 3
+          (ExpApply
+            (ExpApply
+              (ExpVar 1)
+              (ExpApply (ExpVar 2) (ExpVar 3)))
+            (ExpVar 3)))))
+  , (,) "join"
+    (ExpLambda 1
+      (ExpApply
+        (ExpApply (ExpLit "(>>=)") (ExpVar 1))
+        (ExpLambda 5 (ExpVar 5))))
+  , (,) "fjoin"
+    (ExpLambda 1
+      (ExpLambda 2
+        (ExpApply (ExpApply (ExpVar 1) (ExpVar  2)) (ExpVar 2))))
+  , (,) "zipThingy"
+    (ExpLambda 1
+      (ExpLambda 2
+        (ExpApply
+          (ExpApply
+            (ExpLit "fmap")
+            (ExpLambda 6
+              (ExpApply
+                (ExpApply (ExpLit "(,)") (ExpVar 6))
+                (ExpVar 2))))
+          (ExpVar 1))))
+  , (,) "stateRun"
+    (ExpLambda 1
+      (ExpLambda 2
+        (ExpLetMatch "State" [4] (ExpVar 1)
+          (ExpLetMatch "(,)" [7,8]
+            (ExpApply (ExpVar 4) (ExpVar 2))
+            (ExpVar 7)))))
+  , (,) "fst"
+    (ExpLambda 1 (ExpLetMatch "(,)" [3,4] (ExpVar 1) (ExpVar 3)))
+  , (,) "snd"
+    (ExpLambda 1 (ExpLetMatch "(,)" [3,4] (ExpVar 1) (ExpVar 4)))
+  , (,) "quad"
+    (ExpLambda 1
+      (ExpApply
+        (ExpApply
+          (ExpLit "(,)")
+          (ExpApply (ExpApply (ExpLit "(,)") (ExpVar 1)) (ExpVar 1)))
+        (ExpApply (ExpApply (ExpLit "(,)") (ExpVar 1)) (ExpVar 1))))
+  , (,) "liftBlub"
+    (ExpLambda 1
+      (ExpLambda 2
+        (ExpLambda 3
+          (ExpApply
+            (ExpApply (ExpLit "(>>=)") (ExpVar 1))
+            (ExpLambda 7
+              (ExpApply
+                (ExpApply (ExpLit "(>>=)") (ExpVar 2))
+                (ExpLambda 11
+                  (ExpApply
+                    (ExpApply (ExpVar 3) (ExpVar 7))
+                    (ExpVar 11)))))))))
+  , (,) "stateBind"
+    (ExpLambda 1
+      (ExpLambda 2
+        (ExpLetMatch "State" [4] (ExpVar 1)
+          (ExpApply
+            (ExpLit "State")
+            (ExpLambda 6
+              (ExpLetMatch "(,)" [10,11]
+                (ExpApply
+                  (ExpVar 4)
+                  (ExpVar 6))
+                (ExpLetMatch "State" [14]
+                  (ExpApply (ExpVar 2) (ExpVar 10))
+                  (ExpApply (ExpVar 14) (ExpVar 11)))))))))
+  , (,) "dbMaybe"
+    (ExpLambda 1
+      (ExpApply
+        (ExpApply
+          (ExpLit "fmap")
+          (ExpLambda 5
+            (ExpApply
+              (ExpApply (ExpLit "(,)") (ExpVar 5))
+              (ExpVar 5))))
+        (ExpVar 1)))
+  ]
+
+checkOutput :: [( String
+                , Expression
+                , Maybe (Expression, Expression)
+                , Maybe (Int, InfressionStats)
+                )]
+checkOutput = do
+  (iname, allowUnused, typeStr) <- testInput
+  (ename, expr)    <- expected
+  guard $ iname==ename
+  let input = ExferenceInput
+                (readConstrainedType defaultContext typeStr)
+                bindings
+                defaultContext
+                allowUnused
+  let r = findExpressions input
+  let finder :: Int -> [(Expression, InfressionStats)] -> Maybe (Int, InfressionStats)
+      finder n [] = Nothing
+      finder n ((e, s):r) | e==expr = Just (n, s)
+                          | otherwise = finder (n+1) r
+      bestFound = findSortNExpressions 100 input
+      firstAndBest :: Maybe (Expression, Expression)
+      firstAndBest = do
+        (f,_) <- listToMaybe r
+        (b,_) <- listToMaybe bestFound
+        return (f,b)
+  return (iname, expr, firstAndBest, finder 0 r)
+  
+
 
 testOutput :: [[(Expression, InfressionStats)]]
 testOutput = map f testInput
   where
-    f (_,s) = findSortNExpressions 5
+    input = ExferenceInput
+    f (_, allowUnused, s) = takeFindSortNExpressions 5 10 $ ExferenceInput
                 (readConstrainedType defaultContext s)
                 bindings
                 defaultContext
+                allowUnused
 
 testInOut = zip testInput testOutput
 
 printAndStuff = mapM_ f testInOut
   where
-    f ((name, _), []) = putStrLn $ "no results for "++name++"!"
-    f ((name, _), results) = mapM_ g results
+    f ((name, _, _), []) = putStrLn $ "no results for "++name++"!"
+    f ((name, _, _), results) = mapM_ g results
       where
         g (expr, InfressionStats n d) = do
           let str = show expr
@@ -74,8 +207,8 @@ printAndStuff = mapM_ f testInOut
 
 printStatistics = mapM_ f testInOut
   where
-    f ((name, _), [])      = putStrLn ("---")
-    f ((name, _), results) =
+    f ((name, _, _), [])      = putStrLn ("---")
+    f ((name, _, _), results) =
       let (hd, avg, min, max, n) = getStats results
       in putStrLn $ printf "%10s: head=%6d avg=%6d min=%6d max=%6d %s" name hd avg min max
                                      (if n==6 then "" else " n = " ++ show n)
@@ -88,12 +221,39 @@ printStatistics = mapM_ f testInOut
          , length steps
          )
 
+printChecks :: IO ()
+printChecks = mapM_ helper checkOutput
+  where
+    helper :: ( String
+              , Expression
+              , Maybe (Expression, Expression)
+              , Maybe (Int, InfressionStats))
+           -> IO ()
+    helper (name, _, Just(f,b), Just (0, InfressionStats n d))
+      | f==b = do putStrLn $ printf "%-10s: fine                                  %5d %8.2f" name n d
+      | otherwise = do
+      putStrLn $ printf "%-10s: expected solution first, but not best!" name
+      putStrLn $ "  expected solution: " ++ show f
+      putStrLn $ "  best solution:     " ++ show b
+    helper (name, e, Just(f,_), Just (i, _)) = do
+      putStrLn $ printf "%-10s: expected solution not first, but %d!" name i
+      putStrLn $ "  first solution:    " ++ show f
+      putStrLn $ "  expected solution: " ++ show e
+    helper (name, e, Just(f,b), Nothing) = do
+      putStrLn $ printf "%-10s: expected solution not found!" name
+      putStrLn $ "  first solution was " ++ show f
+      putStrLn $ "  best solution:     " ++ show b
+      putStrLn $ "  expected solution: " ++ show e
+    helper (name, _, Nothing, Nothing) = do
+      putStrLn $ printf "%-10s: no solutions found at all!" name 
+
 main = runO $ do
   --print $ result1
   -- let (DynContext _a b _) = testDynContext
   -- print b
-  printAndStuff
-  printStatistics
+  --printAndStuff
+  printChecks
+  --printStatistics
   -- print $ inflateConstraints a b
   {-
   print $ constraintMatches testDynContext (badReadVar "y") (read "x")
@@ -118,11 +278,4 @@ pointful s = (!!0) <$> lines <$> readProcess "pointful" [s] ""
 
 result1 = unify (TypeArrow (TypeVar 0) (TypeCons "Blub"))
                (TypeArrow (TypeCons "Foo") (TypeVar 1))
-
-result4 = take 10 $ findExpressions
-  -- (readConstrainedType defaultContext "(Show B) => B -> String")
-  (readConstrainedType defaultContext "(Show B) => (A -> B) -> List A -> List String")
-  -- (readConstrainedType defaultContext "(A -> B) -> List A -> List B")
-  bindings
-  defaultContext
   

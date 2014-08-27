@@ -54,7 +54,7 @@ bindings = toBindings
   , ("(*)",      3.0, "(Applicative f) => f (a->b) -> f a -> f b")
   -- monad
   , ("(>>=)",    0.0, "(Monad m) => m a -> (a -> m b) -> m b")
-  , ("(>>)",     0.0, "Monad m => m a -> m b -> m b")
+  , ("(>>)",     8.0, "Monad m => m a -> m b -> m b")
   -- show
   , ("show",     3.0, "(Show a) => a -> String")
   -- eq
@@ -74,13 +74,14 @@ bindings = toBindings
   , ("ceiling" , 9.9, "RealFrac a, Integral b => a -> b")
   , ("floor"   , 9.9, "RealFrac a, Integral b => a -> b")
   -- other
-  , ("(,)",      2.0, "a -> b -> Tuple a b")
+  , ("(,)",      0.0, "a -> b -> Tuple a b")
   , ("zip",      0.0, "List a -> List b -> List (Tuple a b)")
   , ("repeat",   5.0, "a -> List a")
-  , ("foldr",    3.0, "(a -> b -> b) -> b -> List a -> b")
+  , ("foldr",    0.0, "(a -> b -> b) -> b -> List a -> b")
+  --, ("foldr0",   0.0,  "(a -> List a -> List a) -> a -> List a")
   , ("()",       9.9, "Unit")
-  , ("State",    0.0, "(s -> Tuple a s) -> State s a")
-  , ("empty",    20.0, "List a")
+  , ("State",    3.0, "(s -> Tuple a s) -> State s a")
+  , ("[]",       40.0, "List a")
   , ("(:)",      4.0, "a -> List a -> List a")
   , ("(,)",      0.0, "Tuple a b -> INFPATTERN a b")
   , ("State",    0.0, "State s a -> INFPATTERN (s -> Tuple a s)")
