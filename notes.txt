@@ -33,34 +33,3 @@ optimal solution:
 7) f g x (a,b) = let h = g x in (h a, h b)
      OR        = let h = g x in (h b, h a)
 8) f g xs = foldr (\a b -> (:) <$> g a <*> b) (pure []) xs
-
-f :: a -> b
-let r = f ? in ?
-given = +b
-goal  = +a
-
-
-f = \b -> (\d -> let f = (runState b) in (State (\i -> (runState (d let n = (f i) in (let ((,) p q) = n in p))) i)))
-
-f b d = let f = (runState b) in
-  State $ \i ->
-    (runState (d (let n = (f i) in (let ((,) p q) = n in p)))) i
-
-f :: State s a -> (a -> State s b) -> State s b
-f b d =
-  let f = runState b
-  in State $ \i ->
-    runState (d (let (p,q) = (f i) in p)) i
-
-
-
-hand-made solution for
-  f :: State s a -> (a -> State s b) -> State s b
-f a b =
-  let c = runState a
-  in State $ \d -> let (e,f) = c d
-                       g = b e
-                   in runState g
-(or, from lyah:)
-f a b s = runState (b iv) is 
-    where (iv,is) = runState a s
