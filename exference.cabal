@@ -1,0 +1,67 @@
+Name:          exference
+Version:       0.2
+Cabal-Version: >= 1.8
+Build-Type:    Simple
+
+Library
+  --ghc-options: -fllvm
+  ghc-options: -threaded
+               -auto-all -caf-all -fno-spec-constr
+               -rtsopts
+               -O1
+               -j
+               -fno-warn-unused-imports
+               -fno-warn-orphans
+  exposed-modules: Language.Haskell.Exference
+  extensions: NoMonomorphismRestriction
+  hs-source-dirs: src
+  Build-Depends:
+    exference-core,
+    base >=3 && <5,
+    containers,
+    haskell-src,
+    deepseq,
+    hood,
+    process
+
+
+Executable test-main
+  -- buildable: False
+  main-is: Main.hs
+  hs-source-dirs: src
+  ghc-options: -auto-all -caf-all -fno-spec-constr
+               -rtsopts
+               -O2
+               -j
+               -fno-warn-unused-imports
+               -fno-warn-orphans
+  extensions: NoMonomorphismRestriction
+  Build-Depends:
+    exference-core,
+    base >=3 && <5,
+    containers,
+    haskell-src,
+    deepseq,
+    hood,
+    process
+
+
+
+Executable sublime
+  main-is: Main.hs
+  hs-source-dirs: src
+  ghc-options: -Wall
+               -auto-all -caf-all -fno-spec-constr
+               -rtsopts
+               -O0
+               -j
+               -fno-warn-unused-imports
+               -fno-warn-orphans  
+  Build-Depends:
+    exference-core,
+    base >=3 && <5,
+    containers,
+    haskell-src,
+    deepseq,
+    hood,
+    process
