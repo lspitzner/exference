@@ -1,4 +1,4 @@
-module Type
+module Language.Haskell.Exference.Type
   ( TVarId
   , HsType (..)
   , Subst

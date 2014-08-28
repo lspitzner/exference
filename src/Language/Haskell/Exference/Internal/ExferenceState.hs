@@ -1,20 +1,32 @@
-module InfressionState
-{-  ( State (..)
+module Language.Haskell.Exference.Internal.ExferenceState
+  ( State (..)
   , FuncBinding (..)
+  , TGoal
+  , Scopes (..)
+  , Scope (..)
+  , ScopeId
+  , VarPBinding
+  , VarUsageMap
   , varBindingApplySubsts
   , varPBindingApplySubsts
-  , newGoal
   , goalApplySubst
   , showStateDevelopment
-  , TGoal
-  )-}
+  , scopesApplySubsts
+  , mkGoals
+  , addScope
+  , scopeGetAllBindings
+  , scopesAddPBinding
+  , splitBinding
+  , addNewScopeGoal
+  , initialScopes
+  )
 where
 
 
 
-import Type
-import TypeClasses
-import Expression
+import Language.Haskell.Exference.Type
+import Language.Haskell.Exference.TypeClasses
+import Language.Haskell.Exference.Expression
 
 import qualified Data.Map.Strict as M
 

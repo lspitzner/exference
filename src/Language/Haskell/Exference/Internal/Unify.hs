@@ -1,4 +1,4 @@
-module Unify
+module Language.Haskell.Exference.Internal.Unify
   ( unify
   , unifyRight
   )
@@ -6,7 +6,7 @@ where
 
 
 
-import Type
+import Language.Haskell.Exference.Type
 import qualified Data.Map.Strict as M
 import Data.Maybe
 

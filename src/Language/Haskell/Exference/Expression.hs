@@ -1,4 +1,4 @@
-module Expression
+module Language.Haskell.Exference.Expression
   ( Expression (..)
   , fillExprHole
   , simplifyLets
@@ -7,7 +7,7 @@ where
 
 
 
-import Type
+import Language.Haskell.Exference.Type
 import Data.List ( intercalate )
 import Data.Function ( on )
 

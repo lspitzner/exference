@@ -1,4 +1,4 @@
-module ConstraintSolver
+module Language.Haskell.Exference.Internal.ConstraintSolver
   ( isProvable
   , isPossible
   )
@@ -6,9 +6,9 @@ where
 
 
 
-import Type
-import Unify
-import TypeClasses
+import Language.Haskell.Exference.Type
+import Language.Haskell.Exference.Internal.Unify
+import Language.Haskell.Exference.TypeClasses
 
 import qualified Data.Set as S
 import Control.Monad ( mplus, guard, msum )

@@ -1,6 +1,6 @@
 {-# LANGUAGE FlexibleInstances #-}
 
-module ConstrainedType
+module Language.Haskell.Exference.ConstrainedType
   ( HsConstrainedType (..)
   , readConstrainedType
   , parseConstrainedType
@@ -9,8 +9,8 @@ where
 
 
 
-import Type
-import TypeClasses
+import Language.Haskell.Exference.Type
+import Language.Haskell.Exference.TypeClasses
 import Data.List ( intersperse, find )
 import Data.Maybe ( fromMaybe )
 

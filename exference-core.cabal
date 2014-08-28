@@ -1,0 +1,38 @@
+Name:          exference-core
+Version:       0.2
+Cabal-Version: >= 1.8
+Build-Type:    Simple
+
+Library
+  --ghc-options: -fllvm
+  ghc-options: -threaded
+               -auto-all -caf-all -fno-spec-constr
+               -rtsopts
+               -O1
+               -j
+               -fno-warn-unused-imports
+               -fno-warn-orphans
+  exposed-modules: Language.Haskell.ExferenceCore,
+                   Language.Haskell.Exference.Type,
+                   Language.Haskell.Exference.ConstrainedType,
+                   Language.Haskell.Exference.TypeClasses,
+                   Language.Haskell.Exference.ExferenceStats,
+                   Language.Haskell.Exference.Expression,
+                   Language.Haskell.Exference.FunctionBinding
+  other-modules: Language.Haskell.Exference.Internal.Unify,
+                 Language.Haskell.Exference.Internal.ConstraintSolver,
+                 Language.Haskell.Exference.Internal.ExferenceState
+                 Language.Haskell.Exference.Internal.Exference
+  extensions: NoMonomorphismRestriction
+  hs-source-dirs: src
+  Build-Depends:
+    base >=3 && <5,
+    containers,
+    pretty >= 1.1,
+    deepseq,
+    vector,
+    mtl,
+    hood,
+    stable-memo,
+    parsec,
+    pqueue

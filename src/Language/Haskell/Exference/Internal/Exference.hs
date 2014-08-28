@@ -3,29 +3,25 @@
 {-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE PatternGuards #-}
 
-module Infression
+module Language.Haskell.Exference.Internal.Exference
   ( findExpressions
-  , findOneExpression
-  , findSortNExpressions
-  , findBestNExpressions
-  , findFirstBestExpressions
-  , takeFindSortNExpressions
-  , ExferenceInput ( ExferenceInput )
+  , ExferenceInput ( .. )
   , ExferenceOutputElement
-  , InfressionStats (..)
+  , ExferenceStats (..)
   )
 where
 
 
 
-import Type
-import Expression
-import Unify
-import TypeClasses
-import ConstrainedType
-import ConstraintSolver
-import InfressionState
-import InfressionStats
+import Language.Haskell.Exference.Type
+import Language.Haskell.Exference.Expression
+import Language.Haskell.Exference.TypeClasses
+import Language.Haskell.Exference.ConstrainedType
+import Language.Haskell.Exference.ExferenceStats
+import Language.Haskell.Exference.FunctionBinding
+import Language.Haskell.Exference.Internal.Unify
+import Language.Haskell.Exference.Internal.ConstraintSolver
+import Language.Haskell.Exference.Internal.ExferenceState
 
 import qualified Data.PQueue.Prio.Max as Q
 import qualified Data.Map as M
@@ -66,68 +62,20 @@ factorFunctionGoalTransform = 0.0
 factorUnusedVar = 20.0
 
 data ExferenceInput = ExferenceInput
-  { goalType :: HsConstrainedType
-  , envFunctions :: [(String, Float, HsConstrainedType)]
-  , envContext :: StaticContext
-  , allowUnused :: Bool
+  { input_goalType :: HsConstrainedType
+  , input_envFunctions :: [FunctionBinding]
+  , input_envContext :: StaticContext
+  , input_allowUnused :: Bool
   }
 
-type ExferenceOutputElement = (Expression, InfressionStats)
+type ExferenceOutputElement = (Expression, ExferenceStats)
 
 type RatedStates = Q.MaxPQueue Float State
-
--- returns the first found solution (not necessarily the best overall)
-findOneExpression :: ExferenceInput
-                  -> Maybe ExferenceOutputElement
-findOneExpression input = listToMaybe $ findExpressions input
-
--- calculates at most n solutions, sorts by rating, returns the first m
-takeFindSortNExpressions :: Int
-                         -> Int
-                         -> ExferenceInput
-                         -> [ExferenceOutputElement]
-takeFindSortNExpressions m n input =
-  take m $ findSortNExpressions n input
-
--- calculates at most n solutions, and returns them sorted by their rating
-findSortNExpressions :: Int
-                     -> ExferenceInput
-                     -> [ExferenceOutputElement]
-findSortNExpressions n input = sortBy (comparing g) $ take n $ r
-  where
-    r = findExpressions input
-    g (_,InfressionStats _ f) = f
-
--- returns the first expressions with the best rating.
--- best explained on examples:
---   []      -> []
---   [2,5,5] -> [2]
---   [3,3,3,4,4,5,6,7] -> [3,3,3]
---   [2,5,2] -> [2] -- will not look past worse ratings
---   [4,3,2,2,2,3] -> [2,2,2] -- if directly next is better, switch to that
-findFirstBestExpressions :: ExferenceInput
-                         -> [ExferenceOutputElement]
-findFirstBestExpressions input
-  | r <- findExpressions input
-  , f <- head . groupBy ((>=) `on` infression_complexityRating.snd)
-  = case r of
-    [] -> []
-    _  -> f $ reverse $ f $ r
-
--- like findSortNExpressions, but retains only the best rating
-findBestNExpressions :: Int
-                     -> ExferenceInput
-                     -> [ExferenceOutputElement]
-findBestNExpressions n input
-  | r <- findSortNExpressions n input
-  = case r of
-    [] -> []
-    _  -> head $ groupBy ((>=) `on` infression_complexityRating.snd) $ r
 
 findExpressions :: ExferenceInput
                 -> [ExferenceOutputElement]
 findExpressions (ExferenceInput rawCType funcs staticContext allowUnused) =
-  [(e, InfressionStats steps compl) | (steps, compl, e) <- r]
+  [(e, ExferenceStats steps compl) | (steps, compl, e) <- r]
   where
     (HsConstrainedType cs t) = ctConstantifyVars rawCType
     r = helper 0 $ Q.singleton 0.0 $ State
