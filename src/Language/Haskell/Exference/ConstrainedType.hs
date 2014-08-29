@@ -73,12 +73,9 @@ constrainedTypeParser c = spaces *>
           sepBy1 parseConstraint (spaces >> string "," >> spaces)
     parseConstraint :: Parser Constraint
     parseConstraint = Constraint
-      <$> ( do 
+      <$> do
         cstr <- (:) <$> satisfy isUpper <*> many alphaNum
-        case find ((cstr ==) . tclass_name) $ context_tclasses c of
-          Nothing -> fail ""
-          Just x -> return x
-        )
+        return $ fromMaybe unknownTypeClass $ find ((cstr ==) . tclass_name) $ context_tclasses c
       <*> many1 typeParser
 
 constrainedTypeApplySubsts :: Substs -> HsConstrainedType -> HsConstrainedType

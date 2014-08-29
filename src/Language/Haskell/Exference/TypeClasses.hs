@@ -11,6 +11,7 @@ module Language.Haskell.Exference.TypeClasses
   , inflateConstraints
   , constraintMapTypes
   , constraintContainsVariables
+  , unknownTypeClass
   )
 where
 
@@ -149,3 +150,6 @@ dynContextAddConstraints cs (DynContext a b _) =
 
 constraintContainsVariables :: Constraint -> Bool
 constraintContainsVariables = any ((-1/=).largestId) . constraint_params
+
+unknownTypeClass :: HsTypeClass
+unknownTypeClass = HsTypeClass "EXFUnknownTC" [] []
