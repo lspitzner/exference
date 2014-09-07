@@ -1,5 +1,6 @@
 module Language.Haskell.Exference.FunctionBinding
   ( FunctionBinding
+  , RatedFunctionBinding
   )
 where
 
@@ -11,4 +12,5 @@ import Language.Haskell.Exference.TypeClasses
 
 
 
-type FunctionBinding = (String, Float, HsConstrainedType)
+type FunctionBinding = (String, HsConstrainedType)
+type RatedFunctionBinding = (String, Float, HsConstrainedType)
