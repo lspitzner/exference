@@ -1,0 +1,10 @@
+- need more complex test-cases
+- instead of guessing any function, use enflated result-types
+  and only apply functions where one of the possible result-types
+  matches current goal, _but_
+    1) use let to bind the return value of the function application
+       (and apply only one parameter at a time)
+    2) float the let-binding as far up as possible in the expression
+       tree.
+  this should give significant performance improvement..
+    theoretically :)
