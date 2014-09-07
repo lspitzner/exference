@@ -1,5 +1,5 @@
 Name:          exference
-Version:       0.2
+Version:       0.3
 Cabal-Version: >= 1.8
 Build-Type:    Simple
 
@@ -16,7 +16,7 @@ Library
   extensions: NoMonomorphismRestriction
   hs-source-dirs: src
   Build-Depends:
-    exference-core ==0.2,
+    exference-core ==0.3,
     base >=3 && <5,
     containers,
     haskell-src,

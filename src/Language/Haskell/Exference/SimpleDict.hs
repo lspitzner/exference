@@ -43,7 +43,7 @@ toBindings = map (\(a,b,c) ->
 
 -- function, penalty for using that function, type
 -- value ignored for pattern-matches
-bindings :: [FunctionBinding]
+bindings :: [RatedFunctionBinding]
 bindings = toBindings
   [
   -- functor
