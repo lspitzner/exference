@@ -1,6 +1,6 @@
 module Language.Haskell.Exference.Internal.ExferenceState
   ( State (..)
-  , FuncBinding (..)
+  , FuncDictElem (..)
   , TGoal
   , Scopes (..)
   , Scope (..)
@@ -40,9 +40,9 @@ import Debug.Hood.Observe
 
 
 type VarBinding = (TVarId, HsType)
-data FuncBinding = SimpleBinding String Float HsType [HsType] [Constraint]
-                               -- name, results, params constraints
-                 | MatchBinding  String [HsType] HsType
+data FuncDictElem = SimpleBinding String Float HsType [HsType] [Constraint]
+                              -- name, results, params constraints
+                  | MatchBinding  String [HsType] HsType
   deriving Show
 
 type VarPBinding = (TVarId, HsType, [HsType])
@@ -137,7 +137,7 @@ data State = State
   , state_constraintGoals :: [Constraint]
   , state_providedScopes  :: Scopes
   , state_varUses         :: VarUsageMap
-  , state_functions       :: [FuncBinding]
+  , state_functions       :: [FuncDictElem]
   , state_context         :: DynContext
   , state_expression      :: Expression
   , state_nextVarId       :: TVarId

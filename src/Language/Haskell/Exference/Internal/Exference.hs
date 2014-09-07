@@ -62,9 +62,9 @@ factorFunctionGoalTransform = 0.0
 factorUnusedVar = 20.0
 
 data ExferenceInput = ExferenceInput
-  { input_goalType :: HsConstrainedType
-  , input_envFunctions :: [FunctionBinding]
-  , input_envContext :: StaticContext
+  { input_goalType    :: HsConstrainedType
+  , input_envDict     :: [RatedFunctionBinding]
+  , input_envContext  :: StaticContext
   , input_allowUnused :: Bool
   }
 
@@ -93,7 +93,7 @@ findExpressions (ExferenceInput rawCType funcs staticContext allowUnused) =
       ""
     helper :: Int -> RatedStates -> [(Int,Float,Expression)]
     helper n states
-      | Q.null states || n > 32768 = []
+      | Q.null states || n > 65535 = []
       | ((_,s), restStates) <- Q.deleteFindMax states =
         let (potentialSolutions, futures) = partition (null.state_goals) 
                                                       (stateStep s)
@@ -158,7 +158,7 @@ getUnusedVarCount :: VarUsageMap -> Int
 getUnusedVarCount m = length $ filter (==0) $ M.elems m
 
 stateStep :: State -> [State]
-stateStep s = --traceShow (state_expression s)
+stateStep s = --traceShow (s)
               -- trace (show (state_depth s) ++ " " ++ show (rateGoals $ state_goals s)
               --                      ++ " " ++ show (rateScopes $ state_providedScopes s)
               --                      ++ " " ++ show (state_expression s)) $
@@ -335,9 +335,7 @@ addScopePatternMatch vid sid bindings state = foldr helper state bindings where
           }
 
 
-splitEnvElement :: (String, Float, HsConstrainedType)
-                  -> FuncBinding
-                  --  name resultType paramTypes constraints
+splitEnvElement :: RatedFunctionBinding -> FuncDictElem
 splitEnvElement (a,r,HsConstrainedType constrs b) =
   case f b of
     (Left  t,  ps) -> SimpleBinding a r t ps constrs
