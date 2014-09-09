@@ -106,7 +106,7 @@ findExpressions (ExferenceInput rawCType funcs staticContext allowUnused) =
                   , let d = state_depth solution
                           + factorUnusedVar*(fromIntegral unusedVarCount)
                   , let e = -- trace (showStateDevelopment solution) $ 
-                            simplifyLets $ state_expression solution
+                            simplifyEta $ simplifyLets $ state_expression solution
                   ]
             rest = helper (n+1) $ foldr 
                        (uncurry Q.insert)
