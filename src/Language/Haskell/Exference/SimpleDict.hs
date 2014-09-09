@@ -53,7 +53,7 @@ bindings = toBindings
   , ("(*)",      3.0, "(Applicative f) => f (a->b) -> f a -> f b")
   -- monad
   , ("(>>=)",    0.0, "(Monad m) => m a -> (a -> m b) -> m b")
-  , ("(>>)",     8.0, "Monad m => m a -> m b -> m b")
+  --, ("(>>)",     8.0, "Monad m => m a -> m b -> m b")
   -- show
   , ("show",     3.0, "(Show a) => a -> String")
   -- eq
