@@ -10,6 +10,7 @@ Library
                -rtsopts
                -O1
                -j
+               -Wall
                -fno-warn-unused-imports
                -fno-warn-orphans
   exposed-modules: Language.Haskell.ExferenceCore,
