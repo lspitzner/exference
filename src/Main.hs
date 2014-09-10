@@ -6,6 +6,10 @@ where
 
 
 import Language.Haskell.Exference
+import Language.Haskell.Exference.ExpressionToHaskellSrc
+import Language.Haskell.Exference.BindingsFromHaskellSrc
+import Language.Haskell.Exference.TypeFromHaskellSrc
+import Language.Haskell.Exference.FunctionBinding
 
 import Language.Haskell.Exference.ConstrainedType
 import Language.Haskell.Exference.SimpleDict
@@ -19,11 +23,21 @@ import System.Process
 
 import Control.Applicative ( (<$>), (<*>) )
 import Control.Arrow ( second, (***) )
-import Control.Monad ( when, forM_, guard )
-import Data.List ( sortBy )
+import Control.Monad ( when, forM_, guard, forM, mplus, mzero )
+import Data.List ( sortBy, find )
 import Data.Ord ( comparing )
 import Text.Printf
-import Data.Maybe ( listToMaybe )
+import Data.Maybe ( listToMaybe, fromMaybe, maybeToList )
+import Data.Either ( lefts, rights )
+
+import Language.Haskell.Exts.Syntax ( Module )
+import Language.Haskell.Exts.Parser ( parseModuleWithMode
+                                    , parseModule
+                                    , ParseResult (..)
+                                    , ParseMode (..) )
+import Language.Haskell.Exts.Extension ( Language (..)
+                                       , Extension (..)
+                                       , KnownExtension (..) )
 
 import Debug.Hood.Observe
 
@@ -47,6 +61,10 @@ testInput =
   , (,,) "dbMaybe"    False "Maybe a -> Maybe (Tuple a a)"
   , (,,) "tupleShow"  False "Show a, Show b => Tuple a b -> String"
   , (,,) "FloatToInt" False "Float -> Int"
+  , (,,) "longApp"    False "a -> b -> c -> (a -> b -> d) -> (a -> c -> e) -> (b -> c -> f) -> (d -> e -> f -> g) -> g"
+  , (,,) "liftSBlub"  False "Monad m, Monad n => (List a -> b -> c) -> m (List (n a)) -> m (n b) -> m (n c)"
+  , (,,) "liftSBlubS" False "Monad m => (List a -> b -> c) -> m (List (Maybe a)) -> m (Maybe b) -> m (Maybe c)"
+  , (,,) "joinBlub"   False "Monad m => List Decl -> (Decl -> m (List FunctionBinding)) -> m (List FunctionBinding)"
   ]
 
 expected :: [(String, Expression)]
@@ -208,7 +226,7 @@ printAndStuff = mapM_ f testInOut
 
 printStatistics = mapM_ f testInOut
   where
-    f ((name, _, _), [])      = putStrLn ("---")
+    f ((name, _, _), [])      = putStrLn $ printf "%10s: ---" name
     f ((name, _, _), results) =
       let (hd, avg, min, max, n) = getStats results
       in putStrLn $ printf "%10s: head=%6d avg=%6d min=%6d max=%6d %s" name hd avg min max
@@ -245,13 +263,162 @@ printChecks = mapM_ helper checkOutput
       putStrLn $ "  first solution was " ++ show f
       putStrLn $ "  best solution:     " ++ show b
       putStrLn $ "  expected solution: " ++ show e
-    helper (name, _, Nothing, Nothing) = do
+    helper (name, _, Nothing, _) = do
       putStrLn $ printf "%-10s: no solutions found at all!" name 
+
+testDictRatings :: [(String, Float)]
+testDictRatings =
+  [ (,) "maybe"    0.0
+  , (,) "either"   0.0
+  , (,) "curry"    0.0
+  , (,) "uncurry"  0.0
+  --, (,) "compare"  0.0
+  --, (,) "minBound" 0.0
+  --, (,) "maxBound" 0.0
+  --, (,) ">>="      0.0
+  --, (,) "pure"     0.0
+  --, (,) "fmap"     0.0
+  , (,) "mapM"     0.0
+  , (,) "sequence" 0.0
+  , (,) "foldl"    0.0
+  , (,) "foldr"    0.0
+  , (,) "concat"   0.0
+  , (,) "zip"      0.0
+  , (,) "zip3"     0.0
+  , (,) "zipWith"  0.0
+  , (,) "unzip"    0.0
+  , (,) "unzip3"   0.0
+  , (,) "repeat"   0.0
+  , (,) "Just"     0.0
+  --, (,) "&&"       0.0
+  --, (,) "||"       0.0
+  ]
+
+compileDict :: [(String, Float)]
+            -> [FunctionBinding]
+            -> Either String [RatedFunctionBinding]
+            -- function_not_found or all bindings
+compileDict ratings binds = forM ratings $ \(name, rating) ->
+  case find ((name==).fst) binds of
+    Nothing -> Left name
+    Just (_,t) -> Right (name, rating, t)
+
+parseExternal :: [(ParseMode, String)] -> IO [Either String FunctionBinding]
+parseExternal l =     concatMap (\s -> either (return.Left) hExtract $ hParse s)
+                  <$> mapM hRead l
+  where
+    hRead :: (ParseMode, String) -> IO (ParseMode, String)
+    hParse :: (ParseMode, String) -> Either String Module
+    hExtract :: Module -> [Either String FunctionBinding]
+    hRead (mode, s) = (,) mode <$> readFile s
+    hParse (mode, content) = case parseModuleWithMode mode content of
+      f@(ParseFailed _ _) -> Left $ show f
+      ParseOk mod -> Right mod
+    hExtract mod =    getBindings defaultContext mod
+                   ++ getDataConss mod
+
+testBaseInput :: [(Bool, String)]
+testBaseInput = [ (,) True  "GHCEnum"
+                , (,) True  "GHCReal"
+                , (,) True  "GHCShow"
+                , (,) False "ControlMonad"
+                , (,) False "DataEither"
+                , (,) False "DataList"
+                , (,) False "DataMaybe"
+                , (,) False "DataTuple"
+                , (,) False "GHCArr"
+                , (,) False "GHCBase"
+                , (,) False "GHCFloat"
+                , (,) False "GHCList"
+                , (,) False "GHCNum"
+                , (,) False "GHCST"
+                , (,) False "SystemIOError"
+                , (,) False "SystemIO"
+                , (,) False "TextRead"
+                ]
+
+testBaseInput' :: [(ParseMode, String)]
+testBaseInput' = map h testBaseInput
+  where
+    h (shouldBangPattern, s) =
+      let exts1 = (if shouldBangPattern then (BangPatterns:) else id)
+                  [ UnboxedTuples
+                  , TypeOperators
+                  , MagicHash
+                  , NPlusKPatterns
+                  , ExplicitForAll
+                  , ExistentialQuantification
+                  , TypeFamilies
+                  , PolyKinds
+                  , DataKinds ]
+          exts2 = map EnableExtension exts1
+          mode = ParseMode (s++".hs")
+                           Haskell2010
+                           exts2
+                           False
+                           False
+                           Nothing
+          fname = "./BaseContext/preprocessed/"++s++".hs"
+      in (mode, fname)
 
 main = runO $ do
   --printAndStuff
-  printChecks
+  --printChecks
   --printStatistics
+  let
+    tryParse :: Bool -> String -> IO ()
+    tryParse shouldBangPattern s = do
+      content <- readFile $ "./BaseContext/preprocessed/"++s++".hs"
+      let exts1 = (if shouldBangPattern then (BangPatterns:) else id)
+                  [ UnboxedTuples
+                  , TypeOperators
+                  , MagicHash
+                  , NPlusKPatterns
+                  , ExplicitForAll
+                  , ExistentialQuantification
+                  , TypeFamilies
+                  , PolyKinds
+                  , DataKinds ]
+          exts2 = map EnableExtension exts1
+      case parseModuleWithMode (ParseMode (s++".hs")
+                                          Haskell2010
+                                          exts2
+                                          False
+                                          False
+                                          Nothing
+                               )
+                               content of
+        f@(ParseFailed _ _) -> do
+          print f
+        ParseOk mod -> do
+          putStrLn s
+          --mapM_ putStrLn $ map (either id show)
+          --               $ getBindings defaultContext mod
+          mapM_ putStrLn $ map (either id show)
+                         $ getDataConss mod
+  --mapM_ (tryParse True ) [ "GHCEnum"
+  --                       , "GHCReal"
+  --                       , "GHCShow"
+  --                       ]
+  --mapM_ (tryParse False) [ "ControlMonad"
+  --                       , "DataEither"
+  --                       , "DataList"
+  --                       , "DataMaybe"
+  --                       , "DataTuple"
+  --                       , "GHCArr"
+  --                       , "GHCBase"
+  --                       , "GHCFloat"
+  --                       , "GHCList"
+  --                       , "GHCNum"
+  --                       , "GHCST"
+  --                       , "SystemIOError"
+  --                       , "SystemIO"
+  --                       , "TextRead"
+  --                       ]
+  eSignatures <- parseExternal testBaseInput'
+  mapM_ print $ lefts $ eSignatures
+  print $ compileDict testDictRatings $ rights $ eSignatures
+  -- print $ parseConstrainedType defaultContext $ "(Show a) => [a] -> String"
   -- print $ inflateConstraints a b
   {-
   print $ constraintMatches testDynContext (badReadVar "y") (read "x")

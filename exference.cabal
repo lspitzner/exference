@@ -13,13 +13,20 @@ Library
                -fno-warn-unused-imports
                -fno-warn-orphans
   exposed-modules: Language.Haskell.Exference
+                   Language.Haskell.Exference.SimpleDict
+                   Language.Haskell.Exference.ExpressionToHaskellSrc
+                   Language.Haskell.Exference.TypeFromHaskellSrc
+                   Language.Haskell.Exference.BindingsFromHaskellSrc
   extensions: NoMonomorphismRestriction
   hs-source-dirs: src
   Build-Depends:
     exference-core ==0.3,
     base >=3 && <5,
     containers,
-    haskell-src,
+    transformers,
+    mtl,
+    either,
+    haskell-src-exts,
     deepseq,
     hood,
     process
@@ -40,7 +47,10 @@ Executable test-main
     exference-core,
     base >=3 && <5,
     containers,
-    haskell-src,
+    transformers,
+    mtl,
+    either,
+    haskell-src-exts,
     deepseq,
     hood,
     process
@@ -56,12 +66,15 @@ Executable sublime
                -O0
                -j
                -fno-warn-unused-imports
-               -fno-warn-orphans  
+               -fno-warn-orphans
   Build-Depends:
     exference-core,
     base >=3 && <5,
     containers,
-    haskell-src,
+    transformers,
+    mtl,
+    either,
+    haskell-src-exts,
     deepseq,
     hood,
     process
