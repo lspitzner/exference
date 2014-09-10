@@ -4,6 +4,7 @@ module Language.Haskell.Exference.ConstrainedType
   ( HsConstrainedType (..)
   , readConstrainedType
   , parseConstrainedType
+  , constrainedTypeApplySubsts -- unused atm
   )
 where
 

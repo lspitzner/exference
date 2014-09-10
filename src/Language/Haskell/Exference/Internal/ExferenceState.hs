@@ -19,6 +19,7 @@ module Language.Haskell.Exference.Internal.ExferenceState
   , splitBinding
   , addNewScopeGoal
   , initialScopes
+  , addGoalProvided -- unused atm
   )
 where
 

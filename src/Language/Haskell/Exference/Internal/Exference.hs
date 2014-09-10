@@ -75,10 +75,10 @@ type RatedStates = Q.MaxPQueue Float State
 findExpressions :: ExferenceInput
                 -> [ExferenceOutputElement]
 findExpressions (ExferenceInput rawCType funcs staticContext allowUnused) =
-  [(e, ExferenceStats steps compl) | (steps, compl, e) <- r]
+  [(e, ExferenceStats steps compl) | (steps, compl, e) <- resultTuples]
   where
     (HsConstrainedType cs t) = ctConstantifyVars rawCType
-    r = helper 0 $ Q.singleton 0.0 $ State
+    resultTuples = helper 0 $ Q.singleton 0.0 $ State
       [((0, t), 0)]
       []
       initialScopes
@@ -149,10 +149,13 @@ rateGoals = sum . map rateGoal
     tComplexity (TypeApp t1 t2)   = factorGoalApp + tComplexity t1 + tComplexity t2
     tComplexity (TypeForall _ t1) = tComplexity t1
 
+-- using this rating had bad effect on ordering; not used anymore
+{-
 rateScopes :: Scopes -> Float
 rateScopes (Scopes _ sMap) = M.foldr' f 0.0 sMap
   where
     f (Scope binds _) x = x + fromIntegral (length binds)
+-}
 
 getUnusedVarCount :: VarUsageMap -> Int
 getUnusedVarCount m = length $ filter (==0) $ M.elems m
