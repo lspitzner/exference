@@ -38,7 +38,7 @@ helper :: Name -> HsConstrainedType -> FunctionBinding
 helper (Ident  n) ct = (n, ct)
 helper (Symbol n) ct = (n, ct)
 
--- type ConversionMonad = StateT (Int, ConvMap) (EitherT String Identity)
+-- type ConversionMonad = StateT (Int, ConvMap) (Either String)
 getDataConss :: Module -> [Either String FunctionBinding]
 getDataConss (Module _loc _m _pragma _warning _mexp _imp decls) = do
   DataDecl _loc _newtflag cntxt name params conss _derives <- decls
@@ -47,7 +47,7 @@ getDataConss (Module _loc _m _pragma _warning _mexp _imp decls) = do
     rTypeM = fmap (foldl TypeApp (TypeCons $ hsNameToString name))
            $ mapM pTransform params
     pTransform :: TyVarBind -> ConversionMonad HsType
-    pTransform (KindedVar _ _) = lift $ left $ "KindedVar"
+    pTransform (KindedVar _ _) = lift $ Left $ "KindedVar"
     pTransform (UnkindedVar n) = TypeVar <$> getVar n
   --let
   --  tTransform (UnBangedTy t) = convertTypeInternal t
@@ -63,12 +63,15 @@ getDataConss (Module _loc _m _pragma _warning _mexp _imp decls) = do
             []
             (foldr TypeArrow rtype convTs)
         ([], [], [], x) ->
-          lift $ left $ "unknown ConDecl: " ++ show x
+          lift $ Left $ "unknown ConDecl: " ++ show x
         ([], _, _, _) ->
-          lift $ left $ "constraint or existential type for constructor"
+          lift $ Left $ "constraint or existential type for constructor"
         _ ->
-          lift $ left $ "context in data type"
+          lift $ Left $ "context in data type"
   either (return.Left) (map Right)
-    $ mapM (\x -> runIdentity $ runEitherT $ evalStateT (typeM x) (0, M.empty))
+    $ mapM (\x -> evalStateT (typeM x) (0, M.empty))
     $ conss
+
+--getClassMethods :: StaticContext -> Module -> [Either String FunctionBinding]
+--getClassMethods context (Module _loc _m _pragma _warning _mexp _imp decls) = do
 

@@ -5,6 +5,7 @@ module Language.Haskell.Exference.TypeFromHaskellSrc
   , convertCType
   , convertTypeInternal
   , hsNameToString
+  , hsQNameToString
   , ConvMap
   , getVar
   , ConversionMonad
@@ -34,15 +35,13 @@ import Control.Monad.Trans.Either
 
 
 
-type ConversionMonad = StateT (Int, ConvMap) (EitherT String Identity)
+type ConversionMonad = StateT (Int, ConvMap) (Either String)
 
 convertType :: Type -> Either String T.HsType
-convertType t = runIdentity
-              $ runEitherT
-              $ evalStateT (convertTypeInternal t) (0, M.empty)
+convertType t = evalStateT (convertTypeInternal t) (0, M.empty)
 
 convertTypeInternal :: Type
-                    -> StateT (Int, ConvMap) (EitherT String Identity) T.HsType
+                    -> ConversionMonad T.HsType
 convertTypeInternal (TyFun a b) = T.TypeArrow
                                   <$> convertTypeInternal a
                                   <*> convertTypeInternal b
@@ -62,24 +61,22 @@ convertTypeInternal (TyCon name) = return
 convertTypeInternal (TyList t)   = T.TypeApp (T.TypeCons "List")
                                    <$> convertTypeInternal t
 convertTypeInternal (TyParen t)  = convertTypeInternal t
-convertTypeInternal (TyInfix _ _ _)  = lift $ left "infix operator"
-convertTypeInternal (TyKind _ _)     = lift $ left "kind annotation"
-convertTypeInternal (TyPromoted _)   = lift $ left "promoted type"
-convertTypeInternal (TyForall _ _ _) = lift $ left "forall type" -- TODO
-convertTypeInternal x                =
-  lift $ left $ "unknown type element: " ++ show x -- TODO
+convertTypeInternal (TyInfix _ _ _)  = lift $ Left "infix operator"
+convertTypeInternal (TyKind _ _)     = lift $ Left "kind annotation"
+convertTypeInternal (TyPromoted _)   = lift $ Left "promoted type"
+convertTypeInternal (TyForall _ _ _) = lift $ Left "forall type" -- TODO
+convertTypeInternal x                = lift $ Left $ "unknown type element: " ++ show x -- TODO
 
 convertCType :: TC.StaticContext -> Type -> Either String CT.HsConstrainedType
-convertCType context qt
-  = runIdentity $ runEitherT $ evalStateT (convCh context qt) (0, M.empty)
+convertCType context qt = evalStateT (convCh context qt) (0, M.empty)
 
 convCh :: TC.StaticContext
        -> Type
-       -> StateT (Int, ConvMap) (EitherT String Identity) CT.HsConstrainedType
+       -> ConversionMonad CT.HsConstrainedType
 convCh context (TyForall Nothing assertions t)
   = CT.HsConstrainedType <$> (mapM (convertConstraint context) assertions)
                          <*> (convertTypeInternal t)
-convCh _ (TyForall _ _ _) = lift $ left $ "forall"
+convCh _ (TyForall _ _ _) = lift $ Left $ "forall"
 convCh _ t = CT.HsConstrainedType [] <$> convertTypeInternal t
 
 type ConvMap = M.Map Name Int
@@ -111,7 +108,7 @@ hsNameToString (Symbol s) = s
 
 convertConstraint :: TC.StaticContext
                   -> Asst
-                  -> StateT (Int, ConvMap) (EitherT String Identity) TC.Constraint
+                  -> ConversionMonad TC.Constraint
 convertConstraint context (ClassA qname types)
   | str <- hsQNameToString qname
   , ctypes <- mapM convertTypeInternal types
@@ -119,7 +116,7 @@ convertConstraint context (ClassA qname types)
                   $ find ((==str).TC.tclass_name)
                   $ TC.context_tclasses context) <$> ctypes
 convertConstraint context (ParenA c) = convertConstraint context c
-convertConstraint _ c = lift $ left $ "bad constraint: " ++ show c
+convertConstraint _ c = lift $ Left $ "bad constraint: " ++ show c
 
 parseConstrainedType :: TC.StaticContext -> String -> Either String CT.HsConstrainedType
 parseConstrainedType c s = case Language.Haskell.Exts.Parser.parseType s of
