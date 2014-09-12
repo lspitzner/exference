@@ -17,6 +17,7 @@ Library
                    Language.Haskell.Exference.ExpressionToHaskellSrc
                    Language.Haskell.Exference.TypeFromHaskellSrc
                    Language.Haskell.Exference.BindingsFromHaskellSrc
+                   Language.Haskell.Exference.ContextFromHaskellSrc
   extensions: NoMonomorphismRestriction
   hs-source-dirs: src
   Build-Depends:
