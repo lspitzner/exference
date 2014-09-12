@@ -101,11 +101,14 @@ countUses i (ExpLet _ bindExp inExp) = ((+) `on` countUses i) bindExp inExp
 simplifyEta :: Expression -> Expression
 simplifyEta e@(ExpVar _) = e
 simplifyEta e@(ExpLit _) = e
-simplifyEta (ExpLambda i (ExpApply e1 (ExpVar j))) | i==j = simplifyEta e1
-simplifyEta (ExpLambda i e) = ExpLambda i (simplifyEta e)
+simplifyEta (ExpLambda i e) = simplifyEta' $ ExpLambda i $ simplifyEta e
 simplifyEta (ExpApply e1 e2) = ExpApply (simplifyEta e1) (simplifyEta e2)
 simplifyEta e@(ExpHole _) = e
 simplifyEta (ExpLetMatch name vids bindExp inExp) =
   ExpLetMatch name vids (simplifyEta bindExp) (simplifyEta inExp)
 simplifyEta (ExpLet i bindExp inExp) =
   ExpLet i (simplifyEta bindExp) (simplifyEta inExp)
+
+simplifyEta' :: Expression -> Expression
+simplifyEta' (ExpLambda i (ExpApply e1 (ExpVar j))) | i==j = e1
+simplifyEta' e = e
