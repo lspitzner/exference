@@ -73,17 +73,17 @@ bindings = toBindings
   , ("ceiling" , 9.9, "RealFrac a, Integral b => a -> b")
   , ("floor"   , 9.9, "RealFrac a, Integral b => a -> b")
   -- other
-  , ("(,)",      0.0, "a -> b -> Tuple a b")
-  , ("zip",      0.0, "List a -> List b -> List (Tuple a b)")
+  , ("(,)",      0.0, "a -> b -> Tuple2 a b")
+  , ("zip",      0.0, "List a -> List b -> List (Tuple2 a b)")
   , ("repeat",   5.0, "a -> List a")
   , ("foldr",    0.0, "(a -> b -> b) -> b -> List a -> b")
   --, ("foldr0",   0.0,  "(a -> List a -> List a) -> a -> List a")
   , ("()",       9.9, "Unit")
-  , ("State",    3.0, "(s -> Tuple a s) -> State s a")
+  , ("State",    3.0, "(s -> Tuple2 a s) -> State s a")
   , ("[]",       40.0, "List a")
   , ("(:)",      4.0, "a -> List a -> List a")
-  , ("(,)",      0.0, "Tuple a b -> INFPATTERN a b")
-  , ("State",    0.0, "State s a -> INFPATTERN (s -> Tuple a s)")
+  , ("(,)",      0.0, "Tuple2 a b -> INFPATTERN a b")
+  , ("State",    0.0, "State s a -> INFPATTERN (s -> Tuple2 a s)")
   , ("Just",     5.0, "a -> Maybe a")
   , ("sequence", 3.0, "Monad m => List (m a) -> m (List a)")
   ]
@@ -174,7 +174,7 @@ list_monad        = HsInstance [] c_monad       [read "List"]
 maybe_monad       = HsInstance [] c_functor     [read "Maybe"]
 maybe_show        = HsInstance [Constraint c_show [read "a"]] c_show [read "Maybe a"]
 tuple_show        = HsInstance [Constraint c_show [read "a"]
-                               ,Constraint c_show [read "b"]] c_show [read "Tuple a b"]
+                               ,Constraint c_show [read "b"]] c_show [read "Tuple2 a b"]
 integral_instances  = mkInstances c_integral ["Int", "Integer"]
 realfloat_instances = mkInstances c_realfloat ["Float", "Double"]
 
