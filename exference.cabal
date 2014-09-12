@@ -54,7 +54,8 @@ Executable test-main
     haskell-src-exts,
     deepseq,
     hood,
-    process
+    process,
+    data-pprint
 
 
 
@@ -68,6 +69,7 @@ Executable sublime
                -j
                -fno-warn-unused-imports
                -fno-warn-orphans
+               --fdefer-type-errors
   Build-Depends:
     exference-core,
     base >=3 && <5,
@@ -78,4 +80,5 @@ Executable sublime
     haskell-src-exts,
     deepseq,
     hood,
-    process
+    process,
+    data-pprint

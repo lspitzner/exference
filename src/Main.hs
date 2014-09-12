@@ -1,3 +1,7 @@
+{-# LANGUAGE ExistentialQuantification #-}
+{-# LANGUAGE MultiWayIf #-}
+{-# LANGUAGE RankNTypes #-}
+
 module Main
   ( main
   )
@@ -8,6 +12,7 @@ where
 import Language.Haskell.Exference
 import Language.Haskell.Exference.ExpressionToHaskellSrc
 import Language.Haskell.Exference.BindingsFromHaskellSrc
+import Language.Haskell.Exference.ContextFromHaskellSrc
 import Language.Haskell.Exference.TypeFromHaskellSrc
 import Language.Haskell.Exference.FunctionBinding
 
@@ -29,8 +34,9 @@ import Data.Ord ( comparing )
 import Text.Printf
 import Data.Maybe ( listToMaybe, fromMaybe, maybeToList )
 import Data.Either ( lefts, rights )
+import Control.Monad.Writer.Strict
 
-import Language.Haskell.Exts.Syntax ( Module )
+import Language.Haskell.Exts.Syntax ( Module(..), Decl(..) )
 import Language.Haskell.Exts.Parser ( parseModuleWithMode
                                     , parseModule
                                     , ParseResult (..)
@@ -38,6 +44,8 @@ import Language.Haskell.Exts.Parser ( parseModuleWithMode
 import Language.Haskell.Exts.Extension ( Language (..)
                                        , Extension (..)
                                        , KnownExtension (..) )
+
+import Data.PPrint
 
 import Debug.Hood.Observe
 
@@ -303,19 +311,42 @@ compileDict ratings binds = forM ratings $ \(name, rating) ->
     Nothing -> Left name
     Just (_,t) -> Right (name, rating, t)
 
-parseExternal :: [(ParseMode, String)] -> IO [Either String FunctionBinding]
-parseExternal l =     concatMap (\s -> either (return.Left) hExtract $ hParse s)
-                  <$> mapM hRead l
+data A a = A Int
+
+instance forall a . Show (A a) where
+  show (A i) = show i
+
+parseExternal :: [(ParseMode, String)]
+              -> IO (Writer [String] ([FunctionBinding], StaticContext))
+parseExternal l = do
+  rawTuples <- mapM hRead l
+  let eParsed = map hParse rawTuples
+  {-
+  let h :: Decl -> IO ()
+      h i@(InstDecl _ _ _ _ _ _ _) = do
+        pprint i >>= print
+      h _ = return ()
+  forM_ (rights eParsed) $ \(Module _ _ _ _ _ _ ds) ->
+    forM_ ds h
+  -}
+  forM_ (rights eParsed) $ \m -> pprintTo 10000 m >>= print
+  return $ do
+    mapM_ (tell.return) $ lefts eParsed
+    let mods = rights eParsed
+    (,).join <$> (mapM hExtractBinds mods)
+             <*> getContext mods
   where
     hRead :: (ParseMode, String) -> IO (ParseMode, String)
     hParse :: (ParseMode, String) -> Either String Module
-    hExtract :: Module -> [Either String FunctionBinding]
+    hExtractBinds :: Module -> Writer [String] [FunctionBinding]
     hRead (mode, s) = (,) mode <$> readFile s
     hParse (mode, content) = case parseModuleWithMode mode content of
       f@(ParseFailed _ _) -> Left $ show f
       ParseOk mod -> Right mod
-    hExtract mod =    getBindings defaultContext mod
-                   ++ getDataConss mod
+    hExtractBinds mod = do
+      let ebinds = getBindings defaultContext mod ++ getDataConss mod
+      mapM_ (tell.return) $ lefts ebinds
+      return $ rights ebinds
 
 testBaseInput :: [(Bool, String)]
 testBaseInput = [ (,) True  "GHCEnum"
@@ -326,6 +357,7 @@ testBaseInput = [ (,) True  "GHCEnum"
                 , (,) False "DataList"
                 , (,) False "DataMaybe"
                 , (,) False "DataTuple"
+                , (,) False "DataOrd"
                 , (,) False "GHCArr"
                 , (,) False "GHCBase"
                 , (,) False "GHCFloat"
@@ -396,28 +428,11 @@ main = runO $ do
           --               $ getBindings defaultContext mod
           mapM_ putStrLn $ map (either id show)
                          $ getDataConss mod
-  --mapM_ (tryParse True ) [ "GHCEnum"
-  --                       , "GHCReal"
-  --                       , "GHCShow"
-  --                       ]
-  --mapM_ (tryParse False) [ "ControlMonad"
-  --                       , "DataEither"
-  --                       , "DataList"
-  --                       , "DataMaybe"
-  --                       , "DataTuple"
-  --                       , "GHCArr"
-  --                       , "GHCBase"
-  --                       , "GHCFloat"
-  --                       , "GHCList"
-  --                       , "GHCNum"
-  --                       , "GHCST"
-  --                       , "SystemIOError"
-  --                       , "SystemIO"
-  --                       , "TextRead"
-  --                       ]
-  eSignatures <- parseExternal testBaseInput'
-  mapM_ print $ lefts $ eSignatures
-  print $ compileDict testDictRatings $ rights $ eSignatures
+  ((eSignatures, StaticContext clss insts), messages) <- runWriter <$> parseExternal testBaseInput'
+  mapM_ print $ messages
+  print $ compileDict testDictRatings $ eSignatures
+  mapM_ print $ clss
+  mapM_ print $ insts
   -- print $ parseConstrainedType defaultContext $ "(Show a) => [a] -> String"
   -- print $ inflateConstraints a b
   {-
@@ -440,4 +455,3 @@ pointfree s = (!!1) <$> lines <$> readProcess "pointfree" ["--verbose", s] ""
 
 pointful :: String -> IO String
 pointful s = (!!0) <$> lines <$> readProcess "pointful" [s] ""
-  
