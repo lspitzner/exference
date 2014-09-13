@@ -4,6 +4,7 @@ module Language.Haskell.Exference.TypeFromHaskellSrc
   ( convertType
   , convertCType
   , convertTypeInternal
+  , convertCTypeInternal
   , hsNameToString
   , hsQNameToString
   , ConvMap
@@ -68,16 +69,16 @@ convertTypeInternal (TyForall _ _ _) = lift $ Left "forall type" -- TODO
 convertTypeInternal x                = lift $ Left $ "unknown type element: " ++ show x -- TODO
 
 convertCType :: TC.StaticContext -> Type -> Either String CT.HsConstrainedType
-convertCType context qt = evalStateT (convCh context qt) (0, M.empty)
+convertCType context qt = evalStateT (convertCTypeInternal context qt) (0, M.empty)
 
-convCh :: TC.StaticContext
+convertCTypeInternal :: TC.StaticContext
        -> Type
        -> ConversionMonad CT.HsConstrainedType
-convCh context (TyForall Nothing assertions t)
+convertCTypeInternal context (TyForall Nothing assertions t)
   = CT.HsConstrainedType <$> (mapM (convertConstraint context) assertions)
                          <*> (convertTypeInternal t)
-convCh _ (TyForall _ _ _) = lift $ Left $ "forall"
-convCh _ t = CT.HsConstrainedType [] <$> convertTypeInternal t
+convertCTypeInternal _ (TyForall _ _ _) = lift $ Left $ "forall"
+convertCTypeInternal _ t = CT.HsConstrainedType [] <$> convertTypeInternal t
 
 type ConvMap = M.Map Name Int
 
