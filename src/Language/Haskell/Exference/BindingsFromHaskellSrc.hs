@@ -47,7 +47,7 @@ getDataConss (Module _loc _m _pragma _warning _mexp _imp decls) = do
     rTypeM = fmap (foldl TypeApp (TypeCons $ hsNameToString name))
            $ mapM pTransform params
     pTransform :: TyVarBind -> ConversionMonad HsType
-    pTransform (KindedVar _ _) = lift $ Left $ "KindedVar"
+    pTransform (KindedVar _ _) = left $ "KindedVar"
     pTransform (UnkindedVar n) = TypeVar <$> getVar n
   --let
   --  tTransform (UnBangedTy t) = convertTypeInternal t
@@ -63,13 +63,13 @@ getDataConss (Module _loc _m _pragma _warning _mexp _imp decls) = do
             []
             (foldr TypeArrow rtype convTs)
         ([], [], [], x) ->
-          lift $ Left $ "unknown ConDecl: " ++ show x
+          left $ "unknown ConDecl: " ++ show x
         ([], _, _, _) ->
-          lift $ Left $ "constraint or existential type for constructor"
+          left $ "constraint or existential type for constructor"
         _ ->
-          lift $ Left $ "context in data type"
+          left $ "context in data type"
   either (return.Left) (map Right)
-    $ mapM (\x -> evalStateT (typeM x) (0, M.empty))
+    $ mapM (\x -> evalState (runEitherT $ typeM x) (0, M.empty))
     $ conss
 
 --getClassMethods :: StaticContext -> Module -> [Either String FunctionBinding]

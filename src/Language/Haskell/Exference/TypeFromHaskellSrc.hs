@@ -1,4 +1,5 @@
 {-# LANGUAGE PatternGuards #-}
+{-# LANGUAGE FlexibleContexts #-}
 
 module Language.Haskell.Exference.TypeFromHaskellSrc
   ( convertType
@@ -36,10 +37,10 @@ import Control.Monad.Trans.Either
 
 
 
-type ConversionMonad = StateT (Int, ConvMap) (Either String)
+type ConversionMonad = EitherT String (State (Int, ConvMap))
 
 convertType :: Type -> Either String T.HsType
-convertType t = evalStateT (convertTypeInternal t) (0, M.empty)
+convertType t = evalState (runEitherT $ convertTypeInternal t) (0, M.empty)
 
 convertTypeInternal :: Type
                     -> ConversionMonad T.HsType
@@ -62,14 +63,14 @@ convertTypeInternal (TyCon name) = return
 convertTypeInternal (TyList t)   = T.TypeApp (T.TypeCons "List")
                                    <$> convertTypeInternal t
 convertTypeInternal (TyParen t)  = convertTypeInternal t
-convertTypeInternal (TyInfix _ _ _)  = lift $ Left "infix operator"
-convertTypeInternal (TyKind _ _)     = lift $ Left "kind annotation"
-convertTypeInternal (TyPromoted _)   = lift $ Left "promoted type"
-convertTypeInternal (TyForall _ _ _) = lift $ Left "forall type" -- TODO
-convertTypeInternal x                = lift $ Left $ "unknown type element: " ++ show x -- TODO
+convertTypeInternal (TyInfix _ _ _)  = left "infix operator"
+convertTypeInternal (TyKind _ _)     = left "kind annotation"
+convertTypeInternal (TyPromoted _)   = left "promoted type"
+convertTypeInternal (TyForall _ _ _) = left "forall type" -- TODO
+convertTypeInternal x                = left $ "unknown type element: " ++ show x -- TODO
 
 convertCType :: TC.StaticContext -> Type -> Either String CT.HsConstrainedType
-convertCType context qt = evalStateT (convertCTypeInternal context qt) (0, M.empty)
+convertCType context qt = evalState (runEitherT $ convertCTypeInternal context qt) (0, M.empty)
 
 convertCTypeInternal :: TC.StaticContext
        -> Type
@@ -77,12 +78,12 @@ convertCTypeInternal :: TC.StaticContext
 convertCTypeInternal context (TyForall Nothing assertions t)
   = CT.HsConstrainedType <$> (mapM (convertConstraint context) assertions)
                          <*> (convertTypeInternal t)
-convertCTypeInternal _ (TyForall _ _ _) = lift $ Left $ "forall"
+convertCTypeInternal _ (TyForall _ _ _) = left $ "forall"
 convertCTypeInternal _ t = CT.HsConstrainedType [] <$> convertTypeInternal t
 
 type ConvMap = M.Map Name Int
 
-getVar :: Monad m => Name -> StateT (Int, ConvMap) m Int
+getVar :: MonadState (Int, ConvMap) m => Name -> m Int
 getVar n = do
   (next, m) <- get
   case M.lookup n m of
@@ -117,7 +118,7 @@ convertConstraint context (ClassA qname types)
                   $ find ((==str).TC.tclass_name)
                   $ TC.context_tclasses context) <$> ctypes
 convertConstraint context (ParenA c) = convertConstraint context c
-convertConstraint _ c = lift $ Left $ "bad constraint: " ++ show c
+convertConstraint _ c = left $ "bad constraint: " ++ show c
 
 parseConstrainedType :: TC.StaticContext -> String -> Either String CT.HsConstrainedType
 parseConstrainedType c s = case Language.Haskell.Exts.Parser.parseType s of

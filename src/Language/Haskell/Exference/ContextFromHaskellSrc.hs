@@ -64,7 +64,7 @@ getTypeClasses ms = let
         assts
       return $ HsTypeClass name varIds constrs
       --either (Left . (("class "++name++": ")++)) Right
-    in evalStateT sAction (0, M.empty)
+    in evalState (runEitherT sAction) (0, M.empty)
   resultMap :: LazyMap.Map String (Either String HsTypeClass)
     -- CARE: DONT USE STRICT METHODS ON THIS MAP
     --       (COMPILER WONT COMPLAIN)
@@ -91,14 +91,14 @@ getInstances tcs ms = do
                 $ find ((str==).tclass_name) tcs)
         cntxt
       rtps <- mapM convertTypeInternal tps
-      ic <- lift instClass
+      ic <- hoistEither instClass
       return $ HsInstance constrs ic rtps
       -- either (Left . (("instance for "++name++": ")++)) Right
-  return $ evalStateT sAction (0, M.empty)
+  return $ evalState (runEitherT sAction) (0, M.empty)
 
 tyVarTransform :: TyVarBind
                -> ConversionMonad TVarId
-tyVarTransform (KindedVar _ _) = lift $ Left $ "KindedVar"
+tyVarTransform (KindedVar _ _) = left $ "KindedVar"
 tyVarTransform (UnkindedVar n) = getVar n
 
 constrTransform :: (String -> Either String HsTypeClass)
@@ -108,6 +108,6 @@ constrTransform tcLookupF (ClassA qname types)
   | ctypes <- mapM convertTypeInternal types
   , constrClass <- tcLookupF $ hsQNameToString qname
   -- 
-  = Constraint <$> lift constrClass <*> ctypes
+  = Constraint <$> hoistEither constrClass <*> ctypes
 constrTransform tcLookupF (ParenA c) = constrTransform tcLookupF c
-constrTransform _ c = lift $ Left $ "unknown constraint: " ++ show c
+constrTransform _ c = left $ "unknown constraint: " ++ show c
