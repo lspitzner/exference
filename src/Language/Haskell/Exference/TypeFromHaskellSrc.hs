@@ -44,30 +44,35 @@ convertType t = evalState (runEitherT $ convertTypeInternal t) (0, M.empty)
 
 convertTypeInternal :: Type
                     -> ConversionMonad T.HsType
-convertTypeInternal (TyFun a b) = T.TypeArrow
-                                  <$> convertTypeInternal a
-                                  <*> convertTypeInternal b
-convertTypeInternal (TyTuple _ ts) | n <- length ts
+convertTypeInternal (TyForall _ [] t) = convertTypeInternal' t
+convertTypeInternal t                 = convertTypeInternal' t
+
+convertTypeInternal' :: Type
+                    -> ConversionMonad T.HsType
+convertTypeInternal' (TyFun a b) = T.TypeArrow
+                                  <$> convertTypeInternal' a
+                                  <*> convertTypeInternal' b
+convertTypeInternal' (TyTuple _ ts) | n <- length ts
                                    , name <- "Tuple" ++ show n
                                    = foldl T.TypeApp (T.TypeCons name)
-                                     <$> mapM convertTypeInternal ts
-convertTypeInternal (TyApp a b) = T.TypeApp
-                                  <$> convertTypeInternal a
-                                  <*> convertTypeInternal b
-convertTypeInternal (TyVar vname) = do
+                                     <$> mapM convertTypeInternal' ts
+convertTypeInternal' (TyApp a b) = T.TypeApp
+                                  <$> convertTypeInternal' a
+                                  <*> convertTypeInternal' b
+convertTypeInternal' (TyVar vname) = do
                                       i <- getVar vname
                                       return $ T.TypeVar i
-convertTypeInternal (TyCon name) = return
+convertTypeInternal' (TyCon name) = return
                                  $ T.TypeCons
                                  $ hsQNameToString name
-convertTypeInternal (TyList t)   = T.TypeApp (T.TypeCons "List")
-                                   <$> convertTypeInternal t
-convertTypeInternal (TyParen t)  = convertTypeInternal t
-convertTypeInternal (TyInfix _ _ _)  = left "infix operator"
-convertTypeInternal (TyKind _ _)     = left "kind annotation"
-convertTypeInternal (TyPromoted _)   = left "promoted type"
-convertTypeInternal (TyForall _ _ _) = left "forall type" -- TODO
-convertTypeInternal x                = left $ "unknown type element: " ++ show x -- TODO
+convertTypeInternal' (TyList t)   = T.TypeApp (T.TypeCons "List")
+                                   <$> convertTypeInternal' t
+convertTypeInternal' (TyParen t)  = convertTypeInternal' t
+convertTypeInternal' (TyInfix _ _ _)  = left "infix operator"
+convertTypeInternal' (TyKind _ _)     = left "kind annotation"
+convertTypeInternal' (TyPromoted _)   = left "promoted type"
+convertTypeInternal' (TyForall _ _ _) = left "forall type" -- TODO
+convertTypeInternal' x                = left $ "unknown type element: " ++ show x -- TODO
 
 convertCType :: TC.StaticContext -> Type -> Either String CT.HsConstrainedType
 convertCType context qt = evalState (runEitherT $ convertCTypeInternal context qt) (0, M.empty)
@@ -75,10 +80,10 @@ convertCType context qt = evalState (runEitherT $ convertCTypeInternal context q
 convertCTypeInternal :: TC.StaticContext
        -> Type
        -> ConversionMonad CT.HsConstrainedType
-convertCTypeInternal context (TyForall Nothing assertions t)
+convertCTypeInternal context (TyForall _ assertions t)
   = CT.HsConstrainedType <$> (mapM (convertConstraint context) assertions)
                          <*> (convertTypeInternal t)
-convertCTypeInternal _ (TyForall _ _ _) = left $ "forall"
+-- convertCTypeInternal _ (TyForall _ _ _) = left $ "forall"
 convertCTypeInternal _ t = CT.HsConstrainedType [] <$> convertTypeInternal t
 
 type ConvMap = M.Map Name Int
