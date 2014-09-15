@@ -112,7 +112,7 @@ hsQNameToString (UnQual s) = hsNameToString s
 
 hsNameToString :: Name -> String
 hsNameToString (Ident s) = s
-hsNameToString (Symbol s) = s
+hsNameToString (Symbol s) = "(" ++ s ++ ")"
 
 convertConstraint :: TC.StaticContext
                   -> Asst

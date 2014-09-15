@@ -35,8 +35,7 @@ getBindings context (Module _loc _m _pragma _warning _mexp _imp decls)
     getFromDecls _ = return []
 
 helper :: Name -> HsConstrainedType -> FunctionBinding
-helper (Ident  n) ct = (n, ct)
-helper (Symbol n) ct = (n, ct)
+helper x ct = (hsNameToString x, ct)
 
 -- type ConversionMonad = StateT (Int, ConvMap) (Either String)
 getDataConss :: Module -> [Either String FunctionBinding]
