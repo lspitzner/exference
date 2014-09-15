@@ -36,7 +36,7 @@ import Data.Maybe ( listToMaybe, fromMaybe, maybeToList )
 import Data.Either ( lefts, rights )
 import Control.Monad.Writer.Strict
 
-import Language.Haskell.Exts.Syntax ( Module(..), Decl(..) )
+import Language.Haskell.Exts.Syntax ( Module(..), Decl(..), ModuleName(..) )
 import Language.Haskell.Exts.Parser ( parseModuleWithMode
                                     , parseModule
                                     , ParseResult (..)
@@ -283,9 +283,10 @@ testDictRatings =
   --, (,) "compare"  0.0
   --, (,) "minBound" 0.0
   --, (,) "maxBound" 0.0
-  --, (,) ">>="      0.0
-  --, (,) "pure"     0.0
-  --, (,) "fmap"     0.0
+  , (,) "fmap"     0.0
+  -- , (,) "pure"     0.0
+  -- , (,) "(<*>)"    0.0
+  , (,) "(>>=)"    0.0
   , (,) "mapM"     0.0
   , (,) "sequence" 0.0
   , (,) "foldl"    0.0
@@ -298,8 +299,8 @@ testDictRatings =
   , (,) "unzip3"   0.0
   , (,) "repeat"   0.0
   , (,) "Just"     0.0
-  --, (,) "&&"       0.0
-  --, (,) "||"       0.0
+  --, (,) "(&&)"       0.0
+  --, (,) "(||)"       0.0
   ]
 
 compileDict :: [(String, Float)]
@@ -310,11 +311,6 @@ compileDict ratings binds = forM ratings $ \(name, rating) ->
   case find ((name==).fst) binds of
     Nothing -> Left name
     Just (_,t) -> Right (name, rating, t)
-
-data A a = A Int
-
-instance forall a . Show (A a) where
-  show (A i) = show i
 
 parseExternal :: [(ParseMode, String)]
               -> IO (Writer [String] ([FunctionBinding], StaticContext))
@@ -329,7 +325,7 @@ parseExternal l = do
   forM_ (rights eParsed) $ \(Module _ _ _ _ _ _ ds) ->
     forM_ ds h
   -}
-  forM_ (rights eParsed) $ \m -> pprintTo 10000 m >>= print
+  -- forM_ (rights eParsed) $ \m -> pprintTo 10000 m >>= print
   return $ do
     mapM_ (tell.return) $ lefts eParsed
     let mods = rights eParsed
@@ -343,9 +339,13 @@ parseExternal l = do
     hParse (mode, content) = case parseModuleWithMode mode content of
       f@(ParseFailed _ _) -> Left $ show f
       ParseOk mod -> Right mod
-    hExtractBinds mod = do
-      let ebinds = getBindings defaultContext mod ++ getDataConss mod
+    hExtractBinds mod@(Module _ (ModuleName mname) _ _ _ _ _) = do
+      -- tell $ return $ mname
+      let ebinds = getBindings defaultContext mod
+                ++ getDataConss mod
+                ++ getClassMethods defaultContext mod
       mapM_ (tell.return) $ lefts ebinds
+      -- tell $ map show $ rights ebinds
       return $ rights ebinds
 
 testBaseInput :: [(Bool, String)]
@@ -426,13 +426,16 @@ main = runO $ do
           putStrLn s
           --mapM_ putStrLn $ map (either id show)
           --               $ getBindings defaultContext mod
-          mapM_ putStrLn $ map (either id show)
-                         $ getDataConss mod
+          --mapM_ putStrLn $ map (either id show)
+          --               $ getDataConss mod
+          --mapM_ putStrLn $ map (either id show)
+          --               $ getClassMethods defaultContext mod
   ((eSignatures, StaticContext clss insts), messages) <- runWriter <$> parseExternal testBaseInput'
   mapM_ print $ messages
+  -- mapM_ print $ clss
+  -- mapM_ print $ insts
+  -- mapM_ print $ eSignatures
   print $ compileDict testDictRatings $ eSignatures
-  mapM_ print $ clss
-  mapM_ print $ insts
   -- print $ parseConstrainedType defaultContext $ "(Show a) => [a] -> String"
   -- print $ inflateConstraints a b
   {-
