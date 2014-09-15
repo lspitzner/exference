@@ -1,6 +1,9 @@
+{-# LANGUAGE TupleSections #-}
+
 module Language.Haskell.Exference.BindingsFromHaskellSrc
   ( getBindings
   , getDataConss
+  , getClassMethods
   )
 where
 
@@ -21,21 +24,34 @@ import Control.Monad.Identity
 import Control.Monad.Trans.Either
 import Control.Monad.State.Strict
 import qualified Data.Map as M
+import Data.List ( find )
 
 
 
 getBindings :: StaticContext -> Module -> [Either String FunctionBinding]
 getBindings context (Module _loc _m _pragma _warning _mexp _imp decls)
-  = concatMap (either (return.Left) (map Right) . getFromDecls) decls
-  where
-    getFromDecls :: Decl -> Either String [FunctionBinding]
-    getFromDecls (TypeSig _loc names qtype)
-      = either (\x -> Left $ x ++ " in " ++ prettyPrint qtype) Right
-      $ mapM ((<$> convertCType context qtype) . helper) names
-    getFromDecls _ = return []
+  = concatMap (either (return.Left) (map Right) . getFromDecls context) decls
 
-helper :: Name -> HsConstrainedType -> FunctionBinding
-helper x ct = (hsNameToString x, ct)
+getFromDecls :: StaticContext -> Decl -> Either String [FunctionBinding]
+getFromDecls context (TypeSig _loc names qtype)
+  = insName qtype
+  $ ((<$> names) . helper) <$> convertCType context qtype
+getFromDecls _ _ = return []
+
+getFromDecls' :: StaticContext
+              -> Decl
+              -> ConversionMonad [FunctionBinding]
+getFromDecls' context (TypeSig _loc names qtype)
+  = mapEitherT (fmap $ insName qtype)
+  $ (<$> names) . helper <$> convertCTypeInternal context qtype
+  where
+getFromDecls' _ _ = return []
+
+insName :: Type -> Either String a -> Either String a
+insName qtype = either (\x -> Left $ x ++ " in " ++ prettyPrint qtype) Right
+
+helper :: HsConstrainedType -> Name -> FunctionBinding
+helper ct x = (hsNameToString x, ct)
 
 -- type ConversionMonad = StateT (Int, ConvMap) (Either String)
 getDataConss :: Module -> [Either String FunctionBinding]
@@ -58,19 +74,49 @@ getDataConss (Module _loc _m _pragma _warning _mexp _imp decls) = do
         ([], [], [], ConDecl cname tys) -> do
           convTs <- mapM convertTypeInternal tys
           rtype  <- rTypeM
-          return $ helper cname $ HsConstrainedType
-            []
-            (foldr TypeArrow rtype convTs)
+          return $ helper (HsConstrainedType
+                            []
+                            (foldr TypeArrow rtype convTs))
+                          cname
         ([], [], [], x) ->
           left $ "unknown ConDecl: " ++ show x
         ([], _, _, _) ->
           left $ "constraint or existential type for constructor"
         _ ->
           left $ "context in data type"
-  either (return.Left) (map Right)
+  let
+    addConsMsg = (++) $ hsNameToString name ++ ": "
+  either (return . Left . addConsMsg) (map Right)
     $ mapM (\x -> evalState (runEitherT $ typeM x) (0, M.empty))
     $ conss
 
---getClassMethods :: StaticContext -> Module -> [Either String FunctionBinding]
---getClassMethods context (Module _loc _m _pragma _warning _mexp _imp decls) = do
-
+getClassMethods :: StaticContext -> Module -> [Either String FunctionBinding]
+getClassMethods context (Module _loc _m _pragma _warning _mexp _imp decls) =
+  do
+    ClassDecl _ _ name vars _ cdecls <- decls
+    let nameStr = hsNameToString name
+    let errorMod = (++) ("class method for "++nameStr++": ")
+    let instClass = find ((nameStr==).tclass_name)
+                  $ context_tclasses context
+    case instClass of
+      Nothing -> return $ Left $ "unknown type class: "++nameStr
+      Just cls -> let
+        cnstrA = Constraint cls <$> mapM ((TypeVar <$>) . tyVarTransform) vars
+        action :: StateT (Int, ConvMap) Identity [Either String [FunctionBinding]]
+        action = do
+          cnstrE <- runEitherT cnstrA
+          case cnstrE of
+            Left x -> return [Left x]
+            Right cnstr ->
+              mapM ( runEitherT
+                   . fmap (map (addConstraint cnstr))
+                   . getFromDecls' context)
+                $ [ d | ClsDecl d <- cdecls ]
+        in concatMap (either (return . Left . errorMod)
+                             (map Right))
+                   $ runIdentity
+                   $ evalStateT action (0, M.empty)
+  where
+    addConstraint :: Constraint -> FunctionBinding -> FunctionBinding
+    addConstraint c (n, HsConstrainedType constrs t) =
+                    (n, HsConstrainedType (c:constrs) t)
