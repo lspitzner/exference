@@ -96,11 +96,6 @@ getInstances tcs ms = do
       -- either (Left . (("instance for "++name++": ")++)) Right
   return $ evalState (runEitherT sAction) (0, M.empty)
 
-tyVarTransform :: TyVarBind
-               -> ConversionMonad TVarId
-tyVarTransform (KindedVar _ _) = left $ "KindedVar"
-tyVarTransform (UnkindedVar n) = getVar n
-
 constrTransform :: (String -> Either String HsTypeClass)
                 -> Asst
                 -> ConversionMonad Constraint

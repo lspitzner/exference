@@ -12,6 +12,7 @@ module Language.Haskell.Exference.TypeFromHaskellSrc
   , getVar
   , ConversionMonad
   , parseConstrainedType
+  , tyVarTransform
   )
 where
 
@@ -129,3 +130,8 @@ parseConstrainedType :: TC.StaticContext -> String -> Either String CT.HsConstra
 parseConstrainedType c s = case Language.Haskell.Exts.Parser.parseType s of
   f@(Language.Haskell.Exts.Parser.ParseFailed _ _) -> Left $ show f
   Language.Haskell.Exts.Parser.ParseOk t -> convertCType c t
+
+tyVarTransform :: TyVarBind
+               -> ConversionMonad T.TVarId
+tyVarTransform (KindedVar _ _) = left $ "KindedVar"
+tyVarTransform (UnkindedVar n) = getVar n
