@@ -1,3 +1,5 @@
+{-# LANGUAGE PatternGuards #-}
+
 module Language.Haskell.Exference.TypeClasses
   ( HsTypeClass (..)
   , HsInstance (..)
@@ -12,6 +14,7 @@ module Language.Haskell.Exference.TypeClasses
   , constraintMapTypes
   , constraintContainsVariables
   , unknownTypeClass
+  , inflateInstances
   )
 where
 
@@ -163,3 +166,16 @@ constraintContainsVariables = any ((-1/=).largestId) . constraint_params
 
 unknownTypeClass :: HsTypeClass
 unknownTypeClass = HsTypeClass "EXFUnknownTC" [] []
+
+inflateInstances :: [HsInstance] -> [HsInstance]
+inflateInstances is = S.toList $ S.unions $ map (S.fromList . f) is
+  where
+    f :: HsInstance -> [HsInstance]
+    f i@(HsInstance iconstrs tclass iparams)
+      | (HsTypeClass _ tparams tconstrs) <- tclass
+      , substs <- M.fromList $ zip tparams iparams
+      = let 
+          g :: Constraint -> HsInstance
+          g (Constraint ctclass cparams) =
+            HsInstance iconstrs ctclass $ map (applySubsts substs) cparams
+        in i : concatMap (f.g) tconstrs
