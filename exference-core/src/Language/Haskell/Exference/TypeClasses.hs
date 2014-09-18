@@ -1,3 +1,5 @@
+{-# LANGUAGE PatternGuards #-}
+
 module Language.Haskell.Exference.TypeClasses
   ( HsTypeClass (..)
   , HsInstance (..)
@@ -12,6 +14,7 @@ module Language.Haskell.Exference.TypeClasses
   , constraintMapTypes
   , constraintContainsVariables
   , unknownTypeClass
+  , inflateInstances
   )
 where
 
@@ -111,6 +114,10 @@ inflateConstraints _context = inflate (S.fromList . f)
 filterConstraintsByVarId :: TVarId -> S.Set Constraint -> S.Set Constraint
 filterConstraintsByVarId i = S.filter $ any (containsVar i) . constraint_params
 
+{-
+-- the constraintsolving stuff was replaced by the functions in
+-- Internal.ConstraintSolver. this method is no longer needed.
+-- Also, no promises this function ever did what it was expected to do..
 constraintMatches :: DynContext -> TVarId -> HsType -> Bool
 constraintMatches dcontext constrVar providedType =
   let contextConstraints  = dynContext_constraints dcontext
@@ -124,6 +131,8 @@ constraintMatches dcontext constrVar providedType =
     $ inflateConstraints
         (dynContext_context dcontext)
         contextConstraints
+-}
+
 {-
  problem:
   given a set of constraints C over type variables a,b,c,..
@@ -144,12 +153,29 @@ inflate f = fold . S.fromList . iterateWhileNonempty (foldMap f)
       then []
       else x : iterateWhileNonempty g (g x)
 
+-- changing the DynContext no longer is necessary. see the comments
+-- on DynContext definition.
+{-
 dynContextAddConstraints :: [Constraint] -> DynContext -> DynContext
 dynContextAddConstraints cs (DynContext a b _) =
   mkDynContext a (cs ++ S.toList b)
+-}
 
 constraintContainsVariables :: Constraint -> Bool
 constraintContainsVariables = any ((-1/=).largestId) . constraint_params
 
 unknownTypeClass :: HsTypeClass
 unknownTypeClass = HsTypeClass "EXFUnknownTC" [] []
+
+inflateInstances :: [HsInstance] -> [HsInstance]
+inflateInstances is = S.toList $ S.unions $ map (S.fromList . f) is
+  where
+    f :: HsInstance -> [HsInstance]
+    f i@(HsInstance iconstrs tclass iparams)
+      | (HsTypeClass _ tparams tconstrs) <- tclass
+      , substs <- M.fromList $ zip tparams iparams
+      = let 
+          g :: Constraint -> HsInstance
+          g (Constraint ctclass cparams) =
+            HsInstance iconstrs ctclass $ map (applySubsts substs) cparams
+        in i : concatMap (f.g) tconstrs

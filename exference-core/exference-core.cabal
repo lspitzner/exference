@@ -1,5 +1,5 @@
 Name:          exference-core
-Version:       0.3
+Version:       0.3.1
 Cabal-Version: >= 1.8
 Build-Type:    Simple
 
@@ -10,6 +10,7 @@ Library
                -rtsopts
                -O1
                -j
+               -Wall
                -fno-warn-unused-imports
                -fno-warn-orphans
   exposed-modules: Language.Haskell.ExferenceCore,

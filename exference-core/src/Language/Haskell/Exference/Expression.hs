@@ -2,6 +2,7 @@ module Language.Haskell.Exference.Expression
   ( Expression (..)
   , fillExprHole
   , simplifyLets
+  , simplifyEta
   )
 where
 
@@ -79,20 +80,35 @@ simplifyLets e@(ExpLit _) = e
 simplifyLets (ExpLambda i e) = ExpLambda i $ simplifyLets e
 simplifyLets (ExpApply e1 e2) = ExpApply (simplifyLets e1) (simplifyLets e2)
 simplifyLets e@(ExpHole _) = e
-simplifyLets e@(ExpLetMatch name vids bindExp inExp) =
+simplifyLets (ExpLetMatch name vids bindExp inExp) =
   ExpLetMatch name vids (simplifyLets bindExp) (simplifyLets inExp)
-simplifyLets e@(ExpLet i bindExp inExp) = case countUses i inExp of
+simplifyLets (ExpLet i bindExp inExp) = case countUses i inExp of
   0 -> simplifyLets inExp
   1 -> simplifyLets $ replaceVar i bindExp inExp
-  _ -> e
+  _ -> ExpLet i (simplifyLets bindExp) (simplifyLets inExp)
 
 countUses :: TVarId -> Expression -> Int
 countUses i (ExpVar j) | i==j = 1
                        | otherwise = 0
-countUses i (ExpLit _) = 0
+countUses _ (ExpLit _) = 0
 countUses i (ExpLambda j e) | i==j = 0
                             | otherwise = countUses i e
 countUses i (ExpApply e1 e2) = ((+) `on` countUses i) e1 e2
-countUses i (ExpHole _) = 0
+countUses _ (ExpHole _) = 0
 countUses i (ExpLetMatch _ _ bindExp inExp) = ((+) `on` countUses i) bindExp inExp
 countUses i (ExpLet _ bindExp inExp) = ((+) `on` countUses i) bindExp inExp
+
+simplifyEta :: Expression -> Expression
+simplifyEta e@(ExpVar _) = e
+simplifyEta e@(ExpLit _) = e
+simplifyEta (ExpLambda i e) = simplifyEta' $ ExpLambda i $ simplifyEta e
+simplifyEta (ExpApply e1 e2) = ExpApply (simplifyEta e1) (simplifyEta e2)
+simplifyEta e@(ExpHole _) = e
+simplifyEta (ExpLetMatch name vids bindExp inExp) =
+  ExpLetMatch name vids (simplifyEta bindExp) (simplifyEta inExp)
+simplifyEta (ExpLet i bindExp inExp) =
+  ExpLet i (simplifyEta bindExp) (simplifyEta inExp)
+
+simplifyEta' :: Expression -> Expression
+simplifyEta' (ExpLambda i (ExpApply e1 (ExpVar j))) | i==j = e1
+simplifyEta' e = e

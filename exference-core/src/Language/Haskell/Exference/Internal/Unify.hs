@@ -82,9 +82,15 @@ unifyRight ut1 ut2 = unify' $ UniState [(ut1, ut2)] M.empty
     uniStep (t1, TypeForall _ t2) = uniStep (t1, t2)
     uniStep _ = Nothing
 
-unifyDist :: HsType -> HsType -> Maybe Substs
-unifyDist t1 t2 = unify t1 $ distinctify t1 t2
+--unifyDist :: HsType -> HsType -> Maybe Substs
+--unifyDist t1 t2 = unify t1 $ distinctify t1 t2
 
+-- tries to unify two types, under the assumption that one is supposed
+-- to serve as the parameter (at some levels) to the other one (when at
+-- least one is a function, that is.)
+-- either is BROKEN, or does something other than i expected.
+-- not used (or needed) anyway, so.. deletion candidate.
+{-
 inflateUnify :: HsType -> HsType -> [HsType]
 inflateUnify t1 t2 =
   let d1 = arrowDepth t1
@@ -103,3 +109,4 @@ inflateUnify t1 t2 =
     f ft1 ft2s = catMaybes [g ft1 (distinctify ft1 ft2) | ft2 <- ft2s]
     g :: HsType -> HsType -> Maybe HsType
     g gt1 gt2 = fmap (\subst -> reduceIds $ applySubsts subst gt1) (unify gt1 gt2)
+-}

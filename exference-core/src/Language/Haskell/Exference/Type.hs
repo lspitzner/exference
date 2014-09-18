@@ -16,6 +16,7 @@ module Language.Haskell.Exference.Type
   , badReadVar
   , showVar
   , largestSubstsId
+  , forallify -- unused atm
   )
 where
 
