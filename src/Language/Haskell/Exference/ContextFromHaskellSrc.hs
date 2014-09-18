@@ -38,7 +38,7 @@ getContext ms = do
   let tcs = rights etcs
   let einsts = getInstances tcs ms
   mapM_ (tell.return) $ lefts einsts
-  let insts = rights einsts
+  let insts = inflateInstances $ rights einsts
   return $ StaticContext tcs insts
 
 type RawMap = M.Map String (Context, [TyVarBind])
