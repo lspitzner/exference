@@ -14,18 +14,19 @@ import Language.Haskell.Exts.Syntax
 
 
 -- TODO:
--- 1) don't convert to some invented function "f"; use lambda instead
--- 2) merge nested lambdas
+-- 1) merge nested lambdas
 
-convert :: E.Expression -> Decl
+convert :: E.Expression -> Exp
 convert e = h e []
   where
     h (E.ExpLambda i e1) is = h e1 (i:is)
+    h rhsExp [] = convertExp rhsExp
     h rhsExp is =
-        FunBind [Match noLoc (Ident "f") params Nothing rhs (BDecls[])]
+        Lambda noLoc params (convertExp rhsExp)
+        -- FunBind [Match noLoc (Ident "f") params Nothing rhs (BDecls[])]
       where
         params = map (PVar . Ident . T.showVar) $ reverse is
-        rhs = UnGuardedRhs $ convertExp rhsExp
+        -- rhs = UnGuardedRhs $ convertExp rhsExp
 
 convertExp :: E.Expression -> Exp
 convertExp e = convertInternal 0 e
