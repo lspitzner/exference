@@ -48,6 +48,23 @@ import Control.Arrow ( first )
 
 
 
+builtInBindings :: [FunctionBinding]
+builtInBindings = map (second $ readConstrainedType emptyContext)
+  $ [ (,) "()" "Unit"
+    , (,) "(,)" "Tuple2 a b -> INFPATTERN a b"
+    , (,) "(,)" "a -> b -> Tuple2 a b"
+    , (,) "(,,)" "Tuple3 a b c -> INFPATTERN a b c"
+    , (,) "(,,)" "a -> b -> c -> Tuple3 a b c"
+    , (,) "(,,,)" "Tuple4 a b c d -> INFPATTERN a b c d"
+    , (,) "(,,,)" "a -> b -> c -> d -> Tuple4 a b c d"
+    , (,) "(,,,,)" "Tuple5 a b c d e -> INFPATTERN a b c d e"
+    , (,) "(,,,,)" "a -> b -> c -> d -> e -> Tuple5 a b c d e"
+    , (,) "(,,,,,)" "Tuple6 a b c d e f -> INFPATTERN a b c d e f"
+    , (,) "(,,,,,)" "a -> b -> c -> d -> e -> f -> Tuple6 a b c d e f"
+    , (,) "(,,,,,,)" "Tuple7 a b c d e f g -> INFPATTERN a b c d e f g"
+    , (,) "(,,,,,,)" "a -> b -> c -> d -> e -> f -> g -> Tuple7 a b c d e f g"
+    ]
+
 -- | Takes a list of bindings, and a dictionary of desired
 -- functions and their rating, and compiles a list of
 -- RatedFunctionBindings.
@@ -89,9 +106,12 @@ contextFromModules l = do
   return $ do
     mapM_ (tell.return) $ lefts eParsed
     let mods = rights eParsed
-    cntxt <- getContext mods
+    cntxt@(StaticContext clss insts) <- getContext mods
+    tell ["got " ++ show (length clss) ++ " classes"]
+    tell ["and " ++ show (length insts) ++ " instances"]
     binds <- join <$> mapM (hExtractBinds cntxt) mods
-    return $ (binds, cntxt)
+    tell ["and " ++ show (length binds) ++ " bindings"]
+    return $ (builtInBindings++binds, cntxt)
   where
     hRead :: (ParseMode, String) -> IO (ParseMode, String)
     hRead (mode, s) = (,) mode <$> readFile s
@@ -125,7 +145,9 @@ contextFromModuleSimple s = do
               , ExplicitForAll
               , ExistentialQuantification
               , TypeFamilies
-              , FunctionalDependencies ]
+              , FunctionalDependencies
+              , FlexibleContexts
+              , MultiParamTypeClasses ]
       exts2 = map EnableExtension exts1
       mode = ParseMode (s++".hs")
                        Haskell2010
