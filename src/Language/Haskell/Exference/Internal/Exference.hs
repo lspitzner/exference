@@ -102,7 +102,7 @@ findExpressions (ExferenceInput rawCType funcs staticContext allowUnused) =
         Nothing
         "")
     maxSteps :: Int
-    maxSteps = 65535
+    maxSteps = 32768
     helper :: FindExpressionsState -> [(Int,Float,Expression)]
     helper (n, worst, states)
       | Q.null states || n > maxSteps = []
