@@ -36,6 +36,7 @@ import Control.Applicative ( (<$>), (<*>) )
 import Data.List ( partition, sortBy, groupBy )
 import Data.Ord ( comparing )
 import Data.Function ( on )
+import Data.Bool (bool)
 
 -- import Data.DeriveTH
 import Debug.Hood.Observe
@@ -72,28 +73,39 @@ type ExferenceOutputElement = (Expression, ExferenceStats)
 
 type RatedStates = Q.MaxPQueue Float State
 
+__debug :: Bool
+__debug = False
+
+type FindExpressionsState = ( Int    -- number of steps already performed
+                            , Float  -- worst rating of state in pqueue
+                            , RatedStates -- pqueue
+                            )
+
 findExpressions :: ExferenceInput
                 -> [ExferenceOutputElement]
 findExpressions (ExferenceInput rawCType funcs staticContext allowUnused) =
   [(e, ExferenceStats steps compl) | (steps, compl, e) <- resultTuples]
   where
     (HsConstrainedType cs t) = ctConstantifyVars rawCType
-    resultTuples = helper 0 $ Q.singleton 0.0 $ State
-      [((0, t), 0)]
-      []
-      initialScopes
-      M.empty
-      (map splitEnvElement funcs)
-      (mkDynContext staticContext cs)
-      (ExpHole 0)
-      1
-      (largestId t)
-      0.0
-      Nothing
-      ""
-    helper :: Int -> RatedStates -> [(Int,Float,Expression)]
-    helper n states
-      | Q.null states || n > 65535 = []
+    resultTuples = helper (0, 0,
+      Q.singleton 0.0 $ State
+        [((0, t), 0)]
+        []
+        initialScopes
+        M.empty
+        (map splitEnvElement funcs)
+        (mkDynContext staticContext cs)
+        (ExpHole 0)
+        1
+        (largestId t)
+        0.0
+        Nothing
+        "")
+    maxSteps :: Int
+    maxSteps = 32768
+    helper :: FindExpressionsState -> [(Int,Float,Expression)]
+    helper (n, worst, states)
+      | Q.null states || n > maxSteps = []
       | ((_,s), restStates) <- Q.deleteFindMax states =
         let (potentialSolutions, futures) = partition (null.state_goals) 
                                                       (stateStep s)
@@ -108,11 +120,20 @@ findExpressions (ExferenceInput rawCType funcs staticContext allowUnused) =
                   , let e = -- trace (showStateDevelopment solution) $ 
                             simplifyEta $ simplifyLets $ state_expression solution
                   ]
-            rest = helper (n+1) $ foldr 
-                       (uncurry Q.insert)
-                       restStates
-                       [ (r, newS) | newS <- futures
-                                   , let r = rateState newS ]
+            ratedNew    = [ (rateState newS, newS) | newS <- futures ]
+            qsize = Q.size states
+            cutoff = worst * fromIntegral maxSteps / fromIntegral qsize
+              -- this cutoff is somewhat arbitrary, and can, theoretically,
+              -- distort the order of the results (i.e.: lead to results being
+              -- omitted).
+            filteredNew = if n+qsize > maxSteps
+              then filter ((>cutoff) . fst) ratedNew
+              else ratedNew
+            newStates   = foldr (uncurry Q.insert) restStates filteredNew
+            rest = helper
+              ( n+1
+              , minimum $ worst:map fst filteredNew
+              , newStates )
         in out ++ rest
 
 
@@ -196,7 +217,7 @@ stateStep2 s
           vEnd
           (state_maxTVarId s)
           (state_depth s + factorFunctionGoalTransform)
-          (Just s)
+          (bool Nothing (Just s) __debug)
           "function goal transform"
     byProvided = do
       (provId, provT, provPs) <- scopeGetAllBindings (state_providedScopes s) scopeId
@@ -263,7 +284,7 @@ stateStep2 s
               (maximum $ state_maxTVarId s
                        : map largestId dependencies)
               (state_depth s + depthModNoMatch) -- constant penalty for wild-guessing..
-              (Just s)
+              (bool Nothing (Just s) __debug)
               ("randomly trying to apply function " ++ show coreExp)
         Just substs -> do
           let contxt = state_context s
@@ -299,7 +320,7 @@ stateStep2 s
                      : largestSubstsId substs
                      : map largestId dependencies)
             (state_depth s + depthModMatch)
-            (Just s)
+            (bool Nothing (Just s) __debug)
             (reasonPart ++ ", because " ++ substsTxt ++ " and because " ++ provableTxt)
 
 addScopePatternMatch :: Int -> ScopeId -> [VarPBinding] -> State -> State
@@ -333,7 +354,7 @@ addScopePatternMatch vid sid bindings state = foldr helper state bindings where
             state_expression = fillExprHole vid expr $ state_expression s,
             state_nextVarId = vEnd,
             state_maxTVarId = maximum (state_maxTVarId s:map largestId newProvTypes),
-            state_previousState = Just s,
+            state_previousState = bool Nothing (Just s) __debug,
             state_lastStepReason = "pattern matching on " ++ showVar v
           }
 

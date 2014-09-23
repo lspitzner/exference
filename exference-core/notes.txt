@@ -1,3 +1,5 @@
+when programming top-down, i don't know if a sub-computation can fail (MaybeT/EitherT), has state (StateT) or whatever else. To keep the amount of refactoring low when i notice what i truely need, i should, by default, make all functions have a type of the form Monad m => a -> b -> m c. It does not matter if, in the end, it turns out that m==Identity.
+
 input: wanted type
 output: [expression with that type]
 
