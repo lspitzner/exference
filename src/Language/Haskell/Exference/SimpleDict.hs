@@ -2,7 +2,7 @@
 {-# LANGUAGE PatternGuards #-}
 
 module Language.Haskell.Exference.SimpleDict
-  ( bindings
+  ( defaultBindings
   , emptyContext
   , defaultContext
   , testDynContext
@@ -43,8 +43,8 @@ toBindings = map (\(a,b,c) ->
 
 -- function, penalty for using that function, type
 -- value ignored for pattern-matches
-bindings :: [RatedFunctionBinding]
-bindings = toBindings
+defaultBindings :: [RatedFunctionBinding]
+defaultBindings = toBindings
   [
   -- functor
     ("fmap",     1.0, "(Functor f) => (a -> b) -> f a -> f b")

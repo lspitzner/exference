@@ -183,7 +183,7 @@ checkOutput = do
   guard $ iname==ename
   let input = ExferenceInput
                 (readConstrainedType defaultContext typeStr)
-                bindings
+                defaultBindings
                 defaultContext
                 allowUnused
   let r = findExpressions input
@@ -205,7 +205,7 @@ testOutput = map f testInput
     input = ExferenceInput
     f (_, allowUnused, s) = takeFindSortNExpressions 5 10 $ ExferenceInput
                 (readConstrainedType defaultContext s)
-                bindings
+                defaultBindings
                 defaultContext
                 allowUnused
 
