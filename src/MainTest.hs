@@ -162,6 +162,8 @@ checkResults (bindings, scontext) = do
                 bindings
                 scontext
                 allowUnused
+                16384
+                (Just 16384)
   let r = findExpressions input
   let finder :: Int -> [(Expression, ExferenceStats)] -> Maybe (Int, ExferenceStats)
       finder n [] = Nothing
@@ -184,6 +186,8 @@ exampleOutput (bindings, scontext) = map f exampleInput
                 bindings
                 scontext
                 allowUnused
+                16384
+                (Just 16384)
 
 exampleInOut context = zip exampleInput (exampleOutput context)
 
