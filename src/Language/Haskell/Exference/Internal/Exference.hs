@@ -63,10 +63,25 @@ factorFunctionGoalTransform = 0.0
 factorUnusedVar = 20.0
 
 data ExferenceInput = ExferenceInput
-  { input_goalType    :: HsConstrainedType
-  , input_envDict     :: [RatedFunctionBinding]
+  { input_goalType    :: HsConstrainedType      -- ^ try to find a expression
+                                                -- of this type
+  , input_envDict     :: [RatedFunctionBinding] -- ^ the list of functions
+                                                -- that may be used
   , input_envContext  :: StaticContext
-  , input_allowUnused :: Bool
+  , input_allowUnused :: Bool                   -- ^ if false, forbid solutions
+                                                -- where any bind is unused
+  , input_maxSteps    :: Int                    -- ^ the maximum number of
+                                                -- steps to perform (otherwise
+                                                -- would not terminate if
+                                                -- there were no (more)
+                                                -- solutions)
+  , input_memoryLimit :: Maybe Int              -- ^ allows to limit memory
+                                                -- usage. no effect if Nothing;
+                                                -- for (Just x), memory usage
+                                                -- scales with x.
+                                                -- Lower memory usage discards
+                                                -- states (and, thus, potential
+                                                -- solutions).
   }
 
 type ExferenceOutputElement = (Expression, ExferenceStats)
@@ -83,7 +98,12 @@ type FindExpressionsState = ( Int    -- number of steps already performed
 
 findExpressions :: ExferenceInput
                 -> [ExferenceOutputElement]
-findExpressions (ExferenceInput rawCType funcs staticContext allowUnused) =
+findExpressions (ExferenceInput rawCType
+                                funcs
+                                staticContext
+                                allowUnused
+                                maxSteps
+                                memLimit) =
   [(e, ExferenceStats steps compl) | (steps, compl, e) <- resultTuples]
   where
     (HsConstrainedType cs t) = ctConstantifyVars rawCType
@@ -101,8 +121,6 @@ findExpressions (ExferenceInput rawCType funcs staticContext allowUnused) =
         0.0
         Nothing
         "")
-    maxSteps :: Int
-    maxSteps = 32768
     helper :: FindExpressionsState -> [(Int,Float,Expression)]
     helper (n, worst, states)
       | Q.null states || n > maxSteps = []
@@ -122,12 +140,17 @@ findExpressions (ExferenceInput rawCType funcs staticContext allowUnused) =
                   ]
             ratedNew    = [ (rateState newS, newS) | newS <- futures ]
             qsize = Q.size states
-            cutoff = worst * fromIntegral maxSteps / fromIntegral qsize
               -- this cutoff is somewhat arbitrary, and can, theoretically,
               -- distort the order of the results (i.e.: lead to results being
               -- omitted).
             filteredNew = if n+qsize > maxSteps
-              then filter ((>cutoff) . fst) ratedNew
+              then case memLimit of
+                Nothing -> ratedNew
+                Just mmax ->
+                  let
+                    cutoff = worst * fromIntegral mmax / fromIntegral qsize
+                  in
+                    filter ((>cutoff) . fst) ratedNew
               else ratedNew
             newStates   = foldr (uncurry Q.insert) restStates filteredNew
             rest = helper
