@@ -49,90 +49,43 @@ import Debug.Hood.Observe
 
 
 
-testInput :: [(String, Bool, String)]
-testInput = 
-  [ (,,) "showmap"    False "(Show b) => (a -> b) -> List a -> List String"
-  , (,,) "ffbind"     False "(a -> t -> b) -> (t -> a) -> (t -> b)"
-  , (,,) "join"       False "(Monad m) => m (m a) -> m a"
-  , (,,) "fjoin"      False "(t -> (t -> a)) -> t -> a"
-  , (,,) "zipThingy"  False "List a -> b -> List (Tuple a b)"
-  , (,,) "stateRun"   True  "State a b -> a -> b"
-  , (,,) "fst"        True  "Tuple a b -> a"
-  , (,,) "ffst"       True  "(a -> Tuple b c) -> a -> b"
-  , (,,) "snd"        True  "Tuple a b -> b"
-  , (,,) "quad"       False "a -> Tuple (Tuple a a) (Tuple a a)"
-  , (,,) "fswap"      False "(a -> Tuple b c) -> a -> Tuple c b"
-  , (,,) "liftBlub"   False "Monad m => m a -> m b -> (a -> b -> m c) -> m c"
-  , (,,) "stateBind"  False "State s a -> (a -> State s b) -> State s b"
-  , (,,) "dbMaybe"    False "Maybe a -> Maybe (Tuple a a)"
-  , (,,) "tupleShow"  False "Show a, Show b => Tuple a b -> String"
-  , (,,) "FloatToInt" False "Float -> Int"
-  , (,,) "longApp"    False "a -> b -> c -> (a -> b -> d) -> (a -> c -> e) -> (b -> c -> f) -> (d -> e -> f -> g) -> g"
-  , (,,) "liftSBlub"  False "Monad m, Monad n => (List a -> b -> c) -> m (List (n a)) -> m (n b) -> m (n c)"
-  , (,,) "liftSBlubS" False "Monad m => (List a -> b -> c) -> m (List (Maybe a)) -> m (Maybe b) -> m (Maybe c)"
-  , (,,) "joinBlub"   False "Monad m => List Decl -> (Decl -> m (List FunctionBinding)) -> m (List FunctionBinding)"
+checkData :: [(String, Bool, String, String)]
+checkData =
+  [ (,,,) "showmap"    False "(Show b) => (a -> b) -> List a -> List String"
+                             "\\b -> fmap (\\g -> show (b g))"
+  , (,,,) "ffbind"     False "(a -> t -> b) -> (t -> a) -> (t -> b)"
+                             "\\b -> (\\c -> b (c d))"
+  , (,,,) "join"       False "(Monad m) => m (m a) -> m a"
+                             "\\b -> ((>>=) b) (\\f -> f))"
+  , (,,,) "fjoin"      False "(t -> (t -> a)) -> t -> a"
+                             "\\b -> (\\c -> (b c) c)"
+  , (,,,) "zipThingy"  False "List a -> b -> List (Tuple a b)"
+                             "\\b -> (\\c -> ((fmap (\\g -> ((,) g) c)) b)"
+  , (,,,) "stateRun"   True  "State a b -> a -> b"
+                             "\\b -> (\\c -> let (State e) = b in let ((,) h i) = e c in h"
+  , (,,,) "fst"        True  "Tuple a b -> a"
+                             "\\b -> let ((,) d e) = b in d"
+  --, (,,,) "ffst"       True  "(a -> Tuple b c) -> a -> b"
+  , (,,,) "snd"        True  "Tuple a b -> b"
+                             "\\b -> let ((,) d e) = b in e"
+  , (,,,) "quad"       False "a -> Tuple (Tuple a a) (Tuple a a)"
+                             "\\b -> ((,) (((,) b) b)) (((,) b) b))"
+  -- , (,,,) "fswap"      False "(a -> Tuple b c) -> a -> Tuple c b"
+  , (,,,) "liftBlub"   False "Monad m => m a -> m b -> (a -> b -> m c) -> m c"
+                             "\\b -> (\\c -> (\\d -> ((>>=) b) (\\h -> ((>>=) c) (d h))))"
+  , (,,,) "stateBind"  False "State s a -> (a -> State s b) -> State s b"
+                             "todo"
+  , (,,,) "dbMaybe"    False "Maybe a -> Maybe (Tuple a a)"
+                             "todo"
+  --, (,,,) "tupleShow"  False "Show a, Show b => Tuple a b -> String"
+  --, (,,,) "FloatToInt" False "Float -> Int"
+  --, (,,,) "longApp"    False "a -> b -> c -> (a -> b -> d) -> (a -> c -> e) -> (b -> c -> f) -> (d -> e -> f -> g) -> g"
+  --, (,,,) "liftSBlub"  False "Monad m, Monad n => (List a -> b -> c) -> m (List (n a)) -> m (n b) -> m (n c)"
+  --, (,,,) "liftSBlubS" False "Monad m => (List a -> b -> c) -> m (List (Maybe a)) -> m (Maybe b) -> m (Maybe c)"
+  --, (,,,) "joinBlub"   False "Monad m => List Decl -> (Decl -> m (List FunctionBinding)) -> m (List FunctionBinding)"
   ]
 
-expected :: [(String, Expression)]
-expected =
-  [ (,) "showmap"
-    (ExpLambda 1
-      (ExpLambda 2
-        (ExpApply
-          (ExpApply
-            (ExpLit "fmap")
-            (ExpLambda 6
-              (ExpApply
-                (ExpLit "show")
-                (ExpApply (ExpVar 1) (ExpVar 6)))))
-          (ExpVar 2))))
-  , (,) "ffbind"
-    (ExpLambda 1
-      (ExpLambda 2
-        (ExpLambda 3
-          (ExpApply
-            (ExpApply
-              (ExpVar 1)
-              (ExpApply (ExpVar 2) (ExpVar 3)))
-            (ExpVar 3)))))
-  , (,) "join"
-    (ExpLambda 1
-      (ExpApply
-        (ExpApply (ExpLit "(>>=)") (ExpVar 1))
-        (ExpLambda 5 (ExpVar 5))))
-  , (,) "fjoin"
-    (ExpLambda 1
-      (ExpLambda 2
-        (ExpApply (ExpApply (ExpVar 1) (ExpVar  2)) (ExpVar 2))))
-  , (,) "zipThingy"
-    (ExpLambda 1
-      (ExpLambda 2
-        (ExpApply
-          (ExpApply
-            (ExpLit "fmap")
-            (ExpLambda 6
-              (ExpApply
-                (ExpApply (ExpLit "(,)") (ExpVar 6))
-                (ExpVar 2))))
-          (ExpVar 1))))
-  , (,) "stateRun"
-    (ExpLambda 1
-      (ExpLambda 2
-        (ExpLetMatch "State" [4] (ExpVar 1)
-          (ExpLetMatch "(,)" [7,8]
-            (ExpApply (ExpVar 4) (ExpVar 2))
-            (ExpVar 7)))))
-  , (,) "fst"
-    (ExpLambda 1 (ExpLetMatch "(,)" [3,4] (ExpVar 1) (ExpVar 3)))
-  , (,) "snd"
-    (ExpLambda 1 (ExpLetMatch "(,)" [3,4] (ExpVar 1) (ExpVar 4)))
-  , (,) "quad"
-    (ExpLambda 1
-      (ExpApply
-        (ExpApply
-          (ExpLit "(,)")
-          (ExpApply (ExpApply (ExpLit "(,)") (ExpVar 1)) (ExpVar 1)))
-        (ExpApply (ExpApply (ExpLit "(,)") (ExpVar 1)) (ExpVar 1))))
+{-
   , (,) "liftBlub"
     (ExpLambda 1
       (ExpLambda 2
@@ -170,26 +123,49 @@ expected =
               (ExpApply (ExpLit "(,)") (ExpVar 5))
               (ExpVar 5))))
         (ExpVar 1)))
+-}
+
+exampleInput :: [(String, Bool, String)]
+exampleInput = 
+  [ (,,) "showmap"    False "(Show b) => (a -> b) -> List a -> List String"
+  , (,,) "ffbind"     False "(a -> t -> b) -> (t -> a) -> (t -> b)"
+  , (,,) "join"       False "(Monad m) => m (m a) -> m a"
+  , (,,) "fjoin"      False "(t -> (t -> a)) -> t -> a"
+  , (,,) "zipThingy"  False "List a -> b -> List (Tuple a b)"
+  , (,,) "stateRun"   True  "State a b -> a -> b"
+  , (,,) "fst"        True  "Tuple a b -> a"
+  , (,,) "ffst"       True  "(a -> Tuple b c) -> a -> b"
+  , (,,) "snd"        True  "Tuple a b -> b"
+  , (,,) "quad"       False "a -> Tuple (Tuple a a) (Tuple a a)"
+  , (,,) "fswap"      False "(a -> Tuple b c) -> a -> Tuple c b"
+  , (,,) "liftBlub"   False "Monad m => m a -> m b -> (a -> b -> m c) -> m c"
+  , (,,) "stateBind"  False "State s a -> (a -> State s b) -> State s b"
+  , (,,) "dbMaybe"    False "Maybe a -> Maybe (Tuple a a)"
+  , (,,) "tupleShow"  False "Show a, Show b => Tuple a b -> String"
+  , (,,) "FloatToInt" False "Float -> Int"
+  , (,,) "longApp"    False "a -> b -> c -> (a -> b -> d) -> (a -> c -> e) -> (b -> c -> f) -> (d -> e -> f -> g) -> g"
+  , (,,) "liftSBlub"  False "Monad m, Monad n => (List a -> b -> c) -> m (List (n a)) -> m (n b) -> m (n c)"
+  , (,,) "liftSBlubS" False "Monad m => (List a -> b -> c) -> m (List (Maybe a)) -> m (Maybe b) -> m (Maybe c)"
+  , (,,) "joinBlub"   False "Monad m => List Decl -> (Decl -> m (List FunctionBinding)) -> m (List FunctionBinding)"
   ]
 
-checkOutput :: [( String
-                , Expression
-                , Maybe (Expression, Expression)
-                , Maybe (Int, ExferenceStats)
-                )]
-checkOutput = do
-  (iname, allowUnused, typeStr) <- testInput
-  (ename, expr)    <- expected
-  guard $ iname==ename
+checkResults :: Context
+             -> [( String -- name
+                 , String -- expected
+                 , Maybe (Expression, Expression) -- first/best
+                 , Maybe (Int, ExferenceStats)    -- no idea atm
+                 )]
+checkResults (bindings, scontext) = do
+  (name, allowUnused, typeStr, expected) <- checkData
   let input = ExferenceInput
-                (readConstrainedType defaultContext typeStr)
-                defaultBindings
-                defaultContext
+                (readConstrainedType scontext typeStr)
+                bindings
+                scontext
                 allowUnused
   let r = findExpressions input
   let finder :: Int -> [(Expression, ExferenceStats)] -> Maybe (Int, ExferenceStats)
       finder n [] = Nothing
-      finder n ((e, s):r) | e==expr = Just (n, s)
+      finder n ((e, s):r) | show e==expected = Just (n, s)
                           | otherwise = finder (n+1) r
       bestFound = findSortNExpressions 100 input
       firstAndBest :: Maybe (Expression, Expression)
@@ -197,21 +173,21 @@ checkOutput = do
         (f,_) <- listToMaybe r
         (b,_) <- listToMaybe bestFound
         return (f,b)
-  return (iname, expr, firstAndBest, finder 0 r)
+  return (name, expected, firstAndBest, finder 0 r)
 
-testOutput :: [[(Expression, ExferenceStats)]]
-testOutput = map f testInput
+exampleOutput :: Context -> [[(Expression, ExferenceStats)]]
+exampleOutput (bindings, scontext) = map f exampleInput
   where
     input = ExferenceInput
     f (_, allowUnused, s) = takeFindSortNExpressions 5 10 $ ExferenceInput
-                (readConstrainedType defaultContext s)
-                defaultBindings
-                defaultContext
+                (readConstrainedType scontext s)
+                bindings
+                scontext
                 allowUnused
 
-testInOut = zip testInput testOutput
+exampleInOut context = zip exampleInput (exampleOutput context)
 
-printAndStuff = mapM_ f testInOut
+printAndStuff context = mapM_ f (exampleInOut context)
   where
     f ((name, _, _), []) = putStrLn $ "no results for "++name++"!"
     f ((name, _, _), results) = mapM_ g results
@@ -228,7 +204,7 @@ printAndStuff = mapM_ f testInOut
             putStrLn $ name ++ " = " ++ str
                        ++ " (depth " ++ show d ++ ", " ++ show n ++ " steps)"
 
-printStatistics = mapM_ f testInOut
+printStatistics context = mapM_ f (exampleInOut context)
   where
     f ((name, _, _), [])      = putStrLn $ printf "%10s: ---" name
     f ((name, _, _), results) =
@@ -244,11 +220,11 @@ printStatistics = mapM_ f testInOut
          , length steps
          )
 
-printChecks :: IO ()
-printChecks = mapM_ helper checkOutput
+printChecks :: Context -> IO ()
+printChecks context = mapM_ helper (checkResults context)
   where
     helper :: ( String
-              , Expression
+              , String
               , Maybe (Expression, Expression)
               , Maybe (Int, ExferenceStats))
            -> IO ()
@@ -261,12 +237,12 @@ printChecks = mapM_ helper checkOutput
     helper (name, e, Just(f,_), Just (i, _)) = do
       putStrLn $ printf "%-10s: expected solution not first, but %d!" name i
       putStrLn $ "  first solution:    " ++ show f
-      putStrLn $ "  expected solution: " ++ show e
+      putStrLn $ "  expected solution: " ++ e
     helper (name, e, Just(f,b), Nothing) = do
       putStrLn $ printf "%-10s: expected solution not found!" name
       putStrLn $ "  first solution was " ++ show f
       putStrLn $ "  best solution:     " ++ show b
-      putStrLn $ "  expected solution: " ++ show e
+      putStrLn $ "  expected solution: " ++ e
     helper (name, _, Nothing, _) = do
       putStrLn $ printf "%-10s: no solutions found at all!" name 
 
