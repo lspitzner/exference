@@ -9,7 +9,7 @@ where
 
 import Language.Haskell.Exts.Syntax
 import Language.Haskell.Exts.Pretty
-import Language.Haskell.Exference.FunctionBinding
+import Language.Haskell.Exference.FunctionBinding hiding (Context)
 import Language.Haskell.Exference.TypeFromHaskellSrc
 import Language.Haskell.Exference.ConstrainedType
 import Language.Haskell.Exference.Type
