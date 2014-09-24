@@ -7,6 +7,7 @@ module Language.Haskell.Exference
   , findBestNExpressions
   , findFirstBestExpressions
   , takeFindSortNExpressions
+  , findFirstExpressionLookahead
   , ExferenceInput ( .. )
   , ExferenceOutputElement
   , ExferenceStats (..)
@@ -66,6 +67,34 @@ findFirstBestExpressions input
   = case r of
     [] -> []
     _  -> f $ reverse $ f $ r
+
+-- tries to find the best solution by looking at the first n solutions,
+-- resetting the count whenever a better solution is found.
+-- "finds the first local maximum"
+-- advantages:
+--   - might be able to find a "best" solution quicker than other approaches
+-- disadvantages:
+--   - might find only a local optimum
+--   - can easily have worst case runtime (especially when there are
+--     just a few/no solutions.. well in the latter case worst case
+--     is not avoidable)
+findFirstExpressionLookahead :: Int
+                             -> ExferenceInput
+                             -> Maybe ExferenceOutputElement
+findFirstExpressionLookahead n input = case findExpressions input of
+  []     -> Nothing
+  (s:sr) -> Just $ f n s sr
+  where
+    f :: Int
+      -> ExferenceOutputElement
+      -> [ExferenceOutputElement]
+      -> ExferenceOutputElement
+    f _ x [] = x
+    f _ best (s:sr) | exference_complexityRating (snd s)
+                    < exference_complexityRating (snd best)
+                    = f n s sr
+    f 0 best _      = best
+    f r best (_:sr) = f (r-1) best sr
 
 -- like findSortNExpressions, but retains only the best rating
 findBestNExpressions :: Int
