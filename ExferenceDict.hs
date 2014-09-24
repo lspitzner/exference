@@ -119,6 +119,8 @@ unzip3 :: [(a, b, c)] -> ([a], [b], [c])
 (||) :: Bool -> Bool -> Bool
 
 -- from Control.Monad
+(>=>) :: Monad m => (a -> m b) -> (b -> m c) -> a -> m c
+(<=<) :: Monad m => (b -> m c) -> (a -> m b) -> a -> m c
 join :: Monad m => m (m a) -> m a 
 msum :: MonadPlus m => [m a] -> m a 
 mfilter :: MonadPlus m => (a -> Bool) -> m a -> m a 
