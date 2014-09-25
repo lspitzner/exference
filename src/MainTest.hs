@@ -7,6 +7,9 @@ where
 
 
 
+import Language.Haskell.ExferenceCore ( defaultHeuristicsConfig
+                                      , ExferenceHeuristicsConfig(..)
+                                      )
 import Language.Haskell.Exference
 import Language.Haskell.Exference.ExpressionToHaskellSrc
 import Language.Haskell.Exference.BindingsFromHaskellSrc
@@ -164,6 +167,7 @@ checkResults (bindings, scontext) = do
                 allowUnused
                 16384
                 (Just 16384)
+                defaultHeuristicsConfig
   let r = findExpressions input
   let finder :: Int -> [(Expression, ExferenceStats)] -> Maybe (Int, ExferenceStats)
       finder n [] = Nothing
@@ -188,7 +192,21 @@ exampleOutput (bindings, scontext) = map f exampleInput
                 allowUnused
                 16384
                 (Just 16384)
-
+                heuristics
+    heuristics :: ExferenceHeuristicsConfig
+    heuristics = ExferenceHeuristicsConfig
+      { heuristics_goalVar               =  4.0
+      , heuristics_goalCons              =  0.55
+      , heuristics_goalArrow             =  5.0
+      , heuristics_goalApp               =  1.9
+      , heuristics_stepProvidedGood      =  0.2
+      , heuristics_stepProvidedBad       =  5.0
+      , heuristics_stepEnvGood           =  6.0
+      , heuristics_stepEnvBad            = 22.0
+      , heuristics_varUsage              =  8.0
+      , heuristics_functionGoalTransform =  0.0
+      , heuristics_unusedVar             = 20.0
+      }
 exampleInOut context = zip exampleInput (exampleOutput context)
 
 printAndStuff context = mapM_ f (exampleInOut context)
