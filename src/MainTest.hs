@@ -16,7 +16,6 @@ import Language.Haskell.Exference.TypeFromHaskellSrc
 import Language.Haskell.Exference.FunctionBinding
 
 import Language.Haskell.Exference.ConstrainedType
-import Language.Haskell.Exference.SimpleDict
 import Language.Haskell.Exference.TypeClasses
 import Language.Haskell.Exference.Expression
 import Language.Haskell.Exference.ExferenceStats
@@ -150,13 +149,14 @@ exampleInput =
   , (,,) "joinBlub"   False "Monad m => List Decl -> (Decl -> m (List FunctionBinding)) -> m (List FunctionBinding)"
   ]
 
-checkResults :: Context
+checkResults :: ExferenceHeuristicsConfig
+             -> Context
              -> [( String -- name
                  , String -- expected
                  , Maybe (Expression, Expression) -- first/best
                  , Maybe (Int, ExferenceStats)    -- no idea atm
                  )]
-checkResults (bindings, scontext) = do
+checkResults heuristics (bindings, scontext) = do
   (name, allowUnused, typeStr, expected) <- checkData
   let input = ExferenceInput
                 (readConstrainedType scontext typeStr)
@@ -165,7 +165,7 @@ checkResults (bindings, scontext) = do
                 allowUnused
                 16384
                 (Just 16384)
-                defaultHeuristicsConfig
+                heuristics
   let r = findExpressions input
   let finder :: Int -> [(Expression, ExferenceStats)] -> Maybe (Int, ExferenceStats)
       finder n [] = Nothing
@@ -179,8 +179,10 @@ checkResults (bindings, scontext) = do
         return (f,b)
   return (name, expected, firstAndBest, finder 0 r)
 
-exampleOutput :: Context -> [[(Expression, ExferenceStats)]]
-exampleOutput (bindings, scontext) = map f exampleInput
+exampleOutput :: ExferenceHeuristicsConfig
+              -> Context
+              -> [[(Expression, ExferenceStats)]]
+exampleOutput heuristics (bindings, scontext) = map f exampleInput
   where
     input = ExferenceInput
     f (_, allowUnused, s) = takeFindSortNExpressions 5 10 $ ExferenceInput
@@ -191,23 +193,10 @@ exampleOutput (bindings, scontext) = map f exampleInput
                 16384
                 (Just 16384)
                 heuristics
-    heuristics :: ExferenceHeuristicsConfig
-    heuristics = ExferenceHeuristicsConfig
-      { heuristics_goalVar               =  4.0
-      , heuristics_goalCons              =  0.55
-      , heuristics_goalArrow             =  5.0
-      , heuristics_goalApp               =  1.9
-      , heuristics_stepProvidedGood      =  0.2
-      , heuristics_stepProvidedBad       =  5.0
-      , heuristics_stepEnvGood           =  6.0
-      , heuristics_stepEnvBad            = 22.0
-      , heuristics_varUsage              =  8.0
-      , heuristics_functionGoalTransform =  0.0
-      , heuristics_unusedVar             = 20.0
-      }
-exampleInOut context = zip exampleInput (exampleOutput context)
 
-printAndStuff context = mapM_ f (exampleInOut context)
+exampleInOut h context = zip exampleInput (exampleOutput h context)
+
+printAndStuff h context = mapM_ f (exampleInOut h context)
   where
     f ((name, _, _), []) = putStrLn $ "no results for "++name++"!"
     f ((name, _, _), results) = mapM_ g results
@@ -224,7 +213,7 @@ printAndStuff context = mapM_ f (exampleInOut context)
             putStrLn $ name ++ " = " ++ str
                        ++ " (depth " ++ show d ++ ", " ++ show n ++ " steps)"
 
-printStatistics context = mapM_ f (exampleInOut context)
+printStatistics h context = mapM_ f (exampleInOut h context)
   where
     f ((name, _, _), [])      = putStrLn $ printf "%10s: ---" name
     f ((name, _, _), results) =
@@ -240,8 +229,8 @@ printStatistics context = mapM_ f (exampleInOut context)
          , length steps
          )
 
-printChecks :: Context -> IO ()
-printChecks context = mapM_ helper (checkResults context)
+printChecks :: ExferenceHeuristicsConfig -> Context -> IO ()
+printChecks h context = mapM_ helper (checkResults h context)
   where
     helper :: ( String
               , String
