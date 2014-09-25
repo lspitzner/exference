@@ -9,6 +9,7 @@ where
 
 
 
+import Language.Haskell.ExferenceCore ( ExferenceHeuristicsConfig(..) )
 import Language.Haskell.Exference
 import Language.Haskell.Exference.ExpressionToHaskellSrc
 import Language.Haskell.Exference.BindingsFromHaskellSrc
@@ -138,10 +139,22 @@ testBaseInput' = map h testBaseInput
           fname = "./BaseContext/preprocessed/"++s++".hs"
       in (mode, fname)
 
+testHeuristicsConfig :: ExferenceHeuristicsConfig
+testHeuristicsConfig = ExferenceHeuristicsConfig
+  { heuristics_goalVar               =  4.0
+  , heuristics_goalCons              =  0.55
+  , heuristics_goalArrow             =  5.0
+  , heuristics_goalApp               =  1.9
+  , heuristics_stepProvidedGood      =  0.2
+  , heuristics_stepProvidedBad       =  5.0
+  , heuristics_stepEnvGood           =  6.0
+  , heuristics_stepEnvBad            = 22.0
+  , heuristics_varUsage              =  8.0
+  , heuristics_functionGoalTransform =  0.0
+  , heuristics_unusedVar             = 20.0
+  }
+
 main = runO $ do
-  --printAndStuff
-  --printChecks
-  --printStatistics
   let
     tryParse :: Bool -> String -> IO ()
     tryParse shouldBangPattern s = do
@@ -176,13 +189,17 @@ main = runO $ do
           --mapM_ putStrLn $ map (either id show)
           --               $ getClassMethods defaultContext mod
   --((eSignatures, StaticContext clss insts), messages) <- runWriter <$> parseExternal testBaseInput'
-  ((eSignatures, StaticContext clss insts), messages)
+  (context@(eSignatures, StaticContext clss insts), messages)
     <- runWriter
     <$> contextFromModuleSimple "ExferenceDict.hs"
-  mapM_ print $ messages
+  --mapM_ putStrLn $ messages
+  --putStrLn $ replicate 30 '='
+  -- printAndStuff   testHeuristicsConfig context
+  printChecks     testHeuristicsConfig context
+  printStatistics testHeuristicsConfig context
   -- mapM_ print $ clss
-  mapM_ print $ insts
-  mapM_ print $ eSignatures
+  --mapM_ print $ insts
+  --mapM_ print $ eSignatures
   -- print $ compileDict testDictRatings $ eSignatures
   -- print $ parseConstrainedType defaultContext $ "(Show a) => [a] -> String"
   -- print $ inflateConstraints a b
