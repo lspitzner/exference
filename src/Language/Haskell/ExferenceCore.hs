@@ -1,6 +1,5 @@
 module Language.Haskell.ExferenceCore
   ( findExpressions
-  , defaultHeuristicsConfig
   , ExferenceHeuristicsConfig (..)
   , ExferenceInput (..)
   , ExferenceOutputElement
