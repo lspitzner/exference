@@ -7,9 +7,7 @@ where
 
 
 
-import Language.Haskell.ExferenceCore ( defaultHeuristicsConfig
-                                      , ExferenceHeuristicsConfig(..)
-                                      )
+import Language.Haskell.ExferenceCore ( ExferenceHeuristicsConfig(..) )
 import Language.Haskell.Exference
 import Language.Haskell.Exference.ExpressionToHaskellSrc
 import Language.Haskell.Exference.BindingsFromHaskellSrc
