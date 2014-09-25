@@ -5,9 +5,10 @@
 
 module Language.Haskell.Exference.Internal.Exference
   ( findExpressions
-  , ExferenceInput ( .. )
+  , defaultHeuristicsConfig
+  , ExferenceHeuristicsConfig (..)
+  , ExferenceInput (..)
   , ExferenceOutputElement
-  , ExferenceStats (..)
   )
 where
 
@@ -43,24 +44,54 @@ import Debug.Hood.Observe
 import Debug.Trace
 
 
-
+{-
 -- the heuristic input factor constant thingies:
 factorGoalVar, factorGoalCons, factorGoalArrow, factorGoalApp,
  factorStepEnvGood, factorStepProvidedGood, factorStepProvidedBad,
  factorStepEnvBad, factorVarUsage, factorFunctionGoalTransform,
  factorUnusedVar :: Float
 
-factorGoalVar   = 4.0
-factorGoalCons  = 0.55
-factorGoalArrow = 5.0
-factorGoalApp   = 1.9
-factorStepProvidedGood = 0.2
-factorStepProvidedBad  = 5.0
-factorStepEnvGood = 6.0
-factorStepEnvBad  = 22.0
-factorVarUsage = 8.0
-factorFunctionGoalTransform = 0.0
-factorUnusedVar = 20.0
+factorGoalVar               =  4.0
+factorGoalCons              =  0.55
+factorGoalArrow             =  5.0
+factorGoalApp               =  1.9
+factorStepProvidedGood      =  0.2
+factorStepProvidedBad       =  5.0
+factorStepEnvGood           =  6.0
+factorStepEnvBad            = 22.0
+factorVarUsage              =  8.0
+factorFunctionGoalTransform =  0.0
+factorUnusedVar             = 20.0
+-}
+
+data ExferenceHeuristicsConfig = ExferenceHeuristicsConfig
+  { heuristics_goalVar               :: Float
+  , heuristics_goalCons              :: Float
+  , heuristics_goalArrow             :: Float
+  , heuristics_goalApp               :: Float
+  , heuristics_stepProvidedGood      :: Float
+  , heuristics_stepProvidedBad       :: Float
+  , heuristics_stepEnvGood           :: Float
+  , heuristics_stepEnvBad            :: Float
+  , heuristics_varUsage              :: Float
+  , heuristics_functionGoalTransform :: Float
+  , heuristics_unusedVar             :: Float
+  }
+
+defaultHeuristicsConfig :: ExferenceHeuristicsConfig
+defaultHeuristicsConfig = ExferenceHeuristicsConfig
+  { heuristics_goalVar               =  4.0
+  , heuristics_goalCons              =  0.55
+  , heuristics_goalArrow             =  5.0
+  , heuristics_goalApp               =  1.9
+  , heuristics_stepProvidedGood      =  0.2
+  , heuristics_stepProvidedBad       =  5.0
+  , heuristics_stepEnvGood           =  6.0
+  , heuristics_stepEnvBad            = 22.0
+  , heuristics_varUsage              =  8.0
+  , heuristics_functionGoalTransform =  0.0
+  , heuristics_unusedVar             = 20.0
+  }
 
 data ExferenceInput = ExferenceInput
   { input_goalType    :: HsConstrainedType      -- ^ try to find a expression
@@ -82,6 +113,7 @@ data ExferenceInput = ExferenceInput
                                                 -- Lower memory usage discards
                                                 -- states (and, thus, potential
                                                 -- solutions).
+  , input_heuristicsConfig :: ExferenceHeuristicsConfig
   }
 
 type ExferenceOutputElement = (Expression, ExferenceStats)
@@ -103,7 +135,8 @@ findExpressions (ExferenceInput rawCType
                                 staticContext
                                 allowUnused
                                 maxSteps
-                                memLimit) =
+                                memLimit
+                                heuristics) =
   [(e, ExferenceStats steps compl) | (steps, compl, e) <- resultTuples]
   where
     (HsConstrainedType cs t) = ctConstantifyVars rawCType
@@ -126,7 +159,7 @@ findExpressions (ExferenceInput rawCType
       | Q.null states || n > maxSteps = []
       | ((_,s), restStates) <- Q.deleteFindMax states =
         let (potentialSolutions, futures) = partition (null.state_goals) 
-                                                      (stateStep s)
+                                                      (stateStep heuristics s)
             out = [ (n, d, e)
                   | solution <- potentialSolutions
                   , null (state_constraintGoals solution)
@@ -134,11 +167,13 @@ findExpressions (ExferenceInput rawCType
                                            (state_varUses solution)
                   , allowUnused || unusedVarCount==0
                   , let d = state_depth solution
-                          + factorUnusedVar*(fromIntegral unusedVarCount)
+                          + ( heuristics_unusedVar heuristics
+                            * fromIntegral unusedVarCount
+                            )
                   , let e = -- trace (showStateDevelopment solution) $ 
                             simplifyEta $ simplifyLets $ state_expression solution
                   ]
-            ratedNew    = [ (rateState newS, newS) | newS <- futures ]
+            ratedNew    = [ (rateState heuristics newS, newS) | newS <- futures ]
             qsize = Q.size states
               -- this cutoff is somewhat arbitrary, and can, theoretically,
               -- distort the order of the results (i.e.: lead to results being
@@ -177,20 +212,20 @@ tConstantifyVars (TypeApp t1 t2)    = TypeApp
                                        (tConstantifyVars t2)
 tConstantifyVars f@(TypeForall _ _) = f
 
-rateState :: State -> Float
-rateState s = 0.0 - rateGoals (state_goals s) - state_depth s
+rateState :: ExferenceHeuristicsConfig -> State -> Float
+rateState h s = 0.0 - rateGoals h (state_goals s) - state_depth s
  -- + 0.6 * rateScopes (state_providedScopes s)
 
-rateGoals :: [TGoal] -> Float
-rateGoals = sum . map rateGoal
+rateGoals :: ExferenceHeuristicsConfig -> [TGoal] -> Float
+rateGoals h = sum . map rateGoal
   where
     rateGoal ((_,t),_) = tComplexity t
     -- TODO: actually measure performance with different values,
     --       use derived values instead of (arbitrarily) chosen ones.
-    tComplexity (TypeVar _)       = factorGoalVar
-    tComplexity (TypeCons _)      = factorGoalCons
-    tComplexity (TypeArrow t1 t2) = factorGoalArrow + tComplexity t1 + tComplexity t2
-    tComplexity (TypeApp t1 t2)   = factorGoalApp + tComplexity t1 + tComplexity t2
+    tComplexity (TypeVar _)       = heuristics_goalVar h
+    tComplexity (TypeCons _)      = heuristics_goalCons h
+    tComplexity (TypeArrow t1 t2) = heuristics_goalArrow h + tComplexity t1 + tComplexity t2
+    tComplexity (TypeApp   t1 t2) = heuristics_goalApp h   + tComplexity t1 + tComplexity t2
     tComplexity (TypeForall _ t1) = tComplexity t1
 
 -- using this rating had bad effect on ordering; not used anymore
@@ -204,15 +239,15 @@ rateScopes (Scopes _ sMap) = M.foldr' f 0.0 sMap
 getUnusedVarCount :: VarUsageMap -> Int
 getUnusedVarCount m = length $ filter (==0) $ M.elems m
 
-stateStep :: State -> [State]
-stateStep s = --traceShow (s)
+stateStep :: ExferenceHeuristicsConfig -> State -> [State]
+stateStep h s = --traceShow (s)
               -- trace (show (state_depth s) ++ " " ++ show (rateGoals $ state_goals s)
               --                      ++ " " ++ show (rateScopes $ state_providedScopes s)
               --                      ++ " " ++ show (state_expression s)) $
-  stateStep2 s
+  stateStep2 h s
 
-stateStep2 :: State -> [State]
-stateStep2 s
+stateStep2 :: ExferenceHeuristicsConfig -> State -> [State]
+stateStep2 h s
   | state_depth s > 200.0 = []
   | (TypeArrow _ _) <- goalType = arrowStep goalType [] (state_nextVarId s)
   | otherwise = byProvided ++ byFunctionSimple
@@ -239,21 +274,21 @@ stateStep2 s
           newExpr
           vEnd
           (state_maxTVarId s)
-          (state_depth s + factorFunctionGoalTransform)
+          (state_depth s + heuristics_functionGoalTransform h)
           (bool Nothing (Just s) __debug)
           "function goal transform"
     byProvided = do
       (provId, provT, provPs) <- scopeGetAllBindings (state_providedScopes s) scopeId
       let usageFloat, usageRating :: Float
           usageFloat = fromIntegral $ (M.!) (state_varUses s) provId
-          usageRating = factorVarUsage * usageFloat * usageFloat
+          usageRating = heuristics_varUsage h * usageFloat * usageFloat
       byGenericUnify
         (Right provId)
         provT
         (S.toList $ dynContext_constraints $ state_context s)
         provPs
-        (factorStepProvidedGood + usageRating)
-        (factorStepProvidedBad + usageRating)
+        (heuristics_stepProvidedGood h + usageRating)
+        (heuristics_stepProvidedBad h + usageRating)
         ("inserting given value " ++ show provId ++ "::" ++ show provT)
     byFunctionSimple = do
       SimpleBinding funcId funcRating funcR funcParams funcConstrs <- state_functions s
@@ -263,8 +298,8 @@ stateStep2 s
         (incF funcR)
         (map (constraintMapTypes incF) funcConstrs)
         (map incF funcParams)
-        (factorStepEnvGood + funcRating)
-        (factorStepEnvBad + funcRating)
+        (heuristics_stepEnvGood h + funcRating)
+        (heuristics_stepEnvBad h + funcRating)
         ("applying function " ++ show funcId)
     byGenericUnify :: Either String TVarId
                    -> HsType
