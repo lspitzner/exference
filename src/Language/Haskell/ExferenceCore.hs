@@ -1,11 +1,21 @@
 module Language.Haskell.ExferenceCore
   ( findExpressions
-  , ExferenceHeuristicsConfig (..)
-  , ExferenceInput (..)
-  , ExferenceOutputElement
+  , findExpressionsChunked
+  , E.ExferenceHeuristicsConfig (..)
+  , E.ExferenceInput (..)
+  , E.ExferenceOutputElement
   )
 where
 
 
 
-import Language.Haskell.Exference.Internal.Exference
+import qualified Language.Haskell.Exference.Internal.Exference as E
+
+
+
+findExpressions :: E.ExferenceInput -> [E.ExferenceOutputElement]
+findExpressions = concat . E.findExpressions
+
+findExpressionsChunked :: E.ExferenceInput
+                   -> [[E.ExferenceOutputElement]]
+findExpressionsChunked = E.findExpressions

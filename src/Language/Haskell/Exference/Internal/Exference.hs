@@ -113,15 +113,21 @@ type FindExpressionsState = ( Int    -- number of steps already performed
                             )
 
 findExpressions :: ExferenceInput
-                -> [ExferenceOutputElement]
+                -> [[ExferenceOutputElement]]
 findExpressions (ExferenceInput rawCType
                                 funcs
                                 staticContext
                                 allowUnused
-                                maxSteps
+                                maxSteps -- since we output a [[x]],
+                                         -- this would not really be
+                                         -- necessary anymore. but
+                                         -- we also use it for calculating
+                                         -- memory limit stuff, and it is
+                                         -- not worth the refactor atm.
                                 memLimit
                                 heuristics) =
-  [(e, ExferenceStats steps compl) | (steps, compl, e) <- resultTuples]
+  fmap (\(steps, compl, e) -> (e, ExferenceStats steps compl))
+    <$> resultTuples
   where
     (HsConstrainedType cs t) = ctConstantifyVars rawCType
     resultTuples = helper (0, 0,
@@ -138,7 +144,7 @@ findExpressions (ExferenceInput rawCType
         0.0
         Nothing
         "")
-    helper :: FindExpressionsState -> [(Int,Float,Expression)]
+    helper :: FindExpressionsState -> [[(Int,Float,Expression)]]
     helper (n, worst, states)
       | Q.null states || n > maxSteps = []
       | ((_,s), restStates) <- Q.deleteFindMax states =
@@ -176,7 +182,7 @@ findExpressions (ExferenceInput rawCType
               ( n+1
               , minimum $ worst:map fst filteredNew
               , newStates )
-        in out ++ rest
+        in out : rest
 
 
 ctConstantifyVars :: HsConstrainedType -> HsConstrainedType
