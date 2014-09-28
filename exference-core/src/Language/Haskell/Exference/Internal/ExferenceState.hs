@@ -28,6 +28,7 @@ where
 import Language.Haskell.Exference.Type
 import Language.Haskell.Exference.TypeClasses
 import Language.Haskell.Exference.Expression
+import Language.Haskell.Exference.ExferenceStats
 
 import qualified Data.Map.Strict as M
 
@@ -146,6 +147,7 @@ data State = State
   , state_depth           :: Float
   , state_previousState   :: Maybe State
   , state_lastStepReason  :: String
+  , state_bindingUsages   :: BindingUsages
   }
 
 instance Show State where
@@ -160,7 +162,8 @@ instance Show State where
               smaxTVarId
               sdepth
               _prev
-              reason)
+              reason
+              _busages)
     = show
     $ text "State" <+> (
           (text   "goals      ="

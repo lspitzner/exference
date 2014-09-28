@@ -48,6 +48,7 @@ instance Show Expression where
 
 instance Observable Expression where
   observer x = observeOpaque (show x) x
+
 fillExprHole :: TVarId -> Expression -> Expression -> Expression
 fillExprHole vid t orig@(ExpHole j) | vid==j = t
                                     | otherwise = orig
@@ -110,5 +111,6 @@ simplifyEta (ExpLet i bindExp inExp) =
   ExpLet i (simplifyEta bindExp) (simplifyEta inExp)
 
 simplifyEta' :: Expression -> Expression
-simplifyEta' (ExpLambda i (ExpApply e1 (ExpVar j))) | i==j = e1
+simplifyEta' (ExpLambda i (ExpApply e1 (ExpVar j)))
+  | i==j && 0==countUses i e1 = e1
 simplifyEta' e = e
