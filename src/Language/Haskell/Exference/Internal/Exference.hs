@@ -113,7 +113,7 @@ type FindExpressionsState = ( Int    -- number of steps already performed
                             )
 
 findExpressions :: ExferenceInput
-                -> [[ExferenceOutputElement]]
+                -> [(BindingUsages, [ExferenceOutputElement])]
 findExpressions (ExferenceInput rawCType
                                 funcs
                                 staticContext
@@ -126,8 +126,14 @@ findExpressions (ExferenceInput rawCType
                                          -- not worth the refactor atm.
                                 memLimit
                                 heuristics) =
-  fmap (\(steps, compl, e) -> (e, ExferenceStats steps compl))
-    <$> resultTuples
+  [ (bindingUsages, solutions)
+  | (bindingUsages, stuples) <- resultTuples
+  , let solutions = [ (e, ExferenceStats steps compl)
+                    | (steps, compl, e) <- stuples
+                    ]
+  ]
+  -- fmap (\(steps, compl, e) -> (e, ExferenceStats steps compl))
+  --   <$> resultTuples
   where
     (HsConstrainedType cs t) = ctConstantifyVars rawCType
     resultTuples = helper (0, 0,
@@ -143,8 +149,9 @@ findExpressions (ExferenceInput rawCType
         (largestId t)
         0.0
         Nothing
-        "")
-    helper :: FindExpressionsState -> [[(Int,Float,Expression)]]
+        ""
+        emptyBindingUsages)
+    helper :: FindExpressionsState -> [(BindingUsages, [(Int,Float,Expression)])]
     helper (n, worst, states)
       | Q.null states || n > maxSteps = []
       | ((_,s), restStates) <- Q.deleteFindMax states =
@@ -182,7 +189,7 @@ findExpressions (ExferenceInput rawCType
               ( n+1
               , minimum $ worst:map fst filteredNew
               , newStates )
-        in out : rest
+        in (state_bindingUsages s, out) : rest
 
 
 ctConstantifyVars :: HsConstrainedType -> HsConstrainedType
@@ -267,6 +274,7 @@ stateStep2 h s
           (state_depth s + heuristics_functionGoalTransform h)
           (bool Nothing (Just s) __debug)
           "function goal transform"
+          (state_bindingUsages s)
     byProvided = do
       (provId, provT, provPs) <- scopeGetAllBindings (state_providedScopes s) scopeId
       let usageFloat, usageRating :: Float
@@ -302,6 +310,9 @@ stateStep2 h s
     byGenericUnify applier provided provConstrs
                    dependencies depthModMatch depthModNoMatch reasonPart
       | coreExp <- either ExpLit ExpVar applier
+      , newBindingUsages <- case applier of
+          Left  x -> incBindingUsage x $ state_bindingUsages s
+          Right _ -> state_bindingUsages s
       = case unify goalType provided of
         -- _a
         -- let b = f _c in _a
@@ -334,6 +345,7 @@ stateStep2 h s
               (state_depth s + depthModNoMatch) -- constant penalty for wild-guessing..
               (bool Nothing (Just s) __debug)
               ("randomly trying to apply function " ++ show coreExp)
+              newBindingUsages
         Just substs -> do
           let contxt = state_context s
               constrs1 = map (constraintApplySubsts substs)
@@ -370,6 +382,7 @@ stateStep2 h s
             (state_depth s + depthModMatch)
             (bool Nothing (Just s) __debug)
             (reasonPart ++ ", because " ++ substsTxt ++ " and because " ++ provableTxt)
+            newBindingUsages
 
 addScopePatternMatch :: Int -> ScopeId -> [VarPBinding] -> State -> State
 addScopePatternMatch vid sid bindings state = foldr helper state bindings where
