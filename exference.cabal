@@ -1,5 +1,5 @@
 Name:          exference
-Version:       0.3.3
+Version:       0.3.4.0
 Cabal-Version: >= 1.8
 Build-Type:    Simple
 
@@ -37,7 +37,8 @@ Library
     haskell-src-exts,
     deepseq,
     hood,
-    process
+    process,
+    parsec
 
 
 Executable test-main
@@ -54,6 +55,7 @@ Executable test-main
       deepseq,
       hood,
       process,
+      parsec,
       data-pprint >= 0.2.4
   } else {
     buildable: False

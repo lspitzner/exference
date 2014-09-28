@@ -1,7 +1,9 @@
 module Language.Haskell.Exference.ContextParser
   ( contextFromModules
   , contextFromModuleSimple
+  , contextFromModuleAndRatings
   , compileWithDict
+  , ratingsFromFile
   )
 where
 
@@ -24,7 +26,7 @@ import Control.DeepSeq
 
 import System.Process
 
-import Control.Applicative ( (<$>), (<*>) )
+import Control.Applicative ( (<$>), (<*>), (<*) )
 import Control.Arrow ( second, (***) )
 import Control.Monad ( when, forM_, guard, forM, mplus, mzero )
 import Data.List ( sortBy, find )
@@ -45,6 +47,8 @@ import Language.Haskell.Exts.Extension ( Language (..)
                                        , KnownExtension (..) )
 
 import Control.Arrow ( first )
+import Text.ParserCombinators.Parsec
+import Text.ParserCombinators.Parsec.Char
 
 
 
@@ -158,3 +162,62 @@ contextFromModuleSimple s = do
   r <- contextFromModules [(mode, s)]
   let f (a,b) = (a,0.0,b)
   return $ first (map f) <$> r
+
+
+ratingsFromFile :: String -> IO (Either String [(String, Float)])
+ratingsFromFile s = do
+  content <- readFile s
+  let
+    parser =
+      (many $ try $ do
+        spaces
+        name <- many1 (noneOf " ")
+        space
+        spaces
+        char '='
+        spaces
+        a <- many1 digit
+        b <- char '.'
+        c <- many1 digit
+        return (name, read $ a++b:c))
+      <* many anyChar
+  return $ case runParser parser () "" content of
+    Left e -> Left $ show e
+    Right x -> Right x
+
+-- TODO: add warnings for ratings not applied
+contextFromModuleAndRatings :: String
+                            -> String
+                            -> IO (Writer
+                                [String]
+                                ( [RatedFunctionBinding]
+                                ,  StaticContext) )
+contextFromModuleAndRatings s1 s2 = do
+  let exts1 = [ TypeOperators
+              , ExplicitForAll
+              , ExistentialQuantification
+              , TypeFamilies
+              , FunctionalDependencies
+              , FlexibleContexts
+              , MultiParamTypeClasses ]
+      exts2 = map EnableExtension exts1
+      mode = ParseMode (s1++".hs")
+                       Haskell2010
+                       exts2
+                       False
+                       False
+                       Nothing
+  w <- contextFromModules [(mode, s1)]
+  r <- ratingsFromFile s2
+  return $ do
+    (binds, cntxt) <- w
+    case r of
+      Left e -> do
+        tell ["could not parse ratings!",e]
+        return ([], cntxt)
+      Right x -> do
+        let f (a,b) = ( a
+                      , fromMaybe 0.0 (lookup a x)
+                      , b
+                      )
+        return $ (map f binds, cntxt)

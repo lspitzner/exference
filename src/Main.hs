@@ -191,11 +191,11 @@ main = runO $ do
   --((eSignatures, StaticContext clss insts), messages) <- runWriter <$> parseExternal testBaseInput'
   (context@(eSignatures, StaticContext clss insts), messages)
     <- runWriter
-    <$> contextFromModuleSimple "ExferenceDict.hs"
+    <$> contextFromModuleAndRatings "ExferenceDict.hs" "ExferenceRatings.txt"
   --mapM_ putStrLn $ messages
   --putStrLn $ replicate 30 '='
   -- printAndStuff   testHeuristicsConfig context
-  printChecks     testHeuristicsConfig context
+  -- printChecks     testHeuristicsConfig context
   printStatistics testHeuristicsConfig context
   -- mapM_ print $ clss
   --mapM_ print $ insts
