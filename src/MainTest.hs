@@ -2,6 +2,7 @@ module MainTest
   ( printAndStuff
   , printChecks
   , printStatistics
+  , printCheckedStatistics
   )
 where
 
@@ -30,7 +31,7 @@ import Control.Monad ( when, forM_, guard, forM, mplus, mzero )
 import Data.List ( sortBy, find )
 import Data.Ord ( comparing )
 import Text.Printf
-import Data.Maybe ( listToMaybe, fromMaybe, maybeToList )
+import Data.Maybe ( listToMaybe, fromMaybe, maybeToList, catMaybes )
 import Data.Either ( lefts, rights )
 import Control.Monad.Writer.Strict
 
@@ -153,7 +154,8 @@ checkResults :: ExferenceHeuristicsConfig
              -> Context
              -> [( String -- name
                  , String -- expected
-                 , Maybe (Expression, Expression) -- first/best
+                 , Maybe Expression -- first
+                 , Maybe Expression -- best
                  , Maybe (Int, ExferenceStats)    -- no idea atm
                  )]
 checkResults heuristics (bindings, scontext) = do
@@ -167,7 +169,9 @@ checkResults heuristics (bindings, scontext) = do
                 (Just 16384)
                 heuristics
   let r = findExpressions input
-  let finder :: Int -> [(Expression, ExferenceStats)] -> Maybe (Int, ExferenceStats)
+  let finder :: Int
+             -> [(Expression, ExferenceStats)]
+             -> Maybe (Int, ExferenceStats)
       finder n [] = Nothing
       finder n ((e, s):r) | show e==expected = Just (n, s)
                           | otherwise = finder (n+1) r
@@ -177,7 +181,11 @@ checkResults heuristics (bindings, scontext) = do
         (f,_) <- listToMaybe r
         (b,_) <- listToMaybe bestFound
         return (f,b)
-  return (name, expected, firstAndBest, finder 0 r)
+  return ( name
+         , expected
+         , fst <$> listToMaybe r
+         , fst <$> listToMaybe bestFound
+         , finder 0 r)
 
 exampleOutput :: ExferenceHeuristicsConfig
               -> Context
@@ -234,26 +242,45 @@ printChecks h context = mapM_ helper (checkResults h context)
   where
     helper :: ( String
               , String
-              , Maybe (Expression, Expression)
+              , Maybe Expression
+              , Maybe Expression
               , Maybe (Int, ExferenceStats))
            -> IO ()
-    helper (name, _, Just(f,b), Just (0, ExferenceStats n d))
+    helper (name, _, Just f, Just b, Just (0, ExferenceStats n d))
       | f==b = do putStrLn $ printf "%-10s: fine                                  %5d %8.2f" name n d
       | otherwise = do
       putStrLn $ printf "%-10s: expected solution first, but not best!" name
       putStrLn $ "  expected solution: " ++ show f
       putStrLn $ "  best solution:     " ++ show b
-    helper (name, e, Just(f,_), Just (i, _)) = do
+    helper (name, e, Just f, _, Just (i, _)) = do
       putStrLn $ printf "%-10s: expected solution not first, but %d!" name i
       putStrLn $ "  first solution:    " ++ show f
       putStrLn $ "  expected solution: " ++ e
-    helper (name, e, Just(f,b), Nothing) = do
+    helper (name, e, Just f, Just b, Nothing) = do
       putStrLn $ printf "%-10s: expected solution not found!" name
       putStrLn $ "  first solution was " ++ show f
       putStrLn $ "  best solution:     " ++ show b
       putStrLn $ "  expected solution: " ++ e
-    helper (name, _, Nothing, _) = do
+    helper (name, _, Nothing, _, _) = do
       putStrLn $ printf "%-10s: no solutions found at all!" name 
+
+printCheckedStatistics :: ExferenceHeuristicsConfig -> Context -> IO ()
+printCheckedStatistics h context = do
+  xs <- mapM f $ checkResults h context
+  print $ foldr g (0, 0, 0.0) $ catMaybes $ xs
+  where
+    f (name, expected, Just first, _, Just (n, stats)) = case n of
+      0 -> do
+        putStrLn $ printf "%-10s: %s" name (show stats)
+        return (Just stats)
+      _ -> do
+        putStrLn $ printf "%-10s: bad (not first), first is %s" name (show first)
+        return Nothing
+    f (name, expected, _, _, _) = do
+        putStrLn $ printf "%-10s: bad (no solution)" name
+        return Nothing
+    g :: ExferenceStats -> (Int,Int,Float) -> (Int,Int,Float)
+    g (ExferenceStats a b) (c,d,e) = (c+1,a+d,b+e)
 
 -- TODO: remove duplication
 pointfree :: String -> IO String

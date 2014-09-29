@@ -195,8 +195,9 @@ main = runO $ do
   --mapM_ putStrLn $ messages
   --putStrLn $ replicate 30 '='
   -- printAndStuff   testHeuristicsConfig context
-  -- printChecks     testHeuristicsConfig context
-  printStatistics testHeuristicsConfig context
+  --printChecks     testHeuristicsConfig context
+  --printStatistics testHeuristicsConfig context
+  printCheckedStatistics testHeuristicsConfig context
   -- mapM_ print $ clss
   --mapM_ print $ insts
   --mapM_ print $ eSignatures
