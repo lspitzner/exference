@@ -24,7 +24,7 @@ import Data.Maybe ( maybeToList, listToMaybe, fromMaybe )
 import Control.Arrow ( first, second, (***) )
 import Control.Monad ( guard, mzero )
 import Control.Applicative ( (<$>), (<*>) )
-import Data.List ( partition, sortBy, groupBy )
+import Data.List ( partition, sortBy, groupBy, minimumBy )
 import Data.Ord ( comparing )
 import Data.Function ( on )
 
@@ -68,33 +68,35 @@ findFirstBestExpressions input
     [] -> []
     _  -> f $ reverse $ f $ r
 
--- tries to find the best solution by looking at the first n solutions,
+-- tries to find the best solution by performing a limitted amount of steps,
 -- resetting the count whenever a better solution is found.
--- "finds the first local maximum"
+-- "finds the "first" (by some metric) local maximum"
 -- advantages:
 --   - might be able to find a "best" solution quicker than other approaches
+--   - does not calculate the maximum amount of steps when there is no
+--     solution left.
 -- disadvantages:
 --   - might find only a local optimum
---   - can easily have worst case runtime (especially when there are
---     just a few/no solutions.. well in the latter case worst case
---     is not avoidable)
 findFirstExpressionLookahead :: Int
                              -> ExferenceInput
                              -> Maybe ExferenceOutputElement
-findFirstExpressionLookahead n input = case findExpressions input of
-  []     -> Nothing
-  (s:sr) -> Just $ f n s sr
+findFirstExpressionLookahead n input = f n Nothing (findExpressionsChunked input)
   where
     f :: Int
-      -> ExferenceOutputElement
-      -> [ExferenceOutputElement]
-      -> ExferenceOutputElement
-    f _ x [] = x
-    f _ best (s:sr) | exference_complexityRating (snd s)
-                    < exference_complexityRating (snd best)
-                    = f n s sr
-    f 0 best _      = best
-    f r best (_:sr) = f (r-1) best sr
+      -> Maybe ExferenceOutputElement
+      -> [[ExferenceOutputElement]]
+      -> Maybe ExferenceOutputElement
+    f _ x        []      = x
+    f 0 best     _       = best
+    f r best     ([]:sr) = f (r-1) best sr
+    f r Nothing  (s:sr)  = f n (Just $ minElem s) sr
+    f r (Just b) (s:sr)  | sbest <- minElem s
+                         , exference_complexityRating (snd sbest)
+                         < exference_complexityRating (snd b)
+                         = f n (Just sbest) sr
+                         | otherwise = f (r-1) (Just b) sr
+    minElem :: [ExferenceOutputElement] -> ExferenceOutputElement
+    minElem = minimumBy (comparing (exference_complexityRating.snd))
 
 -- like findSortNExpressions, but retains only the best rating
 findBestNExpressions :: Int
