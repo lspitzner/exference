@@ -147,7 +147,7 @@ data State = State
   , state_depth           :: Float
   , state_previousState   :: Maybe State
   , state_lastStepReason  :: String
-  , state_bindingUsages   :: BindingUsages
+  , state_lastStepBinding :: Maybe String
   }
 
 instance Show State where
@@ -163,7 +163,7 @@ instance Show State where
               sdepth
               _prev
               reason
-              _busages)
+              _lastStepBinding)
     = show
     $ text "State" <+> (
           (text   "goals      ="

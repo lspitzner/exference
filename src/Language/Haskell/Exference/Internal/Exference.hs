@@ -29,7 +29,7 @@ import qualified Data.Set as S
 
 import Control.DeepSeq
 
-import Data.Maybe ( maybeToList, listToMaybe, fromMaybe )
+import Data.Maybe ( maybeToList, listToMaybe, fromMaybe, catMaybes )
 import Control.Arrow ( first, second, (***) )
 import Control.Monad ( guard, mzero )
 import Control.Applicative ( (<$>), (<*>) )
@@ -109,6 +109,7 @@ __debug = False
 
 type FindExpressionsState = ( Int    -- number of steps already performed
                             , Float  -- worst rating of state in pqueue
+                            , BindingUsages
                             , RatedStates -- pqueue
                             )
 
@@ -136,7 +137,7 @@ findExpressions (ExferenceInput rawCType
   --   <$> resultTuples
   where
     (HsConstrainedType cs t) = ctConstantifyVars rawCType
-    resultTuples = helper (0, 0,
+    resultTuples = helper (0, 0, emptyBindingUsages,
       Q.singleton 0.0 $ State
         [((0, t), 0)]
         []
@@ -150,13 +151,16 @@ findExpressions (ExferenceInput rawCType
         0.0
         Nothing
         ""
-        emptyBindingUsages)
+        Nothing)
     helper :: FindExpressionsState -> [(BindingUsages, [(Int,Float,Expression)])]
-    helper (n, worst, states)
+    helper (n, worst, bindingUsages, states)
       | Q.null states || n > maxSteps = []
       | ((_,s), restStates) <- Q.deleteFindMax states =
         let (potentialSolutions, futures) = partition (null.state_goals) 
                                                       (stateStep heuristics s)
+            newBindingUsages = case state_lastStepBinding s of
+              Nothing -> bindingUsages
+              Just b  -> incBindingUsage b bindingUsages
             out = [ (n, d, e)
                   | solution <- potentialSolutions
                   , null (state_constraintGoals solution)
@@ -188,8 +192,9 @@ findExpressions (ExferenceInput rawCType
             rest = helper
               ( n+1
               , minimum $ worst:map fst filteredNew
+              , newBindingUsages
               , newStates )
-        in (state_bindingUsages s, out) : rest
+        in (newBindingUsages, out) : rest
 
 
 ctConstantifyVars :: HsConstrainedType -> HsConstrainedType
@@ -274,7 +279,7 @@ stateStep2 h s
           (state_depth s + heuristics_functionGoalTransform h)
           (bool Nothing (Just s) __debug)
           "function goal transform"
-          (state_bindingUsages s)
+          Nothing
     byProvided = do
       (provId, provT, provPs) <- scopeGetAllBindings (state_providedScopes s) scopeId
       let usageFloat, usageRating :: Float
@@ -310,9 +315,9 @@ stateStep2 h s
     byGenericUnify applier provided provConstrs
                    dependencies depthModMatch depthModNoMatch reasonPart
       | coreExp <- either ExpLit ExpVar applier
-      , newBindingUsages <- case applier of
-          Left  x -> incBindingUsage x $ state_bindingUsages s
-          Right _ -> state_bindingUsages s
+      , bTrace <- case applier of
+          Left  x -> Just x
+          Right _ -> Nothing
       = case unify goalType provided of
         -- _a
         -- let b = f _c in _a
@@ -331,7 +336,8 @@ stateStep2 h s
                 newVarUses = M.insert vResult 0 $ case applier of
                   Left _ -> state_varUses s
                   Right i -> M.adjust (+1) i $ state_varUses s
-            in return $ addScopePatternMatch var newScopeId [newBinding] $ State
+            in return $ addScopePatternMatch var newScopeId [newBinding]
+                      $ State
               (paramGoal:newMainGoal:gr)
               (state_constraintGoals s ++ provConstrs)
               newScopesRaw
@@ -345,7 +351,7 @@ stateStep2 h s
               (state_depth s + depthModNoMatch) -- constant penalty for wild-guessing..
               (bool Nothing (Just s) __debug)
               ("randomly trying to apply function " ++ show coreExp)
-              newBindingUsages
+              bTrace
         Just substs -> do
           let contxt = state_context s
               constrs1 = map (constraintApplySubsts substs)
@@ -382,7 +388,7 @@ stateStep2 h s
             (state_depth s + depthModMatch)
             (bool Nothing (Just s) __debug)
             (reasonPart ++ ", because " ++ substsTxt ++ " and because " ++ provableTxt)
-            newBindingUsages
+            bTrace
 
 addScopePatternMatch :: Int -> ScopeId -> [VarPBinding] -> State -> State
 addScopePatternMatch vid sid bindings state = foldr helper state bindings where
