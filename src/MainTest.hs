@@ -54,7 +54,7 @@ checkData =
   [ (,,,) "showmap"    False "(Show b) => (a -> b) -> List a -> List String"
                              "\\b -> fmap (\\g -> show (b g))"
   , (,,,) "ffbind"     False "(a -> t -> b) -> (t -> a) -> (t -> b)"
-                             "\\b -> (\\c -> b (c d))"
+                             "\\b -> (\\c -> (\\d -> (b (c d)) d))"
   , (,,,) "join"       False "(Monad m) => m (m a) -> m a"
                              "\\b -> ((>>=) b) (\\f -> f))"
   , (,,,) "fjoin"      False "(t -> (t -> a)) -> t -> a"
@@ -160,7 +160,7 @@ checkResults heuristics (bindings, scontext) = do
   (name, allowUnused, typeStr, expected) <- checkData
   let input = ExferenceInput
                 (readConstrainedType scontext typeStr)
-                bindings
+                (filter (\(x,_,_) -> x/="join") bindings)
                 scontext
                 allowUnused
                 16384
