@@ -28,13 +28,12 @@ isPossible dcontext (c:constraints) =
   where
     rest = isPossible dcontext constraints
     (Constraint cname cparams) = c
+    possibleFromGiven :: Maybe [Constraint]
     possibleFromGiven =
       if constraintContainsVariables c
       then Just [c]
       else
-        if S.member c $ inflateConstraints
-                                  (dynContext_context dcontext)
-                                  (dynContext_constraints dcontext)
+        if S.member c $ dynContext_inflatedConstraints dcontext
         then Just []
         else Nothing
     possibleFromInstance :: Maybe [Constraint]

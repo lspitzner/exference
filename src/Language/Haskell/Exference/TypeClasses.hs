@@ -7,6 +7,7 @@ module Language.Haskell.Exference.TypeClasses
   , StaticContext (..)
   , DynContext ( dynContext_context
                , dynContext_constraints
+               , dynContext_inflatedConstraints
                , dynContext_varConstraints )
   , constraintApplySubsts
   , mkDynContext
@@ -64,6 +65,7 @@ data StaticContext = StaticContext
 data DynContext = DynContext
   { dynContext_context :: StaticContext
   , dynContext_constraints :: S.Set Constraint
+  , dynContext_inflatedConstraints :: S.Set Constraint
   , dynContext_varConstraints :: M.Map TVarId (S.Set Constraint)
   }
 
@@ -71,7 +73,7 @@ instance Show Constraint where
   show (Constraint c ps) = unwords $ tclass_name c : map show ps
 
 instance Show DynContext where
-  show (DynContext _ cs _) = "(DynContext _ " ++ show cs ++ " _)"
+  show (DynContext _ cs _ _) = "(DynContext _ " ++ show cs ++ " _)"
 instance Observable Constraint where
   observer x = observeOpaque (show x) x
 
@@ -89,6 +91,7 @@ mkDynContext :: StaticContext -> [Constraint] -> DynContext
 mkDynContext staticContext constrs = DynContext {
   dynContext_context = staticContext,
   dynContext_constraints = csSet,
+  dynContext_inflatedConstraints = inflateConstraints staticContext csSet,
   dynContext_varConstraints = helper constrs
 }
   where
