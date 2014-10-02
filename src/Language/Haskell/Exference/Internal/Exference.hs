@@ -233,26 +233,31 @@ findExpressionsPar (ExferenceInput rawCType
     = do
   taskChan   <- newChan
   resultChan <- newChan
-  let destParallelCount = 10
+  let destParallelCount = 8
+  let ssCount = 16
   result <- reducer $ do
     let    
       worker = do
         t <- readChan taskChan
         case t of
           Nothing    -> return ()
-          Just state -> do
-            writeChan resultChan $ stateStep heuristics state
+          Just states -> do
+            let r = states >>= stateStep heuristics
+            foldr seq () r `seq` writeChan resultChan r
+            -- writeChan resultChan $!! r
             worker
       controller :: FindExpressionsParState
              -> ListT.ListT IO (BindingUsages, [(Int,Float,Expression)])
       controller (nRunning, n, worst, bindingUsages, states) = if
         | n > maxSteps -> mempty
-        | nRunning < destParallelCount && not (Q.null states) -> do
-            let ((_,s), restStates) = Q.deleteFindMax states
-            lift $ writeChan taskChan (Just s)
-            let newBindingUsages = case state_lastStepBinding s of
-                  Nothing -> bindingUsages
-                  Just b  -> incBindingUsage b bindingUsages
+        | nRunning < 2*destParallelCount && not (Q.null states) -> do
+            let ss = map snd $ Q.take ssCount states
+                restStates = Q.drop ssCount states
+            lift $ writeChan taskChan (Just ss)
+            let calcNew s old = case state_lastStepBinding s of
+                  Nothing -> old
+                  Just b  -> incBindingUsage b old
+            let newBindingUsages = foldr calcNew bindingUsages ss
             controller (nRunning+1, n, worst, newBindingUsages, restStates)
         | nRunning==0 -> mempty
         | otherwise -> do
@@ -288,7 +293,7 @@ findExpressionsPar (ExferenceInput rawCType
                 newStates   = foldr (uncurry Q.insert) states filteredNew
                 rest = controller
                   ( nRunning-1
-                  , n+1
+                  , n+ssCount
                   , minimum $ worst:map fst filteredNew
                   , bindingUsages
                   , newStates )
