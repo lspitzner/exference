@@ -10,6 +10,7 @@ module Language.Haskell.Exference.TypeClasses
                , dynContext_inflatedConstraints
                , dynContext_varConstraints )
   , constraintApplySubsts
+  , mkStaticContext
   , mkDynContext
   , inflateConstraints
   , constraintMapTypes
@@ -58,7 +59,7 @@ data Constraint = Constraint
 
 data StaticContext = StaticContext
   { context_tclasses :: [HsTypeClass]
-  , context_instances :: [HsInstance]
+  , context_instances :: M.Map String [HsInstance]
   }
   deriving Show
 
@@ -86,6 +87,15 @@ instance Observable HsInstance where
 constraintMapTypes :: (HsType -> HsType) -> Constraint -> Constraint
 constraintMapTypes f (Constraint a ts) = Constraint a (map f ts)
 
+
+mkStaticContext :: [HsTypeClass] -> [HsInstance] -> StaticContext
+mkStaticContext tclasses insts = StaticContext tclasses (helper insts)
+  where
+    helper :: [HsInstance] -> M.Map String [HsInstance]
+    helper is = M.unionsWith (++)
+              $ [ M.singleton (tclass_name $ instance_tclass i)
+                              [i]
+                | i <- is ]
 
 mkDynContext :: StaticContext -> [Constraint] -> DynContext
 mkDynContext staticContext constrs = DynContext {
