@@ -250,7 +250,7 @@ findExpressionsPar (ExferenceInput rawCType
              -> ListT.ListT IO (BindingUsages, [(Int,Float,Expression)])
       controller (nRunning, n, worst, bindingUsages, states) = if
         | n > maxSteps -> mempty
-        | nRunning < 2*destParallelCount && not (Q.null states) -> do
+        | nRunning < 2+destParallelCount && not (Q.null states) -> do
             let ss = map snd $ Q.take ssCount states
                 restStates = Q.drop ssCount states
             lift $ writeChan taskChan (Just ss)
