@@ -243,8 +243,23 @@ findExpressionsPar (ExferenceInput rawCType
           Nothing    -> return ()
           Just states -> do
             let r = states >>= stateStep heuristics
-            foldr seq () r `seq` writeChan resultChan r
-            -- writeChan resultChan $!! r
+            let f :: State -> () -> ()
+                f (State goals cgoals scops vumap funs cntxt expr nvid mvid d prev reason binding) x =
+                        rnf goals
+                  `seq` rnf cgoals
+                --  `seq` rnf scops
+                --  `seq` rnf vumap
+                --  `seq` rnf funs
+                --  `seq` rnf cntxt
+                --  `seq` rnf expr
+                --  `seq` rnf nvid
+                --  `seq` rnf mvid
+                  `seq` rnf d
+                --  `seq` rnf prev
+                --  `seq` rnf reason
+                --  `seq` rnf binding
+                  `seq` x
+            foldr f () r `seq` writeChan resultChan r
             worker
       controller :: FindExpressionsParState
              -> ListT.ListT IO (BindingUsages, [(Int,Float,Expression)])
