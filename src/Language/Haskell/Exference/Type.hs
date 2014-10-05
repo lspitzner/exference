@@ -1,3 +1,5 @@
+{-# LANGUAGE DeriveGeneric #-}
+
 module Language.Haskell.Exference.Type
   ( TVarId
   , HsType (..)
@@ -33,6 +35,9 @@ import Text.ParserCombinators.Parsec.Char
 
 import Data.Maybe ( maybeToList, fromMaybe )
 
+import Control.DeepSeq.Generics
+import GHC.Generics
+
 import Debug.Hood.Observe
 import Debug.Trace
 
@@ -45,7 +50,9 @@ data HsType = TypeVar TVarId
             | TypeArrow HsType HsType
             | TypeApp   HsType HsType
             | TypeForall TVarId HsType
-  deriving (Ord, Eq)
+  deriving (Ord, Eq, Generic)
+
+instance NFData HsType where rnf = genericRnf
 
 type Subst  = (TVarId, HsType)
 type Substs = M.Map TVarId HsType

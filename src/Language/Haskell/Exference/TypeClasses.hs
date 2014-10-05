@@ -1,4 +1,5 @@
 {-# LANGUAGE PatternGuards #-}
+{-# LANGUAGE DeriveGeneric #-}
 
 module Language.Haskell.Exference.TypeClasses
   ( HsTypeClass (..)
@@ -34,6 +35,9 @@ import Control.Applicative ( (<$>) )
 import Control.Monad ( mplus, guard )
 import Control.Monad.Identity ( Identity(runIdentity) )
 
+import Control.DeepSeq.Generics
+import GHC.Generics
+
 import Debug.Hood.Observe
 
 
@@ -42,26 +46,26 @@ data HsTypeClass = HsTypeClass
   , tclass_params :: [TVarId]
   , tclass_constraints :: [Constraint]
   }
-  deriving (Eq, Show, Ord)
+  deriving (Eq, Show, Ord, Generic)
 
 data HsInstance = HsInstance
   { instance_constraints :: [Constraint]
   , instance_tclass :: HsTypeClass
   , instance_params :: [HsType]
   }
-  deriving (Eq, Show, Ord)
+  deriving (Eq, Show, Ord, Generic)
 
 data Constraint = Constraint
   { constraint_tclass :: HsTypeClass
   , constraint_params :: [HsType]
   }
-  deriving (Eq, Ord)
+  deriving (Eq, Ord, Generic)
 
 data StaticContext = StaticContext
   { context_tclasses :: [HsTypeClass]
   , context_instances :: M.Map String [HsInstance]
   }
-  deriving Show
+  deriving (Show, Generic)
 
 data DynContext = DynContext
   { dynContext_context :: StaticContext
@@ -69,6 +73,13 @@ data DynContext = DynContext
   , dynContext_inflatedConstraints :: S.Set Constraint
   , dynContext_varConstraints :: M.Map TVarId (S.Set Constraint)
   }
+  deriving (Generic)
+
+instance NFData HsTypeClass   where rnf = genericRnf
+instance NFData HsInstance    where rnf = genericRnf
+instance NFData Constraint    where rnf = genericRnf
+instance NFData StaticContext where rnf = genericRnf
+instance NFData DynContext    where rnf = genericRnf
 
 instance Show Constraint where
   show (Constraint c ps) = unwords $ tclass_name c : map show ps

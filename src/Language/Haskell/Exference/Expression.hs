@@ -1,3 +1,5 @@
+{-# LANGUAGE DeriveGeneric #-}
+
 module Language.Haskell.Exference.Expression
   ( Expression (..)
   , fillExprHole
@@ -12,6 +14,9 @@ import Language.Haskell.Exference.Type
 import Data.List ( intercalate )
 import Data.Function ( on )
 
+import Control.DeepSeq.Generics
+import GHC.Generics
+
 import Debug.Hood.Observe
 
 
@@ -23,9 +28,9 @@ data Expression = ExpVar TVarId
                 | ExpHole TVarId
                 | ExpLetMatch String [TVarId] Expression Expression
                 | ExpLet TVarId Expression Expression
-  deriving Eq
+  deriving (Eq, Generic)
 
--- $( derive makeNFData ''Expression )
+instance NFData Expression where rnf = genericRnf
 
 instance Show Expression where
   showsPrec _ (ExpVar i) = showString $ showVar i

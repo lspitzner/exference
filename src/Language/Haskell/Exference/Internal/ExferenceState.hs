@@ -1,3 +1,5 @@
+{-# LANGUAGE DeriveGeneric #-}
+
 module Language.Haskell.Exference.Internal.ExferenceState
   ( State (..)
   , FuncDictElem (..)
@@ -37,6 +39,9 @@ import Data.StableMemo
 
 import Control.Arrow ( first, second, (***) )
 
+import Control.DeepSeq.Generics
+import GHC.Generics
+
 import Debug.Hood.Observe
 
 
@@ -45,7 +50,7 @@ type VarBinding = (TVarId, HsType)
 data FuncDictElem = SimpleBinding String Float HsType [HsType] [Constraint]
                               -- name, results, params constraints
                   | MatchBinding  String [HsType] HsType
-  deriving Show
+  deriving (Show, Generic)
 
 type VarPBinding = (TVarId, HsType, [HsType])
                 -- var, result, params
@@ -65,7 +70,9 @@ type ScopeId = Int
 
 data Scope = Scope [VarPBinding] [ScopeId]
             -- scope bindings,   superscopes
+  deriving Generic
 data Scopes = Scopes ScopeId (M.Map ScopeId Scope)
+  deriving Generic
               -- next id     scopes
 
 initialScopes :: Scopes
@@ -149,6 +156,12 @@ data State = State
   , state_lastStepReason  :: String
   , state_lastStepBinding :: Maybe String
   }
+  deriving Generic
+
+instance NFData FuncDictElem where rnf = genericRnf
+instance NFData Scope        where rnf = genericRnf
+instance NFData Scopes       where rnf = genericRnf
+instance NFData State        where rnf = genericRnf
 
 instance Show State where
   show (State sgoals

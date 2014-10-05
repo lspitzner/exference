@@ -29,7 +29,7 @@ import qualified Data.PQueue.Prio.Max as Q
 import qualified Data.Map as M
 import qualified Data.Set as S
 
-import Control.DeepSeq
+import Control.DeepSeq.Generics
 
 import Data.Maybe ( maybeToList, listToMaybe, fromMaybe, catMaybes )
 import Control.Arrow ( first, second, (***) )
