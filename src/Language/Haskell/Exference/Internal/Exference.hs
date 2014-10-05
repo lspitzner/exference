@@ -44,6 +44,7 @@ import Control.Monad.Morph ( lift )
 
 import Control.Concurrent.Chan
 import Control.Concurrent ( forkIO )
+import qualified GHC.Conc.Sync
 
 import qualified ListT
 
@@ -231,10 +232,10 @@ findExpressionsPar (ExferenceInput rawCType
                                    heuristics)
                    reducer
     = do
-  taskChan   <- newChan
-  resultChan <- newChan
-  let destParallelCount = 8
-  let ssCount = 16
+  taskChan   <- newChan :: IO (Chan (Maybe [State]))
+  resultChan <- newChan :: IO (Chan [State])
+  let destParallelCount = GHC.Conc.Sync.numCapabilities-1
+  let ssCount = 96
   result <- reducer $ do
     let    
       worker = do
