@@ -68,4 +68,5 @@ Executable test-main
                -j
                -fno-warn-unused-imports
                -fno-warn-orphans
+               -threaded
   extensions: NoMonomorphismRestriction
