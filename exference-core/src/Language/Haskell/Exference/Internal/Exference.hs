@@ -5,9 +5,11 @@
 
 module Language.Haskell.Exference.Internal.Exference
   ( findExpressions
+  , findExpressionsPar
   , ExferenceHeuristicsConfig (..)
   , ExferenceInput (..)
   , ExferenceOutputElement
+  , ExferenceChunkElement
   )
 where
 
@@ -31,12 +33,19 @@ import Control.DeepSeq
 
 import Data.Maybe ( maybeToList, listToMaybe, fromMaybe, catMaybes )
 import Control.Arrow ( first, second, (***) )
-import Control.Monad ( guard, mzero )
+import Control.Monad ( guard, mzero, replicateM_ )
 import Control.Applicative ( (<$>), (<*>) )
 import Data.List ( partition, sortBy, groupBy )
 import Data.Ord ( comparing )
 import Data.Function ( on )
 import Data.Bool (bool)
+import Data.Monoid ( mempty )
+import Control.Monad.Morph ( lift )
+
+import Control.Concurrent.Chan
+import Control.Concurrent ( forkIO )
+
+import qualified ListT
 
 -- import Data.DeriveTH
 import Debug.Hood.Observe
@@ -101,6 +110,7 @@ data ExferenceInput = ExferenceInput
   }
 
 type ExferenceOutputElement = (Expression, ExferenceStats)
+type ExferenceChunkElement = (BindingUsages, [ExferenceOutputElement])
 
 type RatedStates = Q.MaxPQueue Float State
 
@@ -114,7 +124,7 @@ type FindExpressionsState = ( Int    -- number of steps already performed
                             )
 
 findExpressions :: ExferenceInput
-                -> [(BindingUsages, [ExferenceOutputElement])]
+                -> [ExferenceChunkElement]
 findExpressions (ExferenceInput rawCType
                                 funcs
                                 staticContext
@@ -196,6 +206,121 @@ findExpressions (ExferenceInput rawCType
               , newStates )
         in (newBindingUsages, out) : rest
 
+type FindExpressionsParState = ( Int    -- number of calculations currently queued
+                               , Int    -- number of steps already performed
+                               , Float  -- worst rating of state in pqueue
+                               , BindingUsages
+                               , RatedStates -- pqueue
+                               )
+
+findExpressionsPar :: ExferenceInput
+                   -> (   ListT.ListT IO ExferenceChunkElement
+                       -> IO a)
+                   -> IO a
+findExpressionsPar (ExferenceInput rawCType
+                                   funcs
+                                   staticContext
+                                   allowUnused
+                                   maxSteps -- since we output a [[x]],
+                                            -- this would not really be
+                                            -- necessary anymore. but
+                                            -- we also use it for calculating
+                                            -- memory limit stuff, and it is
+                                            -- not worth the refactor atm.
+                                   memLimit
+                                   heuristics)
+                   reducer
+    = do
+  taskChan   <- newChan
+  resultChan <- newChan
+  let destParallelCount = 8
+  let ssCount = 16
+  result <- reducer $ do
+    let    
+      worker = do
+        t <- readChan taskChan
+        case t of
+          Nothing    -> return ()
+          Just states -> do
+            let r = states >>= stateStep heuristics
+            foldr seq () r `seq` writeChan resultChan r
+            -- writeChan resultChan $!! r
+            worker
+      controller :: FindExpressionsParState
+             -> ListT.ListT IO (BindingUsages, [(Int,Float,Expression)])
+      controller (nRunning, n, worst, bindingUsages, states) = if
+        | n > maxSteps -> mempty
+        | nRunning < 2+destParallelCount && not (Q.null states) -> do
+            let ss = map snd $ Q.take ssCount states
+                restStates = Q.drop ssCount states
+            lift $ writeChan taskChan (Just ss)
+            let calcNew s old = case state_lastStepBinding s of
+                  Nothing -> old
+                  Just b  -> incBindingUsage b old
+            let newBindingUsages = foldr calcNew bindingUsages ss
+            controller (nRunning+1, n, worst, newBindingUsages, restStates)
+        | nRunning==0 -> mempty
+        | otherwise -> do
+            res <- lift  $ readChan resultChan
+            let (potentialSolutions, futures) = partition (null.state_goals) res
+                out = [ (n, d, e)
+                      | solution <- potentialSolutions
+                      , null (state_constraintGoals solution)
+                      , let unusedVarCount = getUnusedVarCount
+                                               (state_varUses solution)
+                      , allowUnused || unusedVarCount==0
+                      , let d = state_depth solution
+                              + ( heuristics_unusedVar heuristics
+                                * fromIntegral unusedVarCount
+                                )
+                      , let e = -- trace (showStateDevelopment solution) $ 
+                                simplifyEta $ simplifyLets $ state_expression solution
+                      ]
+                ratedNew    = [ (rateState heuristics newS, newS) | newS <- futures ]
+                qsize = Q.size states
+                  -- this cutoff is somewhat arbitrary, and can, theoretically,
+                  -- distort the order of the results (i.e.: lead to results being
+                  -- omitted).
+                filteredNew = if n+qsize > maxSteps
+                  then case memLimit of
+                    Nothing -> ratedNew
+                    Just mmax ->
+                      let
+                        cutoff = worst * fromIntegral mmax / fromIntegral qsize
+                      in
+                        filter ((>cutoff) . fst) ratedNew
+                  else ratedNew
+                newStates   = foldr (uncurry Q.insert) states filteredNew
+                rest = controller
+                  ( nRunning-1
+                  , n+ssCount
+                  , minimum $ worst:map fst filteredNew
+                  , bindingUsages
+                  , newStates )
+            ListT.cons (bindingUsages, out) rest
+    let 
+      (HsConstrainedType cs t) = ctConstantifyVars rawCType
+      initState = (0, 0, 0, emptyBindingUsages,
+        Q.singleton 0.0 $ State
+          [((0, t), 0)]
+          []
+          initialScopes
+          M.empty
+          (map splitEnvElement funcs)
+          (mkDynContext staticContext cs)
+          (ExpHole 0)
+          1
+          (largestId t)
+          0.0
+          Nothing
+          ""
+          Nothing)
+    let mapF = second (\stuples -> [ (e, ExferenceStats steps compl)
+                                   | (steps, compl, e) <- stuples] )
+    replicateM_ destParallelCount (lift $ forkIO worker)
+    fmap mapF $ controller initState
+  replicateM_ destParallelCount (writeChan taskChan Nothing)
+  return result
 
 ctConstantifyVars :: HsConstrainedType -> HsConstrainedType
 ctConstantifyVars (HsConstrainedType a b) =

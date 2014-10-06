@@ -12,7 +12,7 @@ import Language.Haskell.Exference.TypeClasses
 
 import qualified Data.Set as S
 import Control.Monad ( mplus, guard, msum )
-import Control.Applicative ( (<$>), liftA2 )
+import Control.Applicative ( (<|>), (<$>), liftA2 )
 
 import Debug.Trace
 
@@ -24,21 +24,24 @@ import Debug.Trace
 isPossible :: DynContext -> [Constraint] -> Maybe [Constraint]
 isPossible _dcontext [] = Just []
 isPossible dcontext (c:constraints) =
-  liftA2 (++) (possibleFromGiven `mplus` possibleFromInstance) rest
+  if constraintContainsVariables c
+    then (c:) <$> rest
+    else do
+      cs' <- possibleFromGiven <|> possibleFromInstance
+      cs  <- rest
+      return $ cs' ++ cs
   where
     rest = isPossible dcontext constraints
     (Constraint cname cparams) = c
+    possibleFromGiven :: Maybe [Constraint]
     possibleFromGiven =
-      if constraintContainsVariables c
-      then Just [c]
-      else
-        if S.member c $ inflateConstraints
-                                  (dynContext_context dcontext)
-                                  (dynContext_constraints dcontext)
+      if S.member c $ dynContext_inflatedConstraints dcontext
         then Just []
         else Nothing
     possibleFromInstance :: Maybe [Constraint]
     possibleFromInstance = msum $ do
+      -- TODO: put instances in a map name -> Instance
+      -- so that this lookup gets way faster
       HsInstance instConstrs inst instParams <- context_instances 
                                               $ dynContext_context dcontext
       guard $ inst==cname
