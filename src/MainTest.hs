@@ -28,12 +28,13 @@ import System.Process
 import Control.Applicative ( (<$>), (<*>) )
 import Control.Arrow ( second, (***) )
 import Control.Monad ( when, forM_, guard, forM, mplus, mzero )
-import Data.List ( sortBy, find )
+import Data.List ( sortBy, find, intercalate )
 import Data.Ord ( comparing )
 import Text.Printf
 import Data.Maybe ( listToMaybe, fromMaybe, maybeToList, catMaybes )
 import Data.Either ( lefts, rights )
 import Control.Monad.Writer.Strict
+import qualified Data.Map as M
 
 import Language.Haskell.Exts.Syntax ( Module(..), Decl(..), ModuleName(..) )
 import Language.Haskell.Exts.Parser ( parseModuleWithMode
@@ -50,34 +51,37 @@ import Debug.Hood.Observe
 
 
 
-checkData :: [(String, Bool, String, String)]
+checkData :: [(String, Bool, String, [String])]
 checkData =
   [ (,,,) "showmap"    False "(Show b) => (a -> b) -> List a -> List String"
-                             "\\b -> fmap (\\g -> show (b g))"
+                             ["\\b -> fmap (\\g -> show (b g))"]
   , (,,,) "ffbind"     False "(a -> t -> b) -> (t -> a) -> (t -> b)"
-                             "\\b -> (\\c -> (\\d -> (b (c d)) d))"
+                             ["\\b -> (\\c -> (\\d -> (b (c d)) d))"]
   , (,,,) "join"       False "(Monad m) => m (m a) -> m a"
-                             "\\b -> ((>>=) b) (\\f -> f))"
+                             ["\\b -> ((>>=) b) (\\f -> f)"]
   , (,,,) "fjoin"      False "(t -> (t -> a)) -> t -> a"
-                             "\\b -> (\\c -> (b c) c)"
-  , (,,,) "zipThingy"  False "List a -> b -> List (Tuple a b)"
-                             "\\b -> (\\c -> ((fmap (\\g -> ((,) g) c)) b)"
+                             ["\\b -> (\\c -> (b c) c)"]
+  , (,,,) "zipThingy"  False "List a -> b -> List (Tuple2 a b)"
+                             ["\\b -> (\\c -> ((fmap (\\g -> ((,) g) c)) b)"
+                             ,"\\b -> (\\c -> (zip b) (pure c))"]
   , (,,,) "stateRun"   True  "State a b -> a -> b"
-                             "\\b -> (\\c -> let (State e) = b in let ((,) h i) = e c in h)"
-  , (,,,) "fst"        True  "Tuple a b -> a"
-                             "\\b -> let ((,) d e) = b in d"
+                             ["\\b -> (\\c -> let (State e) = b in let ((,) h i) = e c in h)"]
+  , (,,,) "fst"        True  "Tuple2 a b -> a"
+                             ["\\b -> let ((,) d e) = b in d"]
   --, (,,,) "ffst"       True  "(a -> Tuple b c) -> a -> b"
-  , (,,,) "snd"        True  "Tuple a b -> b"
-                             "\\b -> let ((,) d e) = b in e"
-  , (,,,) "quad"       False "a -> Tuple (Tuple a a) (Tuple a a)"
-                             "\\b -> ((,) (((,) b) b)) (((,) b) b))"
+  , (,,,) "snd"        True  "Tuple2 a b -> b"
+                             ["\\b -> let ((,) d e) = b in e"]
+  , (,,,) "quad"       False "a -> Tuple2 (Tuple2 a a) (Tuple2 a a)"
+                             ["\\b -> ((,) (((,) b) b)) (((,) b) b)"]
   -- , (,,,) "fswap"      False "(a -> Tuple b c) -> a -> Tuple c b"
   , (,,,) "liftBlub"   False "Monad m => m a -> m b -> (a -> b -> m c) -> m c"
-                             "\\b -> (\\c -> (\\d -> ((>>=) b) (\\h -> ((>>=) c) (d h))))"
+                             ["\\b -> (\\c -> (\\d -> ((>>=) b) (\\h -> ((>>=) c) (d h))))"
+                             ,"\\b -> (\\c -> (\\d -> ((>>=) c) (\\h -> ((>>=) b) (\\l -> (d l) h))))"]
   , (,,,) "stateBind"  False "State s a -> (a -> State s b) -> State s b"
-                             "\\b -> (\\c -> let (State e) = b in State (\\g -> let ((,) k l) = e g in let (State o) = c k in o l))"
-  , (,,,) "dbMaybe"    False "Maybe a -> Maybe (Tuple a a)"
-                             "todo"
+                             ["\\b -> (\\c -> let (State e) = b in State (\\g -> let ((,) k l) = e g in let (State o) = c k in o l))"]
+  , (,,,) "dbMaybe"    False "Maybe a -> Maybe (Tuple2 a a)"
+                             ["fmap (\\f -> ((,) f) f)"
+                             ,"\\b -> ((liftM2 (\\g -> (\\h -> ((,) h) g))) b) b"]
   --, (,,,) "tupleShow"  False "Show a, Show b => Tuple a b -> String"
   --, (,,,) "FloatToInt" False "Float -> Int"
   --, (,,,) "longApp"    False "a -> b -> c -> (a -> b -> d) -> (a -> c -> e) -> (b -> c -> f) -> (d -> e -> f -> g) -> g"
@@ -153,7 +157,7 @@ exampleInput =
 checkResults :: ExferenceHeuristicsConfig
              -> Context
              -> [( String -- name
-                 , String -- expected
+                 , [String] -- expected
                  , Maybe Expression -- first
                  , Maybe Expression -- best
                  , Maybe (Int, ExferenceStats)    -- no idea atm
@@ -165,15 +169,15 @@ checkResults heuristics (bindings, scontext) = do
                 (filter (\(x,_,_) -> x/="join") bindings)
                 scontext
                 allowUnused
-                16384
-                (Just 16384)
+                32768
+                (Just 32768)
                 heuristics
   let r = findExpressions input
   let finder :: Int
              -> [(Expression, ExferenceStats)]
              -> Maybe (Int, ExferenceStats)
       finder n [] = Nothing
-      finder n ((e, s):r) | show e==expected = Just (n, s)
+      finder n ((e, s):r) | show e `elem` expected = Just (n, s)
                           | otherwise = finder (n+1) r
       bestFound = findSortNExpressions 100 input
       firstAndBest :: Maybe (Expression, Expression)
@@ -195,7 +199,7 @@ exampleOutput heuristics (bindings, scontext) = map f exampleInput
     input = ExferenceInput
     f (_, allowUnused, s) = takeFindSortNExpressions 5 10 $ ExferenceInput
                 (readConstrainedType scontext s)
-                bindings
+                (filter (\(x,_,_) -> x/="join") bindings)
                 scontext
                 allowUnused
                 16384
@@ -241,7 +245,7 @@ printChecks :: ExferenceHeuristicsConfig -> Context -> IO ()
 printChecks h context = mapM_ helper (checkResults h context)
   where
     helper :: ( String
-              , String
+              , [String]
               , Maybe Expression
               , Maybe Expression
               , Maybe (Int, ExferenceStats))
@@ -250,17 +254,21 @@ printChecks h context = mapM_ helper (checkResults h context)
       | f==b = do putStrLn $ printf "%-10s: fine                                  %5d %8.2f" name n d
       | otherwise = do
       putStrLn $ printf "%-10s: expected solution first, but not best!" name
-      putStrLn $ "  expected solution: " ++ show f
-      putStrLn $ "  best solution:     " ++ show b
+      putStrLn $ "  expected solution:  " ++ show f
+      putStrLn $ "  best solution:      " ++ show b
     helper (name, e, Just f, _, Just (i, _)) = do
       putStrLn $ printf "%-10s: expected solution not first, but %d!" name i
-      putStrLn $ "  first solution:    " ++ show f
-      putStrLn $ "  expected solution: " ++ e
+      putStrLn $ "  first solution:     " ++ show f
+      putStrLn $ "  expected solutions: " ++ intercalate ", " e
     helper (name, e, Just f, Just b, Nothing) = do
       putStrLn $ printf "%-10s: expected solution not found!" name
-      putStrLn $ "  first solution was " ++ show f
-      putStrLn $ "  best solution:     " ++ show b
-      putStrLn $ "  expected solution: " ++ e
+      putStrLn $ "  first solution was  " ++ show f
+      putStrLn $ "  best solution:      " ++ show b
+      putStrLn $ "  expected solutions: " ++ intercalate ", " e
+    helper (name, e, Just f, Nothing, Nothing) = do -- this can't really happen..
+      putStrLn $ printf "%-10s: expected solution not found!" name
+      putStrLn $ "  first solution was  " ++ show f
+      putStrLn $ "  expected solutions: " ++ intercalate ", " e
     helper (name, _, Nothing, _, _) = do
       putStrLn $ printf "%-10s: no solutions found at all!" name 
 

@@ -102,8 +102,11 @@ class Monad m => MonadPlus m where
 
 maybe :: b -> (a -> b) -> Maybe a -> b
 either :: (a->c) -> (b->c) -> Either a b -> c
+-- these two are not really necessary and confuse the algorithm for quad
+{-
 curry :: ((a, b) -> c) -> a -> b -> c
 uncurry :: (a -> b -> c) -> ((a, b) -> c)
+-}
 mapM :: Monad m => (a -> m b) -> [a] -> m [b]
 -- no forM, see rule 2
 sequence :: Monad m => [m a] -> m [a] -- Traversable version better?

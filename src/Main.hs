@@ -141,7 +141,7 @@ testBaseInput' = map h testBaseInput
 
 testHeuristicsConfig :: ExferenceHeuristicsConfig
 testHeuristicsConfig = ExferenceHeuristicsConfig
-  { heuristics_goalVar               =  4.0
+  { heuristics_goalVar               =  3.0
   , heuristics_goalCons              =  0.55
   , heuristics_goalArrow             =  5.0
   , heuristics_goalApp               =  1.9
@@ -149,7 +149,7 @@ testHeuristicsConfig = ExferenceHeuristicsConfig
   , heuristics_stepProvidedBad       =  5.0
   , heuristics_stepEnvGood           =  6.0
   , heuristics_stepEnvBad            = 22.0
-  , heuristics_varUsage              =  8.0
+  , heuristics_varUsage              =  1.0 -- pretty well tested
   , heuristics_functionGoalTransform =  0.0
   , heuristics_unusedVar             = 20.0
   }
@@ -194,13 +194,15 @@ main = runO $ do
     <$> contextFromModuleAndRatings "ExferenceDict.hs" "ExferenceRatings.txt"
   --mapM_ putStrLn $ messages
   --putStrLn $ replicate 30 '='
-  -- printAndStuff   testHeuristicsConfig context
+  --printAndStuff testHeuristicsConfig context
   --printChecks     testHeuristicsConfig context
   --printStatistics testHeuristicsConfig context
   printCheckedStatistics testHeuristicsConfig context
+  -- printMaxUsage testHeuristicsConfig context
   -- mapM_ print $ clss
   --mapM_ print $ insts
-  --mapM_ print $ eSignatures
+  -- mapM_ print $ eSignatures
+
   -- print $ compileDict testDictRatings $ eSignatures
   -- print $ parseConstrainedType defaultContext $ "(Show a) => [a] -> String"
   -- print $ inflateConstraints a b
