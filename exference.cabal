@@ -69,4 +69,5 @@ Executable test-main
                -fno-warn-unused-imports
                -fno-warn-orphans
                -threaded
+               -with-rtsopts "-H2G -M4G -N"
   extensions: NoMonomorphismRestriction
