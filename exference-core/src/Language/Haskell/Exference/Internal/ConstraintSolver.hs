@@ -1,6 +1,5 @@
 module Language.Haskell.Exference.Internal.ConstraintSolver
-  ( isProvable
-  , isPossible
+  ( isPossible
   )
 where
 
@@ -13,6 +12,10 @@ import Language.Haskell.Exference.TypeClasses
 import qualified Data.Set as S
 import Control.Monad ( mplus, guard, msum )
 import Control.Applicative ( (<|>), (<$>), liftA2 )
+import Control.Monad ( join )
+import Data.Maybe ( fromMaybe )
+
+import qualified Data.Map.Strict as M
 
 import Debug.Trace
 
@@ -32,26 +35,25 @@ isPossible dcontext (c:constraints) =
       return $ cs' ++ cs
   where
     rest = isPossible dcontext constraints
-    (Constraint cname cparams) = c
+    (Constraint cclass cparams) = c
     possibleFromGiven :: Maybe [Constraint]
     possibleFromGiven =
       if S.member c $ dynContext_inflatedConstraints dcontext
         then Just []
         else Nothing
     possibleFromInstance :: Maybe [Constraint]
-    possibleFromInstance = msum $ do
-      -- TODO: put instances in a map name -> Instance
-      -- so that this lookup gets way faster
-      HsInstance instConstrs inst instParams <- context_instances 
-                                              $ dynContext_context dcontext
-      guard $ inst==cname
-      return $ do
-        let tempTuplePs     = foldl TypeApp (TypeCons "NTUPLE") cparams
-        let tempTupleInstPs = foldl TypeApp (TypeCons "NTUPLE") instParams
-        substs <- unifyRight tempTuplePs tempTupleInstPs
-        isPossible
-          dcontext
-          (map (constraintApplySubsts substs) instConstrs)
+    possibleFromInstance = msum $ f <$> is
+      where
+        is = fromMaybe [] $ M.lookup (tclass_name cclass)
+                                     ( context_instances
+                          $ dynContext_context dcontext )
+        f (HsInstance instConstrs _iclass instParams) = do
+          let tempTuplePs     = foldl TypeApp (TypeCons "NTUPLE") cparams
+          let tempTupleInstPs = foldl TypeApp (TypeCons "NTUPLE") instParams
+          substs <- unifyRight tempTuplePs tempTupleInstPs
+          isPossible
+            dcontext
+            (map (constraintApplySubsts substs) instConstrs)
        
 
 
@@ -59,7 +61,7 @@ isPossible dcontext (c:constraints) =
 
 
 
-
+{-
 isProvable :: DynContext -> [Constraint] -> Bool
 isProvable _ [] = True
 isProvable dcontext (c1:constraints) =
@@ -87,3 +89,4 @@ isProvable dcontext (c1:constraints) =
                       | instC <- instConstrs
                       ]
                    ++ constraints
+-}

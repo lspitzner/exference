@@ -29,7 +29,7 @@ import qualified Data.PQueue.Prio.Max as Q
 import qualified Data.Map as M
 import qualified Data.Set as S
 
-import Control.DeepSeq
+import Control.DeepSeq.Generics
 
 import Data.Maybe ( maybeToList, listToMaybe, fromMaybe, catMaybes )
 import Control.Arrow ( first, second, (***) )
@@ -44,6 +44,7 @@ import Control.Monad.Morph ( lift )
 
 import Control.Concurrent.Chan
 import Control.Concurrent ( forkIO )
+import qualified GHC.Conc.Sync
 
 import qualified ListT
 
@@ -231,10 +232,10 @@ findExpressionsPar (ExferenceInput rawCType
                                    heuristics)
                    reducer
     = do
-  taskChan   <- newChan
-  resultChan <- newChan
-  let destParallelCount = 8
-  let ssCount = 16
+  taskChan   <- newChan :: IO (Chan (Maybe [State]))
+  resultChan <- newChan :: IO (Chan [State])
+  let destParallelCount = GHC.Conc.Sync.numCapabilities-1
+  let ssCount = 96
   result <- reducer $ do
     let    
       worker = do
@@ -243,8 +244,23 @@ findExpressionsPar (ExferenceInput rawCType
           Nothing    -> return ()
           Just states -> do
             let r = states >>= stateStep heuristics
-            foldr seq () r `seq` writeChan resultChan r
-            -- writeChan resultChan $!! r
+            let f :: State -> () -> ()
+                f (State goals cgoals scops vumap funs cntxt expr nvid mvid d prev reason binding) x =
+                        rnf goals
+                  `seq` rnf cgoals
+                --  `seq` rnf scops
+                --  `seq` rnf vumap
+                --  `seq` rnf funs
+                --  `seq` rnf cntxt
+                --  `seq` rnf expr
+                --  `seq` rnf nvid
+                --  `seq` rnf mvid
+                  `seq` rnf d
+                --  `seq` rnf prev
+                --  `seq` rnf reason
+                --  `seq` rnf binding
+                  `seq` x
+            foldr f () r `seq` writeChan resultChan r
             worker
       controller :: FindExpressionsParState
              -> ListT.ListT IO (BindingUsages, [(Int,Float,Expression)])
