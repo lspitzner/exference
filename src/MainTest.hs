@@ -3,12 +3,14 @@ module MainTest
   , printChecks
   , printStatistics
   , printCheckedStatistics
+  , printMaxUsage
   )
 where
 
 
 
-import Language.Haskell.ExferenceCore ( ExferenceHeuristicsConfig(..) )
+import Language.Haskell.ExferenceCore ( ExferenceHeuristicsConfig(..)
+                                      , findExpressionsWithStats )
 import Language.Haskell.Exference
 import Language.Haskell.Exference.ExpressionToHaskellSrc
 import Language.Haskell.Exference.BindingsFromHaskellSrc
@@ -281,11 +283,30 @@ printCheckedStatistics h context = do
       _ -> do
         putStrLn $ printf "%-10s: bad (not first), first is %s" name (show first)
         return Nothing
+    f (name, expected, Just first, _, _) = do
+        putStrLn $ printf "%-10s: bad (only different solution found), first is %s" name (show first)
+        return Nothing
     f (name, expected, _, _, _) = do
         putStrLn $ printf "%-10s: bad (no solution)" name
         return Nothing
     g :: ExferenceStats -> (Int,Int,Float) -> (Int,Int,Float)
     g (ExferenceStats a b) (c,d,e) = (c+1,a+d,b+e)
+
+printMaxUsage :: ExferenceHeuristicsConfig -> Context -> IO ()
+printMaxUsage h (bindings, scontext) = mapM_ f checkData
+  where
+    f (name, allowUnused, typeStr, _expected) = do
+      let input = ExferenceInput
+                    (readConstrainedType scontext typeStr)
+                    (filter (\(x,_,_) -> x/="join") bindings)
+                    scontext
+                    allowUnused
+                    16384
+                    (Just 16384)
+                    h
+      let (stats, _) = last $ findExpressionsWithStats input
+          highest = take 5 $ sortBy (flip $ comparing snd) $ M.toList stats
+      putStrLn $ printf "%-10s: %s" name (show highest)
 
 -- TODO: remove duplication
 pointfree :: String -> IO String
