@@ -156,12 +156,12 @@ exampleInput =
 
 checkResults :: ExferenceHeuristicsConfig
              -> Context
-             -> [( String -- name
-                 , [String] -- expected
-                 , Maybe Expression -- first
-                 , Maybe Expression -- best
-                 , Maybe (Int, ExferenceStats)    -- no idea atm
-                 )]
+             -> [IO ( String -- name
+                    , [String] -- expected
+                    , Maybe Expression -- first
+                    , Maybe Expression -- best
+                    , Maybe (Int, ExferenceStats)    -- no idea atm
+                    )]
 checkResults heuristics (bindings, scontext) = do
   (name, allowUnused, typeStr, expected) <- checkData
   let input = ExferenceInput
@@ -180,16 +180,13 @@ checkResults heuristics (bindings, scontext) = do
       finder n ((e, s):r) | show e `elem` expected = Just (n, s)
                           | otherwise = finder (n+1) r
       bestFound = findSortNExpressions 100 input
-      firstAndBest :: Maybe (Expression, Expression)
-      firstAndBest = do
-        (f,_) <- listToMaybe r
-        (b,_) <- listToMaybe bestFound
-        return (f,b)
-  return ( name
-         , expected
-         , fst <$> listToMaybe r
-         , fst <$> listToMaybe bestFound
-         , finder 0 r)
+  return $ (,,,,)
+         <$> return name
+         <*> return expected
+         <*> fmap fst <$> findOneExpressionPar input
+         -- <*> return (fst <$> findOneExpression input)
+         <*> return (fst <$> listToMaybe bestFound)
+         <*> return (finder 0 r)
 
 exampleOutput :: ExferenceHeuristicsConfig
               -> Context
@@ -242,7 +239,7 @@ printStatistics h context = mapM_ f (exampleInOut h context)
          )
 
 printChecks :: ExferenceHeuristicsConfig -> Context -> IO ()
-printChecks h context = mapM_ helper (checkResults h context)
+printChecks h context = (>>=helper) `mapM_` checkResults h context
   where
     helper :: ( String
               , [String]
@@ -274,7 +271,7 @@ printChecks h context = mapM_ helper (checkResults h context)
 
 printCheckedStatistics :: ExferenceHeuristicsConfig -> Context -> IO ()
 printCheckedStatistics h context = do
-  xs <- mapM f $ checkResults h context
+  xs <- mapM (>>=f) (checkResults h context)
   print $ foldr g (0, 0, 0.0) $ catMaybes $ xs
   where
     f (name, expected, Just first, _, Just (n, stats)) = case n of
