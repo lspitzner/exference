@@ -50,6 +50,7 @@ import Control.Arrow ( first )
 import Text.ParserCombinators.Parsec
 import Text.ParserCombinators.Parsec.Char
 
+import qualified Data.Map as M
 
 
 builtInBindings :: [FunctionBinding]
@@ -112,7 +113,7 @@ contextFromModules l = do
     let mods = rights eParsed
     cntxt@(StaticContext clss insts) <- getContext mods
     tell ["got " ++ show (length clss) ++ " classes"]
-    tell ["and " ++ show (length insts) ++ " instances"]
+    tell ["and " ++ show (length $ concat $ M.elems insts) ++ " instances"]
     binds <- join <$> mapM (hExtractBinds cntxt) mods
     tell ["and " ++ show (length binds) ++ " bindings"]
     return $ (builtInBindings++binds, cntxt)

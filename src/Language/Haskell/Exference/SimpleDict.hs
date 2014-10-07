@@ -93,23 +93,22 @@ defaultBindings = toBindings
 emptyContext :: StaticContext
 emptyContext = StaticContext {
   context_tclasses = [],
-  context_instances = []
+  context_instances = M.empty
 }
 
 defaultContext :: StaticContext
-defaultContext = StaticContext {
-  context_tclasses = [ c_show
-                     , c_functor, c_applicative, c_monad
-                     , c_eq, c_ord
-                     , c_enum
-                     , c_num, c_real, c_integral
-                     , c_fractional, c_realfrac, c_floating, c_realfloat],
-  context_instances = inflateInstances
-                     $ [ list_show, list_monad, maybe_monad, maybe_show, tuple_show]
-                    ++ integral_instances
-                    ++ realfloat_instances
-  --context_redirects = M.Map TVarId TVarId
-}
+defaultContext = mkStaticContext classes instances
+  where
+    classes = [ c_show
+              , c_functor, c_applicative, c_monad
+              , c_eq, c_ord
+              , c_enum
+              , c_num, c_real, c_integral
+              , c_fractional, c_realfrac, c_floating, c_realfloat]
+    instances = inflateInstances
+              $ [ list_show, list_monad, maybe_monad, maybe_show, tuple_show]
+              ++ integral_instances
+              ++ realfloat_instances
 
 c_show            = HsTypeClass "Show" [badReadVar "a"] []
 c_functor         = HsTypeClass "Functor" [badReadVar "f"] []
