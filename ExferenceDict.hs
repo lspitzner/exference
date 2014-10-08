@@ -93,6 +93,12 @@ class Monad m => MonadPlus m where
   mplus :: m a -> m a -> m a
 
 -- ****
+-- **** data types (constructors and deconstructors aka pattern matching)
+-- ****
+
+newtype State s a = State (s -> (a,s))
+
+-- ****
 -- **** plain old function signatures ****
 -- ****
 
