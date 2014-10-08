@@ -68,16 +68,18 @@ getDataConss (Module _loc _m _pragma _warning _mexp _imp decls) = do
   --  tTransform (UnBangedTy t) = convertTypeInternal t
   --  tTransform x              = lift $ left $ "unknown Type: " ++ show x
   let
-    typeM :: QualConDecl -> ConversionMonad FunctionBinding
+    typeM :: QualConDecl -> ConversionMonad (FunctionBinding, FunctionBinding)
     typeM (QualConDecl _loc cbindings ccntxt conDecl) =
       case (cntxt, cbindings, ccntxt, conDecl) of
         ([], [], [], ConDecl cname tys) -> do
           convTs <- mapM convertTypeInternal tys
           rtype  <- rTypeM
-          return $ helper (HsConstrainedType
-                            []
-                            (foldr TypeArrow rtype convTs))
-                          cname
+          let cons   = HsConstrainedType [] (foldr TypeArrow rtype convTs)
+          let decons = HsConstrainedType []
+                          (TypeArrow
+                            rtype
+                            (foldl TypeApp (TypeCons "INFPATTERN") convTs))
+          return $ (helper cons cname, helper decons cname)
         ([], [], [], x) ->
           left $ "unknown ConDecl: " ++ show x
         ([], _, _, _) ->
@@ -86,9 +88,13 @@ getDataConss (Module _loc _m _pragma _warning _mexp _imp decls) = do
           left $ "context in data type"
   let
     addConsMsg = (++) $ hsNameToString name ++ ": "
-  either (return . Left . addConsMsg) (map Right)
-    $ mapM (\x -> evalState (runEitherT $ typeM x) (0, M.empty))
-    $ conss
+  let
+    consDeconss = mapM (\x -> evalState (runEitherT $ typeM x) (0, M.empty)) conss
+  case consDeconss of
+    Left  x -> return $ Left $ addConsMsg x
+    Right x -> if length conss == 1
+      then x >>= \(a,b) -> [Right a, Right b]
+      else x >>= \(a,_) -> [Right a]
 
 getClassMethods :: StaticContext -> Module -> [Either String FunctionBinding]
 getClassMethods context (Module _loc _m _pragma _warning _mexp _imp decls) =
