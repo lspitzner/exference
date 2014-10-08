@@ -2,6 +2,8 @@
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE PatternGuards #-}
+{-# LANGUAGE BangPatterns #-}
+
 
 module Language.Haskell.Exference.Internal.Exference
   ( findExpressions
@@ -233,7 +235,7 @@ findExpressionsPar (ExferenceInput rawCType
                    reducer
     = do
   taskChan   <- newChan :: IO (Chan (Maybe [State]))
-  resultChan <- newChan :: IO (Chan [State])
+  resultChan <- newChan :: IO (Chan [(Float, State)])
   let destParallelCount = GHC.Conc.Sync.numCapabilities-1
   let ssCount = 96
   result <- reducer $ do
@@ -246,8 +248,8 @@ findExpressionsPar (ExferenceInput rawCType
             let r = states >>= stateStep heuristics
             let f :: State -> () -> ()
                 f (State goals cgoals scops vumap funs cntxt expr nvid mvid d prev reason binding) x =
-                        rnf goals
-                  `seq` rnf cgoals
+                        goals
+                --  `seq` cgoals
                 --  `seq` rnf scops
                 --  `seq` rnf vumap
                 --  `seq` rnf funs
@@ -255,12 +257,14 @@ findExpressionsPar (ExferenceInput rawCType
                 --  `seq` rnf expr
                 --  `seq` rnf nvid
                 --  `seq` rnf mvid
-                  `seq` rnf d
+                --  `seq` d
                 --  `seq` rnf prev
                 --  `seq` rnf reason
                 --  `seq` rnf binding
                   `seq` x
-            foldr f () r `seq` writeChan resultChan r
+            let ratings = rateState heuristics `map` r
+            foldr f () r `seq` rnf ratings
+                         `seq` writeChan resultChan $ zip ratings r
             worker
       controller :: FindExpressionsParState
              -> ListT.ListT IO (BindingUsages, [(Int,Float,Expression)])
@@ -277,10 +281,10 @@ findExpressionsPar (ExferenceInput rawCType
             controller (nRunning+1, n, worst, newBindingUsages, restStates)
         | nRunning==0 -> mempty
         | otherwise -> do
-            res <- lift  $ readChan resultChan
-            let (potentialSolutions, futures) = partition (null.state_goals) res
+            res <- lift $ readChan resultChan
+            let (potentialSolutions, futures) = partition (null.state_goals.snd) res
                 out = [ (n, d, e)
-                      | solution <- potentialSolutions
+                      | (rating, solution) <- potentialSolutions
                       , null (state_constraintGoals solution)
                       , let unusedVarCount = getUnusedVarCount
                                                (state_varUses solution)
@@ -292,20 +296,20 @@ findExpressionsPar (ExferenceInput rawCType
                       , let e = -- trace (showStateDevelopment solution) $ 
                                 simplifyEta $ simplifyLets $ state_expression solution
                       ]
-                ratedNew    = [ (rateState heuristics newS, newS) | newS <- futures ]
+                -- ratedNew    = [ (rateState heuristics newS, newS) | newS <- futures ]
                 qsize = Q.size states
                   -- this cutoff is somewhat arbitrary, and can, theoretically,
                   -- distort the order of the results (i.e.: lead to results being
                   -- omitted).
                 filteredNew = if n+qsize > maxSteps
                   then case memLimit of
-                    Nothing -> ratedNew
+                    Nothing -> futures
                     Just mmax ->
                       let
                         cutoff = worst * fromIntegral mmax / fromIntegral qsize
                       in
-                        filter ((>cutoff) . fst) ratedNew
-                  else ratedNew
+                        filter ((>cutoff) . fst) futures
+                  else futures
                 newStates   = foldr (uncurry Q.insert) states filteredNew
                 rest = controller
                   ( nRunning-1
@@ -332,7 +336,7 @@ findExpressionsPar (ExferenceInput rawCType
           ""
           Nothing)
     let mapF = second (\stuples -> [ (e, ExferenceStats steps compl)
-                                   | (steps, compl, e) <- stuples] )
+                                   | (steps, !compl, e) <- stuples] )
     replicateM_ destParallelCount (lift $ forkIO worker)
     fmap mapF $ controller initState
   replicateM_ destParallelCount (writeChan taskChan Nothing)
