@@ -7,6 +7,7 @@ module Language.Haskell.Exference.SearchTree
   , SearchTreeBuilder
   , initialSearchTreeBuilder
   , buildSearchTree
+  , filterSearchTreeN
   )  
 where
 
@@ -21,6 +22,7 @@ import Control.Monad.Reader
 import qualified Data.HashMap.Strict as HM
 import qualified Data.HashSet as HS
 import Data.Hashable ( Hashable )
+
 
 
 type SearchTreeValue = ( Int         -- total number of children;
@@ -66,3 +68,12 @@ buildSearchTree (assocs,processed) root =
 
 initialSearchTreeBuilder :: a -> Expression -> SearchTreeBuilder a
 initialSearchTreeBuilder x e = ([(x,x,e)],[])
+
+-- removes all nodes that have less than n total nodes (incl. self)
+-- e.g. if n==2, all nodes without children are removed.
+filterSearchTreeN :: Int -> SearchTree -> SearchTree
+filterSearchTreeN n (Node d ts) = Node d (ts >>= f)
+  where
+    f :: SearchTree -> [SearchTree]
+    f (Node d'@(k,_,_) ts') | n>k = []
+                            | otherwise = [Node d' $ ts' >>= f]
