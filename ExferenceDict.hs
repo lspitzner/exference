@@ -140,6 +140,7 @@ liftM3 :: Monad m => (a1 -> a2 -> a3 -> r) -> m a1 -> m a2 -> m a3 -> m r
 liftM4 :: Monad m => (a1 -> a2 -> a3 -> a4 -> r) -> m a1 -> m a2 -> m a3 -> m a4 -> m r 
 liftM5 :: Monad m => (a1 -> a2 -> a3 -> a4 -> a5 -> r) -> m a1 -> m a2 -> m a3 -> m a4 -> m a5 -> m r 
 
+realToFrac :: (Real a, Fractional b) => a -> b
 
 -- ****
 -- **** type class instances ****
@@ -160,11 +161,7 @@ Integral a
 -}
 
 {- TODO:
-Fractional a
 Enum a
-RealFrac a
-Floating a
-RealFloat a
 Bounded a
 Ix a
 -}
@@ -850,3 +847,29 @@ instance Real CIno
 instance Real CDev
 instance Integral a => Real (Ratio a)
 instance HasResolution a => Real (Fixed a)
+
+instance RealFrac Double
+instance RealFrac Float
+instance RealFrac CDouble
+instance RealFrac CFloat
+instance Integral a => RealFrac (Ratio a)
+instance HasResolution a => RealFrac (Fixed a)
+
+instance Fractional Double
+instance Fractional Float
+instance Fractional CDouble
+instance Fractional CFloat
+instance Integral a => Fractional (Ratio a)
+instance RealFloat a => Fractional (Complex a)
+instance HasResolution a => Fractional (Fixed a)
+
+instance Floating Double
+instance Floating Float
+instance Floating CDouble
+instance Floating CFloat
+instance RealFloat a => Floating (Complex a)
+
+instance RealFloat Double
+instance RealFloat Float
+instance RealFloat CDouble
+instance RealFloat CFloat
