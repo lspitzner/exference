@@ -23,6 +23,7 @@ import Language.Haskell.Exference.TypeClasses
 import Language.Haskell.Exference.ConstrainedType
 import Language.Haskell.Exference.ExferenceStats
 import Language.Haskell.Exference.FunctionBinding
+import Language.Haskell.Exference.SearchTree
 import Language.Haskell.Exference.Internal.Unify
 import Language.Haskell.Exference.Internal.ConstraintSolver
 import Language.Haskell.Exference.Internal.ExferenceState
@@ -32,6 +33,8 @@ import qualified Data.Map as M
 import qualified Data.Set as S
 
 import Control.DeepSeq.Generics
+import System.Mem.StableName ( StableName, makeStableName )
+import System.IO.Unsafe ( unsafePerformIO )
 
 import Data.Maybe ( maybeToList, listToMaybe, fromMaybe, catMaybes )
 import Control.Arrow ( first, second, (***) )
@@ -113,16 +116,17 @@ data ExferenceInput = ExferenceInput
   }
 
 type ExferenceOutputElement = (Expression, ExferenceStats)
-type ExferenceChunkElement = (BindingUsages, [ExferenceOutputElement])
+type ExferenceChunkElement = (BindingUsages, SearchTree, [ExferenceOutputElement])
 
 type RatedStates = Q.MaxPQueue Float State
 
 __debug :: Bool
-__debug = False
+__debug = True
 
 type FindExpressionsState = ( Int    -- number of steps already performed
                             , Float  -- worst rating of state in pqueue
                             , BindingUsages
+                            , SearchTreeBuilder (StableName State)
                             , RatedStates -- pqueue
                             )
 
@@ -140,8 +144,8 @@ findExpressions (ExferenceInput rawCType
                                          -- not worth the refactor atm.
                                 memLimit
                                 heuristics) =
-  [ (bindingUsages, solutions)
-  | (bindingUsages, stuples) <- resultTuples
+  [ (bindingUsages, searchTree, solutions)
+  | (bindingUsages, searchTree, stuples) <- resultTuples
   , let solutions = [ (e, ExferenceStats steps compl)
                     | (steps, compl, e) <- stuples
                     ]
@@ -150,8 +154,7 @@ findExpressions (ExferenceInput rawCType
   --   <$> resultTuples
   where
     (HsConstrainedType cs t) = ctConstantifyVars rawCType
-    resultTuples = helper (0, 0, emptyBindingUsages,
-      Q.singleton 0.0 $ State
+    initState = State
         [((0, t), 0)]
         []
         initialScopes
@@ -164,13 +167,20 @@ findExpressions (ExferenceInput rawCType
         0.0
         Nothing
         ""
-        Nothing)
-    helper :: FindExpressionsState -> [(BindingUsages, [(Int,Float,Expression)])]
-    helper (n, worst, bindingUsages, states)
+        Nothing
+    initStateName = unsafePerformIO $ makeStableName $! initState
+    resultTuples = helper ( 0
+                          , 0
+                          , emptyBindingUsages
+                          , initialSearchTreeBuilder initStateName (ExpHole 0)
+                          , Q.singleton 0.0 initState
+                          )
+    helper :: FindExpressionsState -> [(BindingUsages, SearchTree, [(Int,Float,Expression)])]
+    helper (n, worst, bindingUsages, (stA, stB), states)
       | Q.null states || n > maxSteps = []
       | ((_,s), restStates) <- Q.deleteFindMax states =
-        let (potentialSolutions, futures) = partition (null.state_goals) 
-                                                      (stateStep heuristics s)
+        let rStates = stateStep heuristics s
+            (potentialSolutions, futures) = partition (null.state_goals) rStates                                                      
             newBindingUsages = case state_lastStepBinding s of
               Nothing -> bindingUsages
               Just b  -> incBindingUsage b bindingUsages
@@ -201,18 +211,29 @@ findExpressions (ExferenceInput rawCType
                   in
                     filter ((>cutoff) . fst) ratedNew
               else ratedNew
-            newStates   = foldr (uncurry Q.insert) restStates filteredNew
+            newStates = foldr (uncurry Q.insert) restStates filteredNew
+            newSearchTreeBuilder =
+              ( [ unsafePerformIO $ do
+                    n1 <- makeStableName $! ns
+                    n2 <- makeStableName $! s
+                    return (n1,n2,state_expression ns)
+                | ns<-rStates] ++ stA
+              , unsafePerformIO (makeStableName $! s):stB)
             rest = helper
               ( n+1
               , minimum $ worst:map fst filteredNew
               , newBindingUsages
+              , newSearchTreeBuilder
               , newStates )
-        in (newBindingUsages, out) : rest
+        in ( newBindingUsages
+           , buildSearchTree newSearchTreeBuilder initStateName
+           , out) : rest
 
 type FindExpressionsParState = ( Int    -- number of calculations currently queued
                                , Int    -- number of steps already performed
                                , Float  -- worst rating of state in pqueue
                                , BindingUsages
+                               , SearchTreeBuilder (StableName State)
                                , RatedStates -- pqueue
                                )
 
@@ -235,7 +256,7 @@ findExpressionsPar (ExferenceInput rawCType
                    reducer
     = do
   taskChan   <- newChan :: IO (Chan (Maybe [State]))
-  resultChan <- newChan :: IO (Chan [(Float, State)])
+  resultChan <- newChan :: IO (Chan [(Float, State, State)])
   let destParallelCount = GHC.Conc.Sync.numCapabilities-1
   let ssCount = 96
   result <- reducer $ do
@@ -245,30 +266,21 @@ findExpressionsPar (ExferenceInput rawCType
         case t of
           Nothing    -> return ()
           Just states -> do
-            let r = states >>= stateStep heuristics
-            let f :: State -> () -> ()
-                f (State goals cgoals scops vumap funs cntxt expr nvid mvid d prev reason binding) x =
-                        goals
-                --  `seq` cgoals
-                --  `seq` rnf scops
-                --  `seq` rnf vumap
-                --  `seq` rnf funs
-                --  `seq` rnf cntxt
-                --  `seq` rnf expr
-                --  `seq` rnf nvid
-                --  `seq` rnf mvid
-                --  `seq` d
-                --  `seq` rnf prev
-                --  `seq` rnf reason
-                --  `seq` rnf binding
-                  `seq` x
-            let ratings = rateState heuristics `map` r
-            foldr f () r `seq` rnf ratings
-                         `seq` writeChan resultChan $ zip ratings r
+            let g = rateState heuristics
+            let r = [ state_goals s `seq`
+                      (rating, newS, s)
+                    | s <- states
+                    , newS <- stateStep heuristics s
+                    , let !rating = g newS
+                    ]
+            foldr seq () r `seq` writeChan resultChan r
             worker
       controller :: FindExpressionsParState
-             -> ListT.ListT IO (BindingUsages, [(Int,Float,Expression)])
-      controller (nRunning, n, worst, bindingUsages, states) = if
+             -> ListT.ListT IO ( BindingUsages
+                               , SearchTreeBuilder (StableName State)
+                               , [(Int,Float,Expression)]
+                               )
+      controller (nRunning, n, worst, bindingUsages, (stA, stB), states) = if
         | n > maxSteps -> mempty
         | nRunning < 2+destParallelCount && not (Q.null states) -> do
             let ss = map snd $ Q.take ssCount states
@@ -278,13 +290,26 @@ findExpressionsPar (ExferenceInput rawCType
                   Nothing -> old
                   Just b  -> incBindingUsage b old
             let newBindingUsages = foldr calcNew bindingUsages ss
-            controller (nRunning+1, n, worst, newBindingUsages, restStates)
+            let newSearchTreeBuilder =
+                  ( stA
+                  , [ unsafePerformIO (makeStableName $! s)
+                    | s <- ss
+                    ]++stB
+                  )
+            controller ( nRunning+1
+                       , n
+                       , worst
+                       , newBindingUsages
+                       , newSearchTreeBuilder
+                       , restStates
+                       )
         | nRunning==0 -> mempty
         | otherwise -> do
             res <- lift $ readChan resultChan
-            let (potentialSolutions, futures) = partition (null.state_goals.snd) res
+            let (potentialSolutions, futures) =
+                  partition (\(_,x,_) -> null $ state_goals x) res
                 out = [ (n, d, e)
-                      | (rating, solution) <- potentialSolutions
+                      | (_, solution, _) <- potentialSolutions
                       , null (state_constraintGoals solution)
                       , let unusedVarCount = getUnusedVarCount
                                                (state_varUses solution)
@@ -308,20 +333,27 @@ findExpressionsPar (ExferenceInput rawCType
                       let
                         cutoff = worst * fromIntegral mmax / fromIntegral qsize
                       in
-                        filter ((>cutoff) . fst) futures
+                        filter (\(a,_,_) -> a>cutoff) futures
                   else futures
-                newStates   = foldr (uncurry Q.insert) states filteredNew
+                newStates   = foldr (\(r,x,_) -> Q.insert r x) states filteredNew
+                newSearchTreeBuilder =
+                  ( [ unsafePerformIO $ do
+                        s <- makeStableName $! newS
+                        p <- makeStableName $! oldS
+                        return (s,p,state_expression newS)
+                    | (_,newS,oldS) <-res] ++ stA
+                  , stB)
                 rest = controller
                   ( nRunning-1
                   , n+ssCount
-                  , minimum $ worst:map fst filteredNew
+                  , minimum $ worst:map (\(r,_,_) -> r) filteredNew
                   , bindingUsages
+                  , newSearchTreeBuilder
                   , newStates )
-            ListT.cons (bindingUsages, out) rest
+            ListT.cons (bindingUsages, newSearchTreeBuilder, out) rest
     let 
       (HsConstrainedType cs t) = ctConstantifyVars rawCType
-      initState = (0, 0, 0, emptyBindingUsages,
-        Q.singleton 0.0 $ State
+      initState = State
           [((0, t), 0)]
           []
           initialScopes
@@ -334,11 +366,21 @@ findExpressionsPar (ExferenceInput rawCType
           0.0
           Nothing
           ""
-          Nothing)
-    let mapF = second (\stuples -> [ (e, ExferenceStats steps compl)
-                                   | (steps, !compl, e) <- stuples] )
+          Nothing
+      initStateName = unsafePerformIO $ makeStableName $! initState
+    let mapF (a,b,stuples) = ( a
+                             , buildSearchTree b initStateName
+                             , [ (e, ExferenceStats steps compl)
+                               | (steps, !compl, e) <- stuples]
+                             )
     replicateM_ destParallelCount (lift $ forkIO worker)
-    fmap mapF $ controller initState
+    fmap mapF $ controller ( 0
+                           , 0
+                           , 0
+                           , emptyBindingUsages
+                           , initialSearchTreeBuilder initStateName (ExpHole 0)
+                           , Q.singleton 0.0 initState
+                           )
   replicateM_ destParallelCount (writeChan taskChan Nothing)
   return result
 
