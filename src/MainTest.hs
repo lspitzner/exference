@@ -287,7 +287,7 @@ printMaxUsage h (bindings, scontext) = mapM_ f checkData
                     16384
                     (Just 16384)
                     h
-      let (stats, _) = last $ findExpressionsWithStats input
+      let (stats, _, _) = last $ findExpressionsWithStats input
           highest = take 5 $ sortBy (flip $ comparing snd) $ M.toList stats
       putStrLn $ printf "%-10s: %s" name (show highest)
 
