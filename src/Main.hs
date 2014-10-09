@@ -149,7 +149,8 @@ testHeuristicsConfig = ExferenceHeuristicsConfig
   , heuristics_stepProvidedBad       =  5.0
   , heuristics_stepEnvGood           =  6.0
   , heuristics_stepEnvBad            = 22.0
-  , heuristics_varUsage              =  5.0 -- pretty well tested
+  , heuristics_tempUnusedVarPenalty  =  5.0
+  , heuristics_tempMultiVarUsePenalty = 3.0
   , heuristics_functionGoalTransform =  0.0
   , heuristics_unusedVar             = 20.0
   }
@@ -199,7 +200,7 @@ main = runO $ do
   -- printStatistics testHeuristicsConfig context
   printCheckedStatistics testHeuristicsConfig context
   -- printMaxUsage testHeuristicsConfig context
-  printSearchTree testHeuristicsConfig context
+  -- printSearchTree testHeuristicsConfig context
   -- mapM_ print $ clss
   -- mapM_ print $ insts
   -- mapM_ print $ eSignatures

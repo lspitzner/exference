@@ -205,7 +205,8 @@ defaultHeuristicsConfig = ExferenceHeuristicsConfig
   , heuristics_stepProvidedBad       =  5.0
   , heuristics_stepEnvGood           =  6.0
   , heuristics_stepEnvBad            = 22.0
-  , heuristics_varUsage              =  8.0
+  , heuristics_tempUnusedVarPenalty  =  5.0
+  , heuristics_tempMultiVarUsePenalty = 3.0
   , heuristics_functionGoalTransform =  0.0
   , heuristics_unusedVar             = 20.0
   }

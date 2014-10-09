@@ -28,7 +28,7 @@ Library
   extensions: NoMonomorphismRestriction
   hs-source-dirs: src
   Build-Depends:
-    exference-core ==0.8.1.0,
+    exference-core ==0.9.0.0,
     base >=3 && <5,
     containers,
     transformers,
