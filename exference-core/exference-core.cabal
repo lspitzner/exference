@@ -1,5 +1,5 @@
 Name:          exference-core
-Version:       0.7.1.2
+Version:       0.8.1.0
 Cabal-Version: >= 1.8
 Build-Type:    Simple
 
@@ -19,7 +19,8 @@ Library
                    Language.Haskell.Exference.TypeClasses,
                    Language.Haskell.Exference.ExferenceStats,
                    Language.Haskell.Exference.Expression,
-                   Language.Haskell.Exference.FunctionBinding
+                   Language.Haskell.Exference.FunctionBinding,
+                   Language.Haskell.Exference.SearchTree
   other-modules: Language.Haskell.Exference.Internal.Unify,
                  Language.Haskell.Exference.Internal.ConstraintSolver,
                  Language.Haskell.Exference.Internal.ExferenceState
@@ -35,6 +36,8 @@ Library
     mtl,
     hood,
     stable-memo,
+    unordered-containers >= 0.2.5 && < 0.3,
+    hashable,
     parsec,
     pqueue,
     list-t >= 0.2.3 && < 0.3,

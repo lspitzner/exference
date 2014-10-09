@@ -15,20 +15,21 @@ where
 
 import qualified Language.Haskell.Exference.Internal.Exference as E
 import qualified Language.Haskell.Exference.ExferenceStats as S
+import qualified Language.Haskell.Exference.SearchTree as ST
 import qualified ListT
 import Control.Monad ( join )
 import Data.Monoid ( mempty )
 
 
 findExpressions :: E.ExferenceInput -> [E.ExferenceOutputElement]
-findExpressions = concat . map snd . E.findExpressions
+findExpressions = concat . map (\(_,_,x) -> x) . E.findExpressions
 
 findExpressionsChunked :: E.ExferenceInput
                    -> [[E.ExferenceOutputElement]]
-findExpressionsChunked = map snd . E.findExpressions
+findExpressionsChunked = map (\(_,_,x) -> x) . E.findExpressions
 
 findExpressionsWithStats :: E.ExferenceInput
-                         -> [(S.BindingUsages, [E.ExferenceOutputElement])]
+                         -> [(S.BindingUsages, ST.SearchTree, [E.ExferenceOutputElement])]
 findExpressionsWithStats = E.findExpressions
 
 findExpressionsPar :: E.ExferenceInput
@@ -37,14 +38,14 @@ findExpressionsPar :: E.ExferenceInput
                    -> IO a
 findExpressionsPar input reducer =
   E.findExpressionsPar input $
-    reducer . (>>= foldr ListT.cons mempty) . fmap snd
+    reducer . (>>= foldr ListT.cons mempty) . fmap (\(_,_,x) -> x)
 
 findExpressionsChunkedPar :: E.ExferenceInput
                           -> (ListT.ListT IO [E.ExferenceOutputElement]
                               -> IO a)
                           -> IO a
 findExpressionsChunkedPar input reducer =
-  E.findExpressionsPar input $ reducer . fmap snd
+  E.findExpressionsPar input $ reducer . fmap (\(_,_,x) -> x)
 
 findExpressionsWithStatsPar
   :: E.ExferenceInput
