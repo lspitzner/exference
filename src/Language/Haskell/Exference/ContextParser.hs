@@ -177,11 +177,14 @@ ratingsFromFile s = do
         spaces
         char '='
         spaces
+        minus <- optionMaybe $ char '-'
         a <- many1 digit
         b <- char '.'
         c <- many1 digit
-        return (name, read $ a++b:c))
-      <* many anyChar
+        case minus of
+          Nothing -> return (name, read $ a++b:c)
+          Just _  -> return (name, read $ '-':a++b:c))
+      <* spaces
   return $ case runParser parser () "" content of
     Left e -> Left $ show e
     Right x -> Right x
