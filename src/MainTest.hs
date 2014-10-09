@@ -4,6 +4,7 @@ module MainTest
   , printStatistics
   , printCheckedStatistics
   , printMaxUsage
+  , printSearchTree
   )
 where
 
@@ -22,6 +23,7 @@ import Language.Haskell.Exference.ConstrainedType
 import Language.Haskell.Exference.TypeClasses
 import Language.Haskell.Exference.Expression
 import Language.Haskell.Exference.ExferenceStats
+import Language.Haskell.Exference.SearchTree
 
 import Control.DeepSeq
 
@@ -37,6 +39,7 @@ import Data.Maybe ( listToMaybe, fromMaybe, maybeToList, catMaybes )
 import Data.Either ( lefts, rights )
 import Control.Monad.Writer.Strict
 import qualified Data.Map as M
+import Data.Tree ( drawTree )
 
 import Language.Haskell.Exts.Syntax ( Module(..), Decl(..), ModuleName(..) )
 import Language.Haskell.Exts.Parser ( parseModuleWithMode
@@ -56,7 +59,8 @@ import Debug.Hood.Observe
 checkData :: [(String, Bool, String, [String])]
 checkData =
   [ (,,,) "showmap"    False "(Show b) => (a -> b) -> List a -> List String"
-                             ["\\b -> fmap (\\g -> show (b g))"]
+                             ["\\b -> fmap (\\g -> show (b g))"
+                             ,"\\b -> (\\c -> ((>>=) c) (\\g -> pure (show (b g))))"]
   , (,,,) "ffbind"     False "(a -> t -> b) -> (t -> a) -> (t -> b)"
                              ["\\b -> (\\c -> (\\d -> (b (c d)) d))"]
   , (,,,) "join"       False "(Monad m) => m (m a) -> m a"
@@ -91,7 +95,10 @@ checkData =
   , (,,,) "FloatToInt" False "Float -> Int"
                              ["truncate"]
   , (,,,) "liftSBlub"  False "Monad m, Monad n => (List a -> b -> c) -> m (List (n a)) -> m (n b) -> m (n c)"
-                             []
+                             ["\\b -> (\\c -> (\\d -> ((>>=) d) (\\h -> ((>>=) c) (\\l -> pure (((>>=) h) (\\q -> (fmap (\\u -> (b u) q)) ((mapM (\\t0 -> t0)) l)))))))"
+                             ,"\\b -> (\\c -> (\\d -> ((>>=) c) (\\h -> ((>>=) d) (\\l -> pure (((>>=) l) (\\q -> (fmap (\\u -> (b u) q)) ((mapM (\\t0 -> t0)) h)))))))"
+                             ,"\\b -> (\\c -> (\\d -> ((>>=) c) (\\h -> ((>>=) d) (\\l -> pure (((>>=) l) (\\q -> (fmap (\\u -> (b u) q)) (sequence h)))))))"
+                             ,"\\b -> (\\c -> (\\d -> ((>>=) d) (\\h -> ((>>=) c) (\\l -> pure (((>>=) h) (\\q -> (fmap (\\u -> (b u) q)) (sequence l)))))))"]
   --, (,,,) "longApp"    False "a -> b -> c -> (a -> b -> d) -> (a -> c -> e) -> (b -> c -> f) -> (d -> e -> f -> g) -> g"
   --, (,,,) "liftSBlub"  False "Monad m, Monad n => (List a -> b -> c) -> m (List (n a)) -> m (n b) -> m (n c)"
   --, (,,,) "liftSBlubS" False "Monad m => (List a -> b -> c) -> m (List (Maybe a)) -> m (Maybe b) -> m (Maybe c)"
@@ -116,7 +123,7 @@ checkData =
 
 exampleInput :: [(String, Bool, String)]
 exampleInput = 
-  [ (,,) "State"      False "(s -> Tuple2 a s) -> State s a"
+  [{-} (,,) "State"      False "(s -> Tuple2 a s) -> State s a"
   , (,,) "showmap"    False "(Show b) => (a -> b) -> List a -> List String"
   , (,,) "ffbind"     False "(a -> t -> b) -> (t -> a) -> (t -> b)"
   , (,,) "join"       False "(Monad m) => m (m a) -> m a"
@@ -134,10 +141,10 @@ exampleInput =
   , (,,) "tupleShow"  False "Show a, Show b => Tuple2 a b -> String"
   , (,,) "FloatToInt" False "Float -> Int"
   , (,,) "longApp"    False "a -> b -> c -> (a -> b -> d) -> (a -> c -> e) -> (b -> c -> f) -> (d -> e -> f -> g) -> g"
-  , (,,) "liftSBlub"  False "Monad m, Monad n => (List a -> b -> c) -> m (List (n a)) -> m (n b) -> m (n c)"
-  , (,,) "liftSBlubS" False "Monad m => (List a -> b -> c) -> m (List (Maybe a)) -> m (Maybe b) -> m (Maybe c)"
+  ,-} (,,) "liftSBlub"  False "Monad m, Monad n => (List a -> b -> c) -> m (List (n a)) -> m (n b) -> m (n c)"
+  {-, (,,) "liftSBlubS" False "Monad m => (List a -> b -> c) -> m (List (Maybe a)) -> m (Maybe b) -> m (Maybe c)"
   , (,,) "joinBlub"   False "Monad m => List Decl -> (Decl -> m (List FunctionBinding)) -> m (List FunctionBinding)"
-  ]
+  -}]
 
 checkResults :: ExferenceHeuristicsConfig
              -> Context
@@ -264,10 +271,12 @@ printCheckedStatistics h context = do
         putStrLn $ printf "%-10s: %s" name (show stats)
         return (Just stats)
       _ -> do
-        putStrLn $ printf "%-10s: bad (not first), first is %s" name (show first)
+        putStrLn $ printf "%-10s: bad (not first: %d), first is %s" name n (show first)
+        putStrLn $ show (show first)
         return Nothing
     f (name, expected, Just first, _, _) = do
         putStrLn $ printf "%-10s: bad (only different solution found), first is %s" name (show first)
+        putStrLn $ show (show first)
         return Nothing
     f (name, expected, _, _, _) = do
         putStrLn $ printf "%-10s: bad (no solution)" name
@@ -290,6 +299,21 @@ printMaxUsage h (bindings, scontext) = mapM_ f checkData
       let (stats, _, _) = last $ findExpressionsWithStats input
           highest = take 5 $ sortBy (flip $ comparing snd) $ M.toList stats
       putStrLn $ printf "%-10s: %s" name (show highest)
+
+printSearchTree :: ExferenceHeuristicsConfig -> Context -> IO ()
+printSearchTree h (bindings, scontext) = mapM_ f checkData
+  where
+    f (name, allowUnused, typeStr, _expected) = do
+      let input = ExferenceInput
+                    (readConstrainedType scontext typeStr)
+                    (filter (\(x,_,_) -> x/="join") bindings)
+                    scontext
+                    allowUnused
+                    8
+                    (Just 8)
+                    h
+      let (_, tree, _) = last $ findExpressionsWithStats input
+      putStrLn $ drawTree $ fmap show $ filterSearchTreeN 2 $ tree
 
 -- TODO: remove duplication
 pointfree :: String -> IO String

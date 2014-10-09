@@ -149,7 +149,7 @@ testHeuristicsConfig = ExferenceHeuristicsConfig
   , heuristics_stepProvidedBad       =  5.0
   , heuristics_stepEnvGood           =  6.0
   , heuristics_stepEnvBad            = 22.0
-  , heuristics_varUsage              =  1.0 -- pretty well tested
+  , heuristics_varUsage              =  5.0 -- pretty well tested
   , heuristics_functionGoalTransform =  0.0
   , heuristics_unusedVar             = 20.0
   }
@@ -192,15 +192,16 @@ main = runO $ do
   (context@(eSignatures, StaticContext clss insts), messages)
     <- runWriter
     <$> contextFromModuleAndRatings "ExferenceDict.hs" "ExferenceRatings.txt"
-  --mapM_ putStrLn $ messages
-  --putStrLn $ replicate 30 '='
-  --printAndStuff testHeuristicsConfig context
-  --printChecks     testHeuristicsConfig context
-  --printStatistics testHeuristicsConfig context
+  -- mapM_ putStrLn $ messages
+  -- putStrLn $ replicate 30 '='
+  -- printAndStuff testHeuristicsConfig context
+  -- printChecks     testHeuristicsConfig context
+  -- printStatistics testHeuristicsConfig context
   printCheckedStatistics testHeuristicsConfig context
   -- printMaxUsage testHeuristicsConfig context
+  printSearchTree testHeuristicsConfig context
   -- mapM_ print $ clss
-  --mapM_ print $ insts
+  -- mapM_ print $ insts
   -- mapM_ print $ eSignatures
 
   -- print $ compileDict testDictRatings $ eSignatures
