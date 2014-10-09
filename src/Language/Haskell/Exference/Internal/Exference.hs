@@ -79,17 +79,18 @@ factorUnusedVar             = 20.0
 -}
 
 data ExferenceHeuristicsConfig = ExferenceHeuristicsConfig
-  { heuristics_goalVar               :: Float
-  , heuristics_goalCons              :: Float
-  , heuristics_goalArrow             :: Float
-  , heuristics_goalApp               :: Float
-  , heuristics_stepProvidedGood      :: Float
-  , heuristics_stepProvidedBad       :: Float
-  , heuristics_stepEnvGood           :: Float
-  , heuristics_stepEnvBad            :: Float
-  , heuristics_varUsage              :: Float
-  , heuristics_functionGoalTransform :: Float
-  , heuristics_unusedVar             :: Float
+  { heuristics_goalVar                :: Float
+  , heuristics_goalCons               :: Float
+  , heuristics_goalArrow              :: Float
+  , heuristics_goalApp                :: Float
+  , heuristics_stepProvidedGood       :: Float
+  , heuristics_stepProvidedBad        :: Float
+  , heuristics_stepEnvGood            :: Float
+  , heuristics_stepEnvBad             :: Float
+  , heuristics_tempUnusedVarPenalty   :: Float
+  , heuristics_tempMultiVarUsePenalty :: Float
+  , heuristics_functionGoalTransform  :: Float
+  , heuristics_unusedVar              :: Float
   }
 
 data ExferenceInput = ExferenceInput
@@ -402,7 +403,7 @@ tConstantifyVars (TypeApp t1 t2)    = TypeApp
 tConstantifyVars f@(TypeForall _ _) = f
 
 rateState :: ExferenceHeuristicsConfig -> State -> Float
-rateState h s = 0.0 - rateGoals h (state_goals s) - state_depth s
+rateState h s = 0.0 - rateGoals h (state_goals s) - state_depth s + rateUsage h s
  -- + 0.6 * rateScopes (state_providedScopes s)
 
 rateGoals :: ExferenceHeuristicsConfig -> [TGoal] -> Float
@@ -424,6 +425,15 @@ rateScopes (Scopes _ sMap) = M.foldr' f 0.0 sMap
   where
     f (Scope binds _) x = x + fromIntegral (length binds)
 -}
+
+rateUsage :: ExferenceHeuristicsConfig -> State -> Float
+rateUsage h s = M.foldr f 0.0 vumap
+  where
+    vumap = state_varUses s
+    f :: Int -> Float -> Float
+    f 0 x = x - heuristics_tempUnusedVarPenalty h
+    f 1 x = x
+    f n x = x - (fromIntegral $ n-1) * heuristics_tempMultiVarUsePenalty h
 
 getUnusedVarCount :: VarUsageMap -> Int
 getUnusedVarCount m = length $ filter (==0) $ M.elems m
@@ -469,16 +479,13 @@ stateStep2 h s
           Nothing
     byProvided = do
       (provId, provT, provPs) <- scopeGetAllBindings (state_providedScopes s) scopeId
-      let usageFloat, usageRating :: Float
-          usageFloat = fromIntegral $ (M.!) (state_varUses s) provId
-          usageRating = heuristics_varUsage h * usageFloat * usageFloat
       byGenericUnify
         (Right provId)
         provT
         (S.toList $ dynContext_constraints $ state_context s)
         provPs
-        (heuristics_stepProvidedGood h + usageRating)
-        (heuristics_stepProvidedBad h + usageRating)
+        (heuristics_stepProvidedGood h)
+        (heuristics_stepProvidedBad h)
         ("inserting given value " ++ show provId ++ "::" ++ show provT)
     byFunctionSimple = do
       SimpleBinding funcId funcRating funcR funcParams funcConstrs <- state_functions s
