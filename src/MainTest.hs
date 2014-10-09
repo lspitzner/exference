@@ -83,9 +83,15 @@ checkData =
                              ["\\b -> (\\c -> let (State e) = b in State (\\g -> let ((,) k l) = e g in let (State o) = c k in o l))"]
   , (,,,) "dbMaybe"    False "Maybe a -> Maybe (Tuple2 a a)"
                              ["fmap (\\f -> ((,) f) f)"
-                             ,"\\b -> ((liftM2 (\\g -> (\\h -> ((,) h) g))) b) b"]
-  --, (,,,) "tupleShow"  False "Show a, Show b => Tuple a b -> String"
-  --, (,,,) "FloatToInt" False "Float -> Int"
+                             ,"\\b -> ((liftM2 (\\g -> (\\h -> ((,) h) g))) b) b"
+                             ,"\\b -> ((>>=) b) (\\f -> pure (((,) f) f))"]
+  , (,,,) "tupleShow"  False "Show a, Show b => Tuple2 a b -> String"
+                             ["show"
+                             ,"\\b -> let ((,) d e) = b in show (((,) d) e)"]
+  , (,,,) "FloatToInt" False "Float -> Int"
+                             ["truncate"]
+  , (,,,) "liftSBlub"  False "Monad m, Monad n => (List a -> b -> c) -> m (List (n a)) -> m (n b) -> m (n c)"
+                             []
   --, (,,,) "longApp"    False "a -> b -> c -> (a -> b -> d) -> (a -> c -> e) -> (b -> c -> f) -> (d -> e -> f -> g) -> g"
   --, (,,,) "liftSBlub"  False "Monad m, Monad n => (List a -> b -> c) -> m (List (n a)) -> m (n b) -> m (n c)"
   --, (,,,) "liftSBlubS" False "Monad m => (List a -> b -> c) -> m (List (Maybe a)) -> m (Maybe b) -> m (Maybe c)"
@@ -106,49 +112,26 @@ checkData =
                   (ExpApply
                     (ExpApply (ExpVar 3) (ExpVar 7))
                     (ExpVar 11)))))))))
-  , (,) "stateBind"
-    (ExpLambda 1
-      (ExpLambda 2
-        (ExpLetMatch "State" [4] (ExpVar 1)
-          (ExpApply
-            (ExpLit "State")
-            (ExpLambda 6
-              (ExpLetMatch "(,)" [10,11]
-                (ExpApply
-                  (ExpVar 4)
-                  (ExpVar 6))
-                (ExpLetMatch "State" [14]
-                  (ExpApply (ExpVar 2) (ExpVar 10))
-                  (ExpApply (ExpVar 14) (ExpVar 11)))))))))
-  , (,) "dbMaybe"
-    (ExpLambda 1
-      (ExpApply
-        (ExpApply
-          (ExpLit "fmap")
-          (ExpLambda 5
-            (ExpApply
-              (ExpApply (ExpLit "(,)") (ExpVar 5))
-              (ExpVar 5))))
-        (ExpVar 1)))
 -}
 
 exampleInput :: [(String, Bool, String)]
 exampleInput = 
-  [ (,,) "showmap"    False "(Show b) => (a -> b) -> List a -> List String"
+  [ (,,) "State"      False "(s -> Tuple2 a s) -> State s a"
+  , (,,) "showmap"    False "(Show b) => (a -> b) -> List a -> List String"
   , (,,) "ffbind"     False "(a -> t -> b) -> (t -> a) -> (t -> b)"
   , (,,) "join"       False "(Monad m) => m (m a) -> m a"
   , (,,) "fjoin"      False "(t -> (t -> a)) -> t -> a"
-  , (,,) "zipThingy"  False "List a -> b -> List (Tuple a b)"
+  , (,,) "zipThingy"  False "List a -> b -> List (Tuple2 a b)"
   , (,,) "stateRun"   True  "State a b -> a -> b"
-  , (,,) "fst"        True  "Tuple a b -> a"
-  , (,,) "ffst"       True  "(a -> Tuple b c) -> a -> b"
-  , (,,) "snd"        True  "Tuple a b -> b"
-  , (,,) "quad"       False "a -> Tuple (Tuple a a) (Tuple a a)"
-  , (,,) "fswap"      False "(a -> Tuple b c) -> a -> Tuple c b"
+  , (,,) "fst"        True  "Tuple2 a b -> a"
+  , (,,) "ffst"       True  "(a -> Tuple2 b c) -> a -> b"
+  , (,,) "snd"        True  "Tuple2 a b -> b"
+  , (,,) "quad"       False "a -> Tuple2 (Tuple2 a a) (Tuple2 a a)"
+  , (,,) "fswap"      False "(a -> Tuple2 b c) -> a -> Tuple2 c b"
   , (,,) "liftBlub"   False "Monad m => m a -> m b -> (a -> b -> m c) -> m c"
   , (,,) "stateBind"  False "State s a -> (a -> State s b) -> State s b"
-  , (,,) "dbMaybe"    False "Maybe a -> Maybe (Tuple a a)"
-  , (,,) "tupleShow"  False "Show a, Show b => Tuple a b -> String"
+  , (,,) "dbMaybe"    False "Maybe a -> Maybe (Tuple2 a a)"
+  , (,,) "tupleShow"  False "Show a, Show b => Tuple2 a b -> String"
   , (,,) "FloatToInt" False "Float -> Int"
   , (,,) "longApp"    False "a -> b -> c -> (a -> b -> d) -> (a -> c -> e) -> (b -> c -> f) -> (d -> e -> f -> g) -> g"
   , (,,) "liftSBlub"  False "Monad m, Monad n => (List a -> b -> c) -> m (List (n a)) -> m (n b) -> m (n c)"
@@ -201,8 +184,8 @@ exampleOutput heuristics (bindings, scontext) = map f exampleInput
                 (filter (\(x,_,_) -> x/="join") bindings)
                 scontext
                 allowUnused
-                16384
-                (Just 16384)
+                32768
+                (Just 32768)
                 heuristics
 
 exampleInOut h context = zip exampleInput (exampleOutput h context)
