@@ -209,4 +209,5 @@ defaultHeuristicsConfig = ExferenceHeuristicsConfig
   , heuristics_tempMultiVarUsePenalty = 3.0
   , heuristics_functionGoalTransform =  0.0
   , heuristics_unusedVar             = 20.0
+  , heuristics_solutionLength        =  0.0153
   }

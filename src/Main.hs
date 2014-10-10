@@ -153,6 +153,7 @@ testHeuristicsConfig = ExferenceHeuristicsConfig
   , heuristics_tempMultiVarUsePenalty=  9.0 -- tested to .1
   , heuristics_functionGoalTransform =  0.0 -- tested to .1
   , heuristics_unusedVar             = 20.0
+  , heuristics_solutionLength        =  0.0153
   }
 
 main = runO $ do
