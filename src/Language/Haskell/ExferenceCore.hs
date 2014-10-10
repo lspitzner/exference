@@ -22,7 +22,7 @@ import Data.Monoid ( mempty )
 
 
 findExpressions :: E.ExferenceInput -> [E.ExferenceOutputElement]
-findExpressions = concat . map (\(_,_,x) -> x) . E.findExpressions
+findExpressions = concatMap (\(_,_,x) -> x) . E.findExpressions
 
 findExpressionsChunked :: E.ExferenceInput
                    -> [[E.ExferenceOutputElement]]
