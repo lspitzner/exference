@@ -141,17 +141,17 @@ testBaseInput' = map h testBaseInput
 
 testHeuristicsConfig :: ExferenceHeuristicsConfig
 testHeuristicsConfig = ExferenceHeuristicsConfig
-  { heuristics_goalVar               =  3.0
-  , heuristics_goalCons              =  0.55
-  , heuristics_goalArrow             =  5.0
-  , heuristics_goalApp               =  1.9
-  , heuristics_stepProvidedGood      =  0.2
-  , heuristics_stepProvidedBad       =  5.0
-  , heuristics_stepEnvGood           =  6.0
-  , heuristics_stepEnvBad            = 22.0
-  , heuristics_tempUnusedVarPenalty  =  5.0
-  , heuristics_tempMultiVarUsePenalty = 3.0
-  , heuristics_functionGoalTransform =  0.0
+  { heuristics_goalVar               =  2.4 -- tested to .1
+  , heuristics_goalCons              =  0.6 -- tested to .1
+  , heuristics_goalArrow             =  5.0 -- tested to .1
+  , heuristics_goalApp               =  1.9 -- tested to .1
+  , heuristics_stepProvidedGood      =  0.2 -- tested to .1
+  , heuristics_stepProvidedBad       =  5.0 -- tested to .1
+  , heuristics_stepEnvGood           =  6.0 -- tested to .1
+  , heuristics_stepEnvBad            = 22.0 -- can improve, but needs testcases
+  , heuristics_tempUnusedVarPenalty  =  4.1 -- tested to .1
+  , heuristics_tempMultiVarUsePenalty=  9.0 -- tested to .1
+  , heuristics_functionGoalTransform =  0.0 -- tested to .1
   , heuristics_unusedVar             = 20.0
   }
 
