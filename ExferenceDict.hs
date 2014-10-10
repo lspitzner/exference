@@ -135,10 +135,10 @@ msum :: MonadPlus m => [m a] -> m a
 mfilter :: MonadPlus m => (a -> Bool) -> m a -> m a 
 zipWithM :: Monad m => (a -> b -> m c) -> [a] -> [b] -> m [c]
 foldM :: Monad m => (a -> b -> m a) -> a -> [b] -> m a
-liftM2 :: Monad m => (a1 -> a2 -> r) -> m a1 -> m a2 -> m r
-liftM3 :: Monad m => (a1 -> a2 -> a3 -> r) -> m a1 -> m a2 -> m a3 -> m r 
-liftM4 :: Monad m => (a1 -> a2 -> a3 -> a4 -> r) -> m a1 -> m a2 -> m a3 -> m a4 -> m r 
-liftM5 :: Monad m => (a1 -> a2 -> a3 -> a4 -> a5 -> r) -> m a1 -> m a2 -> m a3 -> m a4 -> m a5 -> m r 
+liftA2 :: Applicative f => (a1 -> a2 -> r) -> f a1 -> f a2 -> f r
+liftA3 :: Applicative f => (a1 -> a2 -> a3 -> r) -> f a1 -> f a2 -> f a3 -> f r 
+liftA4 :: Applicative f => (a1 -> a2 -> a3 -> a4 -> r) -> f a1 -> f a2 -> f a3 -> f a4 -> f r 
+liftA5 :: Applicative f => (a1 -> a2 -> a3 -> a4 -> a5 -> r) -> f a1 -> f a2 -> f a3 -> f a4 -> f a5 -> f r 
 
 realToFrac :: (Real a, Fractional b) => a -> b
 
