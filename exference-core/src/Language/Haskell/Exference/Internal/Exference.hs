@@ -375,13 +375,13 @@ findExpressionsPar (ExferenceInput rawCType
                                | (steps, !compl, e) <- stuples]
                              )
     replicateM_ destParallelCount (lift $ forkIO worker)
-    fmap mapF $ controller ( 0
-                           , 0
-                           , 0
-                           , emptyBindingUsages
-                           , initialSearchTreeBuilder initStateName (ExpHole 0)
-                           , Q.singleton 0.0 initState
-                           )
+    mapF <$> controller ( 0
+                        , 0
+                        , 0
+                        , emptyBindingUsages
+                        , initialSearchTreeBuilder initStateName (ExpHole 0)
+                        , Q.singleton 0.0 initState
+                        )
   replicateM_ destParallelCount (writeChan taskChan Nothing)
   return result
 
@@ -433,7 +433,7 @@ rateUsage h s = M.foldr f 0.0 vumap
     f :: Int -> Float -> Float
     f 0 x = x - heuristics_tempUnusedVarPenalty h
     f 1 x = x
-    f n x = x - (fromIntegral $ n-1) * heuristics_tempMultiVarUsePenalty h
+    f n x = x - fromIntegral (n-1) * heuristics_tempMultiVarUsePenalty h
 
 getUnusedVarCount :: VarUsageMap -> Int
 getUnusedVarCount m = length $ filter (==0) $ M.elems m
@@ -605,7 +605,7 @@ addScopePatternMatch vid sid bindings state = foldr helper state bindings where
               vEnd = vBase + length resultTypes
               vars = [vBase .. vEnd-1]
               newProvTypes = map (applySubsts substs) resultTypes
-              newBinds = map splitBinding $ zip vars $ newProvTypes
+              newBinds = zipWith (curry splitBinding) vars newProvTypes
               expr = ExpLetMatch matchId vars (ExpVar v) (ExpHole vid)
               newVarUses = M.adjust (+1) v (state_varUses s)
                            `M.union` (M.fromList $ zip vars $ repeat 0)

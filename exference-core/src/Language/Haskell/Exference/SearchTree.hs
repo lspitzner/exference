@@ -1,5 +1,6 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE PatternGuards #-}
 
 module Language.Haskell.Exference.SearchTree
   ( SearchTree
@@ -8,6 +9,7 @@ module Language.Haskell.Exference.SearchTree
   , initialSearchTreeBuilder
   , buildSearchTree
   , filterSearchTreeN
+  , filterSearchTreeProcessedN
   )  
 where
 
@@ -25,7 +27,8 @@ import Data.Hashable ( Hashable )
 
 
 
-type SearchTreeValue = ( Int         -- total number of children;
+type SearchTreeValue = ( Int         -- total number of children
+                       , Int         -- number of processed children
                        , Expression  -- expression
                        , Bool        -- processed
                        )
@@ -51,10 +54,18 @@ buildSearchTree (assocs,processed) root =
     where
       r :: SearchTree
       r = ff pureTree
-      ff (Node (x,e) ts) = Node ( 1 + length (concatMap flatten ts)
-                                , e
-                                , HS.member x processedSet)
-                                (map ff ts)
+      isProcessed (_,_,_,x) = x
+      ff (Node (x,e) ts)
+        | eval <- HS.member x processedSet
+        , subtrees <- map ff ts
+        = Node ( 1 + length (concatMap flatten ts)
+               , if eval
+                   then 1 + length (filter isProcessed
+                                   $ concatMap flatten subtrees)
+                   else 0
+               , e
+               , eval)
+               subtrees
       processedSet = HS.fromList processed
       pureTree :: Tree (a,Expression)
       pureTree = runReader (unfoldTreeM f root) (mv,mp)
@@ -75,5 +86,14 @@ filterSearchTreeN :: Int -> SearchTree -> SearchTree
 filterSearchTreeN n (Node d ts) = Node d (ts >>= f)
   where
     f :: SearchTree -> [SearchTree]
-    f (Node d'@(k,_,_) ts') | n>k = []
-                            | otherwise = [Node d' $ ts' >>= f]
+    f (Node d'@(k,_,_,_) ts') | n>k = []
+                              | otherwise = [Node d' $ ts' >>= f]
+
+-- removes all nodes that have less than n total nodes (incl. self)
+-- e.g. if n==2, all nodes without children are removed.
+filterSearchTreeProcessedN :: Int -> SearchTree -> SearchTree
+filterSearchTreeProcessedN n (Node d ts) = Node d (ts >>= f)
+  where
+    f :: SearchTree -> [SearchTree]
+    f (Node d'@(_,k,_,_) ts') | n>k = []
+                              | otherwise = [Node d' $ ts' >>= f]

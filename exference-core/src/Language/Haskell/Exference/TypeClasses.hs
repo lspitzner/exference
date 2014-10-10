@@ -103,10 +103,8 @@ mkStaticContext :: [HsTypeClass] -> [HsInstance] -> StaticContext
 mkStaticContext tclasses insts = StaticContext tclasses (helper insts)
   where
     helper :: [HsInstance] -> M.Map String [HsInstance]
-    helper is = M.unionsWith (++)
-              $ [ M.singleton (tclass_name $ instance_tclass i)
-                              [i]
-                | i <- is ]
+    helper is = M.fromListWith (++)
+              $ [ (tclass_name $ instance_tclass i, [i]) | i <- is ]
 
 mkDynContext :: StaticContext -> [Constraint] -> DynContext
 mkDynContext staticContext constrs = DynContext {
