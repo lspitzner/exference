@@ -94,15 +94,24 @@ checkData =
                              ,"\\b -> let ((,) d e) = b in show (((,) d) e)"]
   , (,,,) "FloatToInt" False "Float -> Int"
                              ["truncate"]
+  , (,,,) "longApp"    False "a -> b -> c -> (a -> b -> d) -> (a -> c -> e) -> (b -> c -> f) -> (d -> e -> f -> g) -> g"
+                             ["\\b -> (\\c -> (\\d -> (\\e -> (\\f -> (\\g -> (\\h -> ((h ((e b) c)) ((f b) d)) ((g c) d)))))))"]
   , (,,,) "liftSBlub"  False "Monad m, Monad n => (List a -> b -> c) -> m (List (n a)) -> m (n b) -> m (n c)"
                              ["\\b -> (\\c -> (\\d -> ((>>=) d) (\\h -> ((>>=) c) (\\l -> pure (((>>=) h) (\\q -> (fmap (\\u -> (b u) q)) ((mapM (\\t0 -> t0)) l)))))))"
                              ,"\\b -> (\\c -> (\\d -> ((>>=) c) (\\h -> ((>>=) d) (\\l -> pure (((>>=) l) (\\q -> (fmap (\\u -> (b u) q)) ((mapM (\\t0 -> t0)) h)))))))"
                              ,"\\b -> (\\c -> (\\d -> ((>>=) c) (\\h -> ((>>=) d) (\\l -> pure (((>>=) l) (\\q -> (fmap (\\u -> (b u) q)) (sequence h)))))))"
                              ,"\\b -> (\\c -> (\\d -> ((>>=) d) (\\h -> ((>>=) c) (\\l -> pure (((>>=) h) (\\q -> (fmap (\\u -> (b u) q)) (sequence l)))))))"]
-  --, (,,,) "longApp"    False "a -> b -> c -> (a -> b -> d) -> (a -> c -> e) -> (b -> c -> f) -> (d -> e -> f -> g) -> g"
-  --, (,,,) "liftSBlub"  False "Monad m, Monad n => (List a -> b -> c) -> m (List (n a)) -> m (n b) -> m (n c)"
-  --, (,,,) "liftSBlubS" False "Monad m => (List a -> b -> c) -> m (List (Maybe a)) -> m (Maybe b) -> m (Maybe c)"
-  --, (,,,) "joinBlub"   False "Monad m => List Decl -> (Decl -> m (List FunctionBinding)) -> m (List FunctionBinding)"
+  , (,,,) "liftSBlubS" False "Monad m => (List a -> b -> c) -> m (List (Maybe a)) -> m (Maybe b) -> m (Maybe c)"
+                             ["\\b -> (\\c -> (\\d -> ((>>=) d) (\\h -> ((>>=) c) (\\l -> pure (((>>=) h) (\\q -> (fmap (\\u -> (b u) q)) ((mapM (\\t0 -> t0)) l)))))))"
+                             ,"\\b -> (\\c -> (\\d -> ((>>=) c) (\\h -> ((>>=) d) (\\l -> pure (((>>=) l) (\\q -> (fmap (\\u -> (b u) q)) ((mapM (\\t0 -> t0)) h)))))))"
+                             ,"\\b -> (\\c -> (\\d -> ((>>=) c) (\\h -> ((>>=) d) (\\l -> pure (((>>=) l) (\\q -> (fmap (\\u -> (b u) q)) (sequence h)))))))"
+                             ,"\\b -> (\\c -> (\\d -> ((>>=) d) (\\h -> ((>>=) c) (\\l -> pure (((>>=) h) (\\q -> (fmap (\\u -> (b u) q)) (sequence l)))))))"]
+  , (,,,) "joinBlub"   False "Monad m => List Decl -> (Decl -> m (List FunctionBinding)) -> m (List FunctionBinding)"
+                             ["\\b -> (\\c -> (fmap (\\g -> ((>>=) g) (\\k -> k))) ((mapM c) b))"
+                             ,"\\b -> (\\c -> ((>>=) ((mapM c) b)) (\\l -> pure (((>>=) l) (\\q -> q))))"]
+  , (,,,) "liftA2"     False "Applicative f => (a -> b -> c) -> f a -> f b -> f c"
+                             ["\\b -> (\\c -> (\\d -> ((<*>) ((fmap (\\j -> (\\k -> (b k) j))) d)) c))"
+                             ,"\\b -> (\\c -> (<*>) ((fmap b) c))"]
   ]
 
 {-
@@ -123,7 +132,7 @@ checkData =
 
 exampleInput :: [(String, Bool, String)]
 exampleInput = 
-  [{-} (,,) "State"      False "(s -> Tuple2 a s) -> State s a"
+  [ (,,) "State"      False "(s -> Tuple2 a s) -> State s a"
   , (,,) "showmap"    False "(Show b) => (a -> b) -> List a -> List String"
   , (,,) "ffbind"     False "(a -> t -> b) -> (t -> a) -> (t -> b)"
   , (,,) "join"       False "(Monad m) => m (m a) -> m a"
@@ -141,10 +150,11 @@ exampleInput =
   , (,,) "tupleShow"  False "Show a, Show b => Tuple2 a b -> String"
   , (,,) "FloatToInt" False "Float -> Int"
   , (,,) "longApp"    False "a -> b -> c -> (a -> b -> d) -> (a -> c -> e) -> (b -> c -> f) -> (d -> e -> f -> g) -> g"
-  ,-} (,,) "liftSBlub"  False "Monad m, Monad n => (List a -> b -> c) -> m (List (n a)) -> m (n b) -> m (n c)"
-  {-, (,,) "liftSBlubS" False "Monad m => (List a -> b -> c) -> m (List (Maybe a)) -> m (Maybe b) -> m (Maybe c)"
+  , (,,) "liftSBlub"  False "Monad m, Monad n => (List a -> b -> c) -> m (List (n a)) -> m (n b) -> m (n c)"
+  , (,,) "liftSBlubS" False "Monad m => (List a -> b -> c) -> m (List (Maybe a)) -> m (Maybe b) -> m (Maybe c)"
   , (,,) "joinBlub"   False "Monad m => List Decl -> (Decl -> m (List FunctionBinding)) -> m (List FunctionBinding)"
-  -}]
+  , (,,) "liftA2"     False "Applicative f => (a -> b -> c) -> f a -> f b -> f c"
+  ]
 
 checkResults :: ExferenceHeuristicsConfig
              -> Context
@@ -158,7 +168,7 @@ checkResults heuristics (bindings, scontext) = do
   (name, allowUnused, typeStr, expected) <- checkData
   let input = ExferenceInput
                 (readConstrainedType scontext typeStr)
-                (filter (\(x,_,_) -> x/="join") bindings)
+                (filter (\(x,_,_) -> x/="join" && x/="liftA2") bindings)
                 scontext
                 allowUnused
                 32768
@@ -188,7 +198,7 @@ exampleOutput heuristics (bindings, scontext) = map f exampleInput
     input = ExferenceInput
     f (_, allowUnused, s) = takeFindSortNExpressions 5 10 $ ExferenceInput
                 (readConstrainedType scontext s)
-                (filter (\(x,_,_) -> x/="join") bindings)
+                (filter (\(x,_,_) -> x/="join" && x/="liftA2") bindings)
                 scontext
                 allowUnused
                 32768
