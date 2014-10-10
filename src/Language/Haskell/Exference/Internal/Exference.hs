@@ -91,6 +91,7 @@ data ExferenceHeuristicsConfig = ExferenceHeuristicsConfig
   , heuristics_tempMultiVarUsePenalty :: Float
   , heuristics_functionGoalTransform  :: Float
   , heuristics_unusedVar              :: Float
+  , heuristics_solutionLength         :: Float
   }
 
 data ExferenceInput = ExferenceInput
@@ -191,13 +192,15 @@ findExpressions (ExferenceInput rawCType
                   , let unusedVarCount = getUnusedVarCount
                                            (state_varUses solution)
                   , allowUnused || unusedVarCount==0
+                  , let e = -- trace (showStateDevelopment solution) $ 
+                            simplifyEta $ simplifyLets $ state_expression solution
                   , let d = state_depth solution
                           + ( heuristics_unusedVar heuristics
                             * fromIntegral unusedVarCount
                             )
-                  , let e = -- trace (showStateDevelopment solution) $ 
-                            -- simplifyEta $ simplifyLets $
-                            state_expression solution
+                          + ( heuristics_solutionLength heuristics
+                            * fromIntegral (length $ show e)
+                            )
                   ]
             ratedNew    = [ (rateState heuristics newS, newS) | newS <- futures ]
             qsize = Q.size states
@@ -318,13 +321,15 @@ findExpressionsPar (ExferenceInput rawCType
                       , let unusedVarCount = getUnusedVarCount
                                                (state_varUses solution)
                       , allowUnused || unusedVarCount==0
+                      , let e = -- trace (showStateDevelopment solution) $ 
+                                simplifyEta $ simplifyLets $ state_expression solution
                       , let d = state_depth solution
                               + ( heuristics_unusedVar heuristics
                                 * fromIntegral unusedVarCount
                                 )
-                      , let e = -- trace (showStateDevelopment solution) $ 
-                                -- simplifyEta $ simplifyLets $
-                                state_expression solution
+                              + ( heuristics_solutionLength heuristics
+                                * fromIntegral (length $ show e)
+                                )
                       ]
                 -- ratedNew    = [ (rateState heuristics newS, newS) | newS <- futures ]
                 qsize = Q.size states
