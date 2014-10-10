@@ -309,11 +309,15 @@ printSearchTree h (bindings, scontext) = mapM_ f checkData
                     (filter (\(x,_,_) -> x/="join") bindings)
                     scontext
                     allowUnused
-                    8
-                    (Just 8)
+                    256
+                    (Just 256)
                     h
       let (_, tree, _) = last $ findExpressionsWithStats input
-      putStrLn $ drawTree $ fmap show $ filterSearchTreeN 2 $ tree
+      let showf (total,processed,expression,_)
+            = printf "%d (+%d): %s" processed
+                                    (total-processed)
+                                    (show expression)
+      putStrLn $ drawTree $ fmap showf $ filterSearchTreeProcessedN 2 $ tree
 
 -- TODO: remove duplication
 pointfree :: String -> IO String
