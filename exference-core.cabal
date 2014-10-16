@@ -1,5 +1,5 @@
 Name:          exference-core
-Version:       0.11.0.1
+Version:       0.11.1.0
 Cabal-Version: >= 1.8
 Build-Type:    Simple
 
@@ -21,6 +21,7 @@ Library
                    Language.Haskell.Exference.Expression
                    Language.Haskell.Exference.FunctionBinding
                    Language.Haskell.Exference.SearchTree
+                   Paths_exference_core
   other-modules: Language.Haskell.Exference.Internal.Unify,
                  Language.Haskell.Exference.Internal.ConstraintSolver,
                  Language.Haskell.Exference.Internal.ExferenceState,
