@@ -202,7 +202,12 @@ findExpressions (ExferenceInput rawCType
                             * fromIntegral (length $ show e)
                             )
                   ]
-            ratedNew    = [ (rateState heuristics newS, newS) | newS <- futures ]
+            f :: Float -> Float
+            f x | x>900 = 0.0
+                | k<-1.111e-3*x = 1 + 2*k**3 - 3*k**2
+            ratedNew    = [ ( rateState heuristics newS + 4.5*f (fromIntegral n)
+                            , newS)
+                          | newS <- futures ]
             qsize = Q.size states
               -- this cutoff is somewhat arbitrary, and can, theoretically,
               -- distort the order of the results (i.e.: lead to results being
@@ -304,7 +309,7 @@ findExpressionsPar (ExferenceInput rawCType
                        )
                   else st
             controller ( nRunning+1
-                       , n
+                       , n + length ss
                        , worst
                        , newBindingUsages
                        , newSearchTreeBuilder
@@ -356,7 +361,7 @@ findExpressionsPar (ExferenceInput rawCType
                   else st
                 rest = controller
                   ( nRunning-1
-                  , n+ssCount
+                  , n
                   , minimum $ worst:map (\(r,_,_) -> r) filteredNew
                   , bindingUsages
                   , newSearchTreeBuilder
@@ -449,11 +454,12 @@ getUnusedVarCount :: VarUsageMap -> Int
 getUnusedVarCount m = length $ filter (==0) $ M.elems m
 
 stateStep :: ExferenceHeuristicsConfig -> State -> [State]
-stateStep h s = --traceShow (s)
+stateStep h s = stateStep2 h
+              -- $ (\s -> trace (show s ++ " " ++ show (rateState h s)) s)
+              $ s
               -- trace (show (state_depth s) ++ " " ++ show (rateGoals $ state_goals s)
               --                      ++ " " ++ show (rateScopes $ state_providedScopes s)
               --                      ++ " " ++ show (state_expression s)) $
-  stateStep2 h s
 
 stateStep2 :: ExferenceHeuristicsConfig -> State -> [State]
 stateStep2 h s

@@ -24,7 +24,7 @@ where
 
 
 import Language.Haskell.Exference.Type
-import Language.Haskell.Exference.Internal.Unify
+-- import Language.Haskell.Exference.Internal.Unify
 import qualified Data.Set as S
 import qualified Data.Map.Strict as M
 import Data.Foldable ( fold, foldMap )
