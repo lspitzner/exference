@@ -91,6 +91,7 @@ data ExferenceHeuristicsConfig = ExferenceHeuristicsConfig
   , heuristics_tempMultiVarUsePenalty :: Float
   , heuristics_functionGoalTransform  :: Float
   , heuristics_unusedVar              :: Float
+  , heuristics_solutionLength         :: Float
   }
 
 data ExferenceInput = ExferenceInput
@@ -122,7 +123,7 @@ type ExferenceChunkElement = (BindingUsages, SearchTree, [ExferenceOutputElement
 type RatedStates = Q.MaxPQueue Float State
 
 __debug :: Bool
-__debug = True
+__debug = False
 
 type FindExpressionsState = ( Int    -- number of steps already performed
                             , Float  -- worst rating of state in pqueue
@@ -177,7 +178,7 @@ findExpressions (ExferenceInput rawCType
                           , Q.singleton 0.0 initState
                           )
     helper :: FindExpressionsState -> [(BindingUsages, SearchTree, [(Int,Float,Expression)])]
-    helper (n, worst, bindingUsages, (stA, stB), states)
+    helper (n, worst, bindingUsages, st@(stA, stB), states)
       | Q.null states || n > maxSteps = []
       | ((_,s), restStates) <- Q.deleteFindMax states =
         let rStates = stateStep heuristics s
@@ -191,12 +192,15 @@ findExpressions (ExferenceInput rawCType
                   , let unusedVarCount = getUnusedVarCount
                                            (state_varUses solution)
                   , allowUnused || unusedVarCount==0
+                  , let e = -- trace (showStateDevelopment solution) $ 
+                            simplifyEta $ simplifyLets $ state_expression solution
                   , let d = state_depth solution
                           + ( heuristics_unusedVar heuristics
                             * fromIntegral unusedVarCount
                             )
-                  , let e = -- trace (showStateDevelopment solution) $ 
-                            simplifyEta $ simplifyLets $ state_expression solution
+                          + ( heuristics_solutionLength heuristics
+                            * fromIntegral (length $ show e)
+                            )
                   ]
             ratedNew    = [ (rateState heuristics newS, newS) | newS <- futures ]
             qsize = Q.size states
@@ -213,13 +217,14 @@ findExpressions (ExferenceInput rawCType
                     filter ((>cutoff) . fst) ratedNew
               else ratedNew
             newStates = foldr (uncurry Q.insert) restStates filteredNew
-            newSearchTreeBuilder =
-              ( [ unsafePerformIO $ do
-                    n1 <- makeStableName $! ns
-                    n2 <- makeStableName $! s
-                    return (n1,n2,state_expression ns)
-                | ns<-rStates] ++ stA
-              , unsafePerformIO (makeStableName $! s):stB)
+            newSearchTreeBuilder = if __debug
+              then ( [ unsafePerformIO $ do
+                         n1 <- makeStableName $! ns
+                         n2 <- makeStableName $! s
+                         return (n1,n2,state_expression ns)
+                     | ns<-rStates] ++ stA
+                   , unsafePerformIO (makeStableName $! s):stB)
+              else st
             rest = helper
               ( n+1
               , minimum $ worst:map fst filteredNew
@@ -281,7 +286,7 @@ findExpressionsPar (ExferenceInput rawCType
                                , SearchTreeBuilder (StableName State)
                                , [(Int,Float,Expression)]
                                )
-      controller (nRunning, n, worst, bindingUsages, (stA, stB), states) = if
+      controller (nRunning, n, worst, bindingUsages, st@(stA, stB), states) = if
         | n > maxSteps -> mempty
         | nRunning < 2+destParallelCount && not (Q.null states) -> do
             let ss = map snd $ Q.take ssCount states
@@ -291,12 +296,13 @@ findExpressionsPar (ExferenceInput rawCType
                   Nothing -> old
                   Just b  -> incBindingUsage b old
             let newBindingUsages = foldr calcNew bindingUsages ss
-            let newSearchTreeBuilder =
-                  ( stA
-                  , [ unsafePerformIO (makeStableName $! s)
-                    | s <- ss
-                    ]++stB
-                  )
+            let newSearchTreeBuilder = if __debug
+                  then ( stA
+                       , [ unsafePerformIO (makeStableName $! s)
+                         | s <- ss
+                         ]++stB
+                       )
+                  else st
             controller ( nRunning+1
                        , n
                        , worst
@@ -315,12 +321,15 @@ findExpressionsPar (ExferenceInput rawCType
                       , let unusedVarCount = getUnusedVarCount
                                                (state_varUses solution)
                       , allowUnused || unusedVarCount==0
+                      , let e = -- trace (showStateDevelopment solution) $ 
+                                simplifyEta $ simplifyLets $ state_expression solution
                       , let d = state_depth solution
                               + ( heuristics_unusedVar heuristics
                                 * fromIntegral unusedVarCount
                                 )
-                      , let e = -- trace (showStateDevelopment solution) $ 
-                                simplifyEta $ simplifyLets $ state_expression solution
+                              + ( heuristics_solutionLength heuristics
+                                * fromIntegral (length $ show e)
+                                )
                       ]
                 -- ratedNew    = [ (rateState heuristics newS, newS) | newS <- futures ]
                 qsize = Q.size states
@@ -337,13 +346,14 @@ findExpressionsPar (ExferenceInput rawCType
                         filter (\(a,_,_) -> a>cutoff) futures
                   else futures
                 newStates   = foldr (\(r,x,_) -> Q.insert r x) states filteredNew
-                newSearchTreeBuilder =
-                  ( [ unsafePerformIO $ do
-                        s <- makeStableName $! newS
-                        p <- makeStableName $! oldS
-                        return (s,p,state_expression newS)
-                    | (_,newS,oldS) <-res] ++ stA
-                  , stB)
+                newSearchTreeBuilder = if __debug
+                  then ( [ unsafePerformIO $ do
+                             s <- makeStableName $! newS
+                             p <- makeStableName $! oldS
+                             return (s,p,state_expression newS)
+                         | (_,newS,oldS) <-res] ++ stA
+                       , stB)
+                  else st
                 rest = controller
                   ( nRunning-1
                   , n+ssCount
