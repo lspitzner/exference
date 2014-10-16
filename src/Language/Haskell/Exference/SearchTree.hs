@@ -59,7 +59,7 @@ buildSearchTree (assocs,processed) root =
         | eval <- HS.member x processedSet
         , subtrees <- map ff ts
         = Node ( 1 + length (concatMap flatten ts)
-               , if eval
+               , if eval || not (null ts)
                    then 1 + length (filter isProcessed
                                    $ concatMap flatten subtrees)
                    else 0

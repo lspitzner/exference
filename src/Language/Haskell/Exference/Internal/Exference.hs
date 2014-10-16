@@ -304,7 +304,7 @@ findExpressionsPar (ExferenceInput rawCType
                        )
                   else st
             controller ( nRunning+1
-                       , n
+                       , n + length ss
                        , worst
                        , newBindingUsages
                        , newSearchTreeBuilder
@@ -356,7 +356,7 @@ findExpressionsPar (ExferenceInput rawCType
                   else st
                 rest = controller
                   ( nRunning-1
-                  , n+ssCount
+                  , n
                   , minimum $ worst:map (\(r,_,_) -> r) filteredNew
                   , bindingUsages
                   , newSearchTreeBuilder

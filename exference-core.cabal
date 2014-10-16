@@ -1,5 +1,5 @@
 Name:          exference-core
-Version:       0.11.0.0
+Version:       0.11.0.1
 Cabal-Version: >= 1.8
 Build-Type:    Simple
 
@@ -13,17 +13,17 @@ Library
                -Wall
                -fno-warn-unused-imports
                -fno-warn-orphans
-  exposed-modules: Language.Haskell.ExferenceCore,
-                   Language.Haskell.Exference.Type,
-                   Language.Haskell.Exference.ConstrainedType,
-                   Language.Haskell.Exference.TypeClasses,
-                   Language.Haskell.Exference.ExferenceStats,
-                   Language.Haskell.Exference.Expression,
-                   Language.Haskell.Exference.FunctionBinding,
+  exposed-modules: Language.Haskell.ExferenceCore
+                   Language.Haskell.Exference.Type
+                   Language.Haskell.Exference.ConstrainedType
+                   Language.Haskell.Exference.TypeClasses
+                   Language.Haskell.Exference.ExferenceStats
+                   Language.Haskell.Exference.Expression
+                   Language.Haskell.Exference.FunctionBinding
                    Language.Haskell.Exference.SearchTree
   other-modules: Language.Haskell.Exference.Internal.Unify,
                  Language.Haskell.Exference.Internal.ConstraintSolver,
-                 Language.Haskell.Exference.Internal.ExferenceState
+                 Language.Haskell.Exference.Internal.ExferenceState,
                  Language.Haskell.Exference.Internal.Exference
   extensions: NoMonomorphismRestriction
   hs-source-dirs: src
