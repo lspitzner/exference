@@ -1,8 +1,7 @@
 module MainTest
   ( printAndStuff
-  , printChecks
+  , printCheckExpectedResults
   , printStatistics
-  , printCheckedStatistics
   , printMaxUsage
   , printSearchTree
   )
@@ -32,7 +31,7 @@ import System.Process
 import Control.Applicative ( (<$>), (<*>) )
 import Control.Arrow ( second, (***) )
 import Control.Monad ( when, forM_, guard, forM, mplus, mzero )
-import Data.List ( sortBy, find, intercalate )
+import Data.List ( sortBy, find, intercalate, maximumBy )
 import Data.Ord ( comparing )
 import Text.Printf
 import Data.Maybe ( listToMaybe, fromMaybe, maybeToList, catMaybes )
@@ -40,6 +39,7 @@ import Data.Either ( lefts, rights )
 import Control.Monad.Writer.Strict
 import qualified Data.Map as M
 import Data.Tree ( drawTree )
+import qualified ListT
 
 import Language.Haskell.Exts.Syntax ( Module(..), Decl(..), ModuleName(..) )
 import Language.Haskell.Exts.Parser ( parseModuleWithMode
@@ -156,13 +156,148 @@ exampleInput =
   , (,,) "liftA2"     False "Applicative f => (a -> b -> c) -> f a -> f b -> f c"
   ]
 
+checkInput :: ExferenceHeuristicsConfig
+           -> Context
+           -> String
+           -> Bool
+           -> ExferenceInput
+checkInput heuristics (bindings, scontext) typeStr allowUnused =
+  ExferenceInput
+    (readConstrainedType scontext typeStr)
+    (filter (\(x,_,_) -> x/="join" && x/="liftA2") bindings)
+    scontext
+    allowUnused
+    262144
+    (Just 131072)
+    heuristics
+
+checkExpectedResults :: ExferenceHeuristicsConfig
+                     -> Context
+                     -> [ ( String -- ^ name
+                          , [String] -- ^ expected
+                          , Maybe ( (Expression, ExferenceStats)
+                                    -- ^ first
+                                  , Maybe (Int, ExferenceStats)
+                                  ) -- ^ index and stats of expected
+                          )]
+checkExpectedResults heuristics context = do
+  (name, allowUnused, typeStr, expected) <- checkData
+  let input = checkInput heuristics context typeStr allowUnused
+  let getExp :: Int -> [(Expression, ExferenceStats)] -> Maybe (Int, ExferenceStats)
+      getExp _ [] = Nothing
+      getExp n ((e,s):r) | show e `elem` expected = Just (n,s)
+                         | otherwise              = getExp (n+1) r
+  return $
+    ( name
+    , expected
+    , case findExpressions input of
+      []       -> Nothing
+      xs@(x:_) -> Just (x, getExp 0 xs)
+    )
+
+checkExpectedResultsPar :: ExferenceHeuristicsConfig
+                        -> Context
+                        -> [IO ( String -- ^ name
+                               , [String] -- ^ expected
+                               , Maybe ( (Expression, ExferenceStats)
+                                         -- ^ first
+                                       , Maybe (Int, ExferenceStats)
+                                         -- ^ index and stats of expected
+                                       ) 
+                               )]
+checkExpectedResultsPar heuristics context = do
+  (name, allowUnused, typeStr, expected) <- checkData
+  let input = checkInput heuristics context typeStr allowUnused
+  let getExp :: Int -> [(Expression, ExferenceStats)] -> Maybe (Int, ExferenceStats)
+      getExp _ [] = Nothing
+      getExp n ((e,s):r) | show e `elem` expected = Just (n,s)
+                         | otherwise              = getExp (n+1) r
+      helper :: ListT.ListT IO ExferenceOutputElement
+             -> IO (Maybe ( (Expression, ExferenceStats)
+                          , Maybe (Int, ExferenceStats)))
+      helper l = do
+        x <- ListT.uncons l
+        case x of
+          Nothing -> return Nothing
+          Just ((e,s), rest)
+            | show e `elem` expected
+            -> return $ Just ((e,s), Just (0,s))
+            | otherwise
+            -> do
+              exp <- helper2 1 rest
+              return $ Just ((e,s), exp)
+      helper2 :: Int
+              -> ListT.ListT IO ExferenceOutputElement
+              -> IO (Maybe (Int, ExferenceStats))
+      helper2 n l = do
+        x <- ListT.uncons l
+        case x of
+          Nothing -> return Nothing
+          Just ((e,s), rest) | show e `elem` expected
+                               -> return $ Just (n,s)
+                             | otherwise
+                               -> helper2 (n+1) rest
+  return $ (,,) name expected <$> findExpressionsPar input helper
+
+checkBestResults :: ExferenceHeuristicsConfig
+                 -> Context
+                 -> [ ( String
+                      , [String]
+                      , Maybe ( (Expression, ExferenceStats)
+                                  -- ^ first result
+                              , (Int, Expression, ExferenceStats)
+                                  -- ^ best result
+                              , Maybe (Int, ExferenceStats)
+                                  -- ^ expected
+                              )
+                      )]
+checkBestResults heuristics context = do
+  (name, allowUnused, typeStr, expected) <- checkData
+  let input = checkInput heuristics context typeStr allowUnused
+  let getBest :: [(Expression, ExferenceStats)]
+              -> (Int, Expression, ExferenceStats)
+      getBest = maximumBy (comparing g) . zipWith (\a (b,c) -> (a,b,c)) [0..]
+        where
+          g (_,_,ExferenceStats _ f) = f
+  let getExp :: Int
+             -> [(Expression, ExferenceStats)]
+             -> Maybe (Int, ExferenceStats)
+      getExp _ [] = Nothing
+      getExp n ((e,s):r) | show e `elem` expected = Just (n,s)
+                         | otherwise              = getExp (n+1) r
+  return $
+    ( name
+    , expected
+    , case findExpressions input of
+        [] -> Nothing
+        xs@(x:_) -> Just (x, getBest xs, getExp 0 xs)
+    )
+
+{-
+checkBestResultsPar :: ExferenceHeuristicsConfig
+                    -> Context
+                    -> [ IO ( String
+                            , [String]
+                            , Maybe ( (Expression, ExferenceStats)
+                                        -- ^ first result
+                                    , (Int, Expression, ExferenceStats)
+                                        -- ^ best result
+                                    , Maybe (Int, ExferenceStats)
+                                        -- ^ expected
+                                    )
+                            )]
+-}
+
+{-
 checkResults :: ExferenceHeuristicsConfig
              -> Context
              -> [IO ( String -- name
                     , [String] -- expected
                     , Maybe Expression -- first
                     , Maybe Expression -- best
-                    , Maybe (Int, ExferenceStats)    -- no idea atm
+                    , Maybe (Int, ExferenceStats) -- expected was nth solution
+                                                  -- and had these stats
+                    , [(Expression, ExferenceStats)]
                     )]
 checkResults heuristics (bindings, scontext) = do
   (name, allowUnused, typeStr, expected) <- checkData
@@ -171,10 +306,10 @@ checkResults heuristics (bindings, scontext) = do
                 (filter (\(x,_,_) -> x/="join" && x/="liftA2") bindings)
                 scontext
                 allowUnused
-                32768
-                (Just 32768)
+                131072
+                (Just 131072)
                 heuristics
-  let r = findExpressions input
+  let r = findExpressionsPar input
   let finder :: Int
              -> [(Expression, ExferenceStats)]
              -> Maybe (Int, ExferenceStats)
@@ -182,13 +317,15 @@ checkResults heuristics (bindings, scontext) = do
       finder n ((e, s):r) | show e `elem` expected = Just (n, s)
                           | otherwise = finder (n+1) r
       bestFound = findSortNExpressions 100 input
-  return $ (,,,,)
+  return $ (,,,,,)
          <$> return name
          <*> return expected
          <*> fmap fst <$> findOneExpressionPar input
          -- <*> return (fst <$> findOneExpression input)
          <*> return (fst <$> listToMaybe bestFound)
-         <*> return (finder 0 r)
+         <*> (finder 0 <$> r)
+         <*> r
+-}
 
 exampleOutput :: ExferenceHeuristicsConfig
               -> Context
@@ -240,57 +377,42 @@ printStatistics h context = mapM_ f (exampleInOut h context)
          , length steps
          )
 
-printChecks :: ExferenceHeuristicsConfig -> Context -> IO ()
-printChecks h context = (>>=helper) `mapM_` checkResults h context
+printCheckExpectedResults :: Bool -> ExferenceHeuristicsConfig -> Context -> IO ()
+printCheckExpectedResults par h context = do
+    let xs = if par
+          then            checkExpectedResultsPar h context
+          else return <$> checkExpectedResults    h context
+    stats <- (>>=helper) `mapM` xs
+    print $ foldr g (0, 0, 0.0) $ catMaybes $ stats
   where
-    helper :: ( String
-              , [String]
-              , Maybe Expression
-              , Maybe Expression
-              , Maybe (Int, ExferenceStats))
-           -> IO ()
-    helper (name, _, Just f, Just b, Just (0, ExferenceStats n d))
-      | f==b = do putStrLn $ printf "%-10s: fine                                  %5d %8.2f" name n d
-      | otherwise = do
-      putStrLn $ printf "%-10s: expected solution first, but not best!" name
-      putStrLn $ "  expected solution:  " ++ show f
-      putStrLn $ "  best solution:      " ++ show b
-    helper (name, e, Just f, _, Just (i, _)) = do
-      putStrLn $ printf "%-10s: expected solution not first, but %d!" name i
-      putStrLn $ "  first solution:     " ++ show f
-      putStrLn $ "  expected solutions: " ++ intercalate ", " e
-    helper (name, e, Just f, Just b, Nothing) = do
+    helper :: ( String -- ^ name
+              , [String] -- ^ expected
+              , Maybe ( (Expression, ExferenceStats) -- ^ first
+                      , Maybe (Int, ExferenceStats)
+                      ) -- ^ index and stats of expected
+              )
+           -> IO (Maybe ExferenceStats)
+    helper (name, _, Nothing) = do
+      putStrLn $ printf "%-10s: no solutions found at all!" name
+      return Nothing
+    helper (name, e, Just ((first,stats), Nothing)) = do
       putStrLn $ printf "%-10s: expected solution not found!" name
-      putStrLn $ "  first solution was  " ++ show f
-      putStrLn $ "  best solution:      " ++ show b
-      putStrLn $ "  expected solutions: " ++ intercalate ", " e
-    helper (name, e, Just f, Nothing, Nothing) = do -- this can't really happen..
-      putStrLn $ printf "%-10s: expected solution not found!" name
-      putStrLn $ "  first solution was  " ++ show f
-      putStrLn $ "  expected solutions: " ++ intercalate ", " e
-    helper (name, _, Nothing, _, _) = do
-      putStrLn $ printf "%-10s: no solutions found at all!" name 
-
-printCheckedStatistics :: ExferenceHeuristicsConfig -> Context -> IO ()
-printCheckedStatistics h context = do
-  xs <- mapM (>>=f) (checkResults h context)
-  print $ foldr g (0, 0, 0.0) $ catMaybes $ xs
-  where
-    f (name, expected, Just first, _, Just (n, stats)) = case n of
-      0 -> do
-        putStrLn $ printf "%-10s: %s" name (show stats)
-        return (Just stats)
-      _ -> do
-        putStrLn $ printf "%-10s: bad (not first: %d), first is %s" name n (show first)
-        putStrLn $ show (show first)
-        return Nothing
-    f (name, expected, Just first, _, _) = do
-        putStrLn $ printf "%-10s: bad (only different solution found), first is %s" name (show first)
-        putStrLn $ show (show first)
-        return Nothing
-    f (name, expected, _, _, _) = do
-        putStrLn $ printf "%-10s: bad (no solution)" name
-        return Nothing
+      putStrLn $ "  first solution was:   " ++ show first
+      putStrLn $ "  first solution stats: " ++ show stats
+      putStrLn $ "  expected solutions:   " ++ intercalate ", " e
+      putStrLn $ "  " ++ show (show first)
+      return Nothing
+    helper (name, e, Just (_, Just (0, stats))) = do
+      putStrLn $ printf "%-10s: %s" name (show stats)
+      return (Just stats)
+    helper (name, e, Just ((first, fstats), Just (n, stats))) = do
+      putStrLn $ printf "%-10s: expected solution not first, but %d!" name n
+      putStrLn $ "  first solution:     " ++ show first
+      putStrLn $ "  expected solutions: " ++ intercalate " OR " e
+      putStrLn $ "  first solution stats:    " ++ show fstats
+      putStrLn $ "  expected solution stats: " ++ show stats
+      putStrLn $ "  " ++ show (show first)
+      return Nothing
     g :: ExferenceStats -> (Int,Int,Float) -> (Int,Int,Float)
     g (ExferenceStats a b) (c,d,e) = (c+1,a+d,b+e)
 

@@ -2,6 +2,7 @@
 
 module Language.Haskell.Exference
   ( findExpressions
+  , findExpressionsPar
   , findOneExpression
   , findOneExpressionPar
   , findSortNExpressions

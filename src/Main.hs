@@ -68,7 +68,7 @@ main = runO $ do
   -- printAndStuff testHeuristicsConfig context
   -- printChecks     testHeuristicsConfig context
   -- printStatistics testHeuristicsConfig context
-  printCheckedStatistics testHeuristicsConfig context
+  printCheckExpectedResults False testHeuristicsConfig context
   -- printMaxUsage testHeuristicsConfig context
   -- printSearchTree testHeuristicsConfig context
   -- mapM_ print $ clss
