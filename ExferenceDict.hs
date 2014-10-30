@@ -117,7 +117,7 @@ instance Monad (State s)
 -- 2) don't add f if g is already added and f = flip g
 
 maybe :: b -> (a -> b) -> Maybe a -> b
-fromMaybe :: a -> Maybe a -> a
+-- fromMaybe :: a -> Maybe a -> a
 either :: (a->c) -> (b->c) -> Either a b -> c
 -- these two are not really necessary and confuse the algorithm for quad
 {-
@@ -153,7 +153,7 @@ liftA5 :: Applicative f => (a1 -> a2 -> a3 -> a4 -> a5 -> r) -> f a1 -> f a2 -> 
 
 realToFrac :: (Real a, Fractional b) => a -> b
 
--- mapLookup :: Ord k => k -> Map k a -> Maybe a
+mapLookup :: Ord k => k -> Map k a -> Maybe a
 
 -- ****
 -- **** type class instances ****
