@@ -581,7 +581,7 @@ stateStep2 h s
         -- _a
         -- let b = f _c in _a
         Nothing -> case dependencies of
-          [] -> []
+          [] -> [] -- we can't (randomly) partially apply a non-function
           (d:ds) ->
             let vResult = state_nextVarId s
                 vParam = vResult + 1
@@ -597,7 +597,7 @@ stateStep2 h s
                   Right i -> M.adjust (+1) i $ state_varUses s
             in return $ addScopePatternMatch var newScopeId [newBinding]
                       $ State
-              (paramGoal:newMainGoal:gr)
+              (paramGoal:gr++[newMainGoal])
               (state_constraintGoals s ++ provConstrs)
               newScopesRaw
               newVarUses
@@ -633,7 +633,7 @@ stateStep2 h s
                 Left _ -> state_varUses s
                 Right i -> M.adjust (+1) i $ state_varUses s
           return $ State
-            (map (goalApplySubst substs) $ newGoals ++ gr)
+            (map (goalApplySubst substs) $ gr ++ newGoals)
             newConstraints
             (scopesApplySubsts substs $ state_providedScopes s)
             newVarUses
