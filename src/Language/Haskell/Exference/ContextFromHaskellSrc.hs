@@ -102,7 +102,6 @@ constrTransform :: (String -> Either String HsTypeClass)
 constrTransform tcLookupF (ClassA qname types)
   | ctypes <- mapM convertTypeInternal types
   , constrClass <- tcLookupF $ hsQNameToString qname
-  -- 
   = Constraint <$> hoistEither constrClass <*> ctypes
 constrTransform tcLookupF (ParenA c) = constrTransform tcLookupF c
 constrTransform _ c = left $ "unknown constraint: " ++ show c

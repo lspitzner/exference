@@ -44,7 +44,6 @@ getFromDecls' :: StaticContext
 getFromDecls' context (TypeSig _loc names qtype)
   = mapEitherT (fmap $ insName qtype)
   $ (<$> names) . helper <$> convertCTypeInternal context qtype
-  where
 getFromDecls' _ _ = return []
 
 insName :: Type -> Either String a -> Either String a

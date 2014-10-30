@@ -1,6 +1,14 @@
 module ExferenceDict where
 
 
+runEitherT :: EitherT e m a -> m (Either e a)
+
+instance Monad m => Monad (EitherT e m)
+
+-- this one is waay to polymorphic for practical purposes, apparently..
+-- mapEitherT :: (m (Either e a) -> n (Either e' b)) -> EitherT e m a -> EitherT e' n b 
+
+-- instance Functor (EitherT e m)
 
 -- ****
 -- **** type classes ****
@@ -98,6 +106,8 @@ class Monad m => MonadPlus m where
 
 newtype State s a = State (s -> (a,s))
 
+instance Monad (State s)
+
 -- ****
 -- **** plain old function signatures ****
 -- ****
@@ -107,6 +117,7 @@ newtype State s a = State (s -> (a,s))
 -- 2) don't add f if g is already added and f = flip g
 
 maybe :: b -> (a -> b) -> Maybe a -> b
+fromMaybe :: a -> Maybe a -> a
 either :: (a->c) -> (b->c) -> Either a b -> c
 -- these two are not really necessary and confuse the algorithm for quad
 {-
@@ -141,6 +152,8 @@ liftA4 :: Applicative f => (a1 -> a2 -> a3 -> a4 -> r) -> f a1 -> f a2 -> f a3 -
 liftA5 :: Applicative f => (a1 -> a2 -> a3 -> a4 -> a5 -> r) -> f a1 -> f a2 -> f a3 -> f a4 -> f a5 -> f r 
 
 realToFrac :: (Real a, Fractional b) => a -> b
+
+-- mapLookup :: Ord k => k -> Map k a -> Maybe a
 
 -- ****
 -- **** type class instances ****

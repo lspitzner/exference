@@ -94,24 +94,39 @@ checkData =
                              ,"\\b -> let ((,) d e) = b in show (((,) d) e)"]
   , (,,,) "FloatToInt" False "Float -> Int"
                              ["truncate"]
+  , (,,,) "FloatToIntL" False "List Float -> List Int"
+                             ["fmap round", "fmap floor", "fmap ceiling", "fmap truncate"]
   , (,,,) "longApp"    False "a -> b -> c -> (a -> b -> d) -> (a -> c -> e) -> (b -> c -> f) -> (d -> e -> f -> g) -> g"
                              ["\\b -> (\\c -> (\\d -> (\\e -> (\\f -> (\\g -> (\\h -> ((h ((e b) c)) ((f b) d)) ((g c) d)))))))"]
   , (,,,) "liftSBlub"  False "Monad m, Monad n => (List a -> b -> c) -> m (List (n a)) -> m (n b) -> m (n c)"
-                             ["\\b -> (\\c -> (\\d -> ((>>=) d) (\\h -> ((>>=) c) (\\l -> pure (((>>=) h) (\\q -> (fmap (\\u -> (b u) q)) ((mapM (\\t0 -> t0)) l)))))))"
+                             ["\\b -> (\\c -> (\\d -> ((>>=) d) (\\h -> (fmap (\\l -> ((>>=) h) (\\p -> (fmap (\\t -> (b t) p)) ((mapM (\\z -> z)) l)))) c)))"
+                             ,"\\b -> (\\c -> (\\d -> ((>>=) d) (\\h -> ((>>=) c) (\\l -> pure (((>>=) h) (\\q -> (fmap (\\u -> (b u) q)) ((mapM (\\t0 -> t0)) l)))))))"
                              ,"\\b -> (\\c -> (\\d -> ((>>=) c) (\\h -> ((>>=) d) (\\l -> pure (((>>=) l) (\\q -> (fmap (\\u -> (b u) q)) ((mapM (\\t0 -> t0)) h)))))))"
                              ,"\\b -> (\\c -> (\\d -> ((>>=) c) (\\h -> ((>>=) d) (\\l -> pure (((>>=) l) (\\q -> (fmap (\\u -> (b u) q)) (sequence h)))))))"
                              ,"\\b -> (\\c -> (\\d -> ((>>=) d) (\\h -> ((>>=) c) (\\l -> pure (((>>=) h) (\\q -> (fmap (\\u -> (b u) q)) (sequence l)))))))"]
   , (,,,) "liftSBlubS" False "Monad m => (List a -> b -> c) -> m (List (Maybe a)) -> m (Maybe b) -> m (Maybe c)"
-                             ["\\b -> (\\c -> (\\d -> ((>>=) d) (\\h -> ((>>=) c) (\\l -> pure (((>>=) h) (\\q -> (fmap (\\u -> (b u) q)) ((mapM (\\t0 -> t0)) l)))))))"
+                             ["\\b -> (\\c -> (\\d -> ((>>=) d) (\\h -> (fmap (\\l -> ((>>=) h) (\\p -> (fmap (\\t -> (b t) p)) ((mapM (\\z -> z)) l)))) c)))"
+                             ,"\\b -> (\\c -> (\\d -> ((>>=) d) (\\h -> ((>>=) c) (\\l -> pure (((>>=) h) (\\q -> (fmap (\\u -> (b u) q)) ((mapM (\\t0 -> t0)) l)))))))"
                              ,"\\b -> (\\c -> (\\d -> ((>>=) c) (\\h -> ((>>=) d) (\\l -> pure (((>>=) l) (\\q -> (fmap (\\u -> (b u) q)) ((mapM (\\t0 -> t0)) h)))))))"
                              ,"\\b -> (\\c -> (\\d -> ((>>=) c) (\\h -> ((>>=) d) (\\l -> pure (((>>=) l) (\\q -> (fmap (\\u -> (b u) q)) (sequence h)))))))"
                              ,"\\b -> (\\c -> (\\d -> ((>>=) d) (\\h -> ((>>=) c) (\\l -> pure (((>>=) h) (\\q -> (fmap (\\u -> (b u) q)) (sequence l)))))))"]
   , (,,,) "joinBlub"   False "Monad m => List Decl -> (Decl -> m (List FunctionBinding)) -> m (List FunctionBinding)"
-                             ["\\b -> (\\c -> (fmap (\\g -> ((>>=) g) (\\k -> k))) ((mapM c) b))"
-                             ,"\\b -> (\\c -> ((>>=) ((mapM c) b)) (\\l -> pure (((>>=) l) (\\q -> q))))"]
+                             ["\\b -> (\\c -> ((>>=) ((mapM c) b)) (\\i -> pure (((>>=) i) (\\q -> q))))"
+                             ,"\\b -> (\\c -> (fmap (\\g -> ((>>=) g) (\\k -> k))) ((mapM c) b))"
+                             ,"\\b -> (\\c -> ((>>=) ((mapM c) b)) (\\l -> pure (((>>=) l) (\\q -> q))))"
+                             ,"\\b -> (\\c -> ((>>=) ((mapM c) b)) (\\l -> pure (concat l)))"]
   , (,,,) "liftA2"     False "Applicative f => (a -> b -> c) -> f a -> f b -> f c"
                              ["\\b -> (\\c -> (\\d -> ((<*>) ((fmap (\\j -> (\\k -> (b k) j))) d)) c))"
                              ,"\\b -> (\\c -> (<*>) ((fmap b) c))"]
+  , (,,,) "runEitherT" False "Monad m => List D -> (D -> EitherT e m (List FB)) -> (List FB -> List FB) -> m (List (Either e (List FB)))"
+                             ["\\b -> (\\c -> (\\d -> (mapM (\\h -> runEitherT ((fmap d) (c h)))) b))"]
+  , (,,,) "constr"     False "Monad m => ((e -> Either e TC) -> A -> EitherT e m C) -> Either e TC -> Map e (Either e TC) -> List A -> EitherT e m (List C)"
+                             ["\\b -> (\\c -> (\\d -> mapM (b (\\m -> (fromMaybe c) ((mapLookup m) d)))))"]
+  , (,,,) "fmapmap"    False "Monad m => T -> List N -> (CT -> N -> FB) -> (SC -> T -> m CT) -> SC -> m (List FB)"
+                             ["\\b -> (\\c -> (\\d -> (\\e -> (\\f -> ((>>=) ((e f) b)) (\\l -> (mapM (\\p -> pure ((d l) p))) c)))))"]
+  , (,,,) "fmapmap2"   False "Monad m => T -> SC -> (T -> m (List FB) -> m (List FB)) -> List N -> (SC -> T -> m CT) -> (CT -> N -> FB) -> m (List FB)"
+                             ["\\b -> (\\c -> (\\d -> (\\e -> (\\f -> (\\g -> (d b) ((mapM (\\m -> (fmap (\\s -> (g s) m)) ((f c) b))) e))))))"
+                             ,"\\b -> (\\c -> (\\d -> (\\e -> (\\f -> (\\g -> (d b) ((mapM (\\m -> (fmap (\\q -> (g q) m)) ((f c) b))) e))))))"]
   ]
 
 {-
@@ -149,6 +164,7 @@ exampleInput =
   , (,,) "dbMaybe"    False "Maybe a -> Maybe (Tuple2 a a)"
   , (,,) "tupleShow"  False "Show a, Show b => Tuple2 a b -> String"
   , (,,) "FloatToInt" False "Float -> Int"
+  , (,,) "FloatToIntL" False "List Float -> List Int"
   , (,,) "longApp"    False "a -> b -> c -> (a -> b -> d) -> (a -> c -> e) -> (b -> c -> f) -> (d -> e -> f -> g) -> g"
   , (,,) "liftSBlub"  False "Monad m, Monad n => (List a -> b -> c) -> m (List (n a)) -> m (n b) -> m (n c)"
   , (,,) "liftSBlubS" False "Monad m => (List a -> b -> c) -> m (List (Maybe a)) -> m (Maybe b) -> m (Maybe c)"
@@ -332,8 +348,7 @@ exampleOutput :: ExferenceHeuristicsConfig
               -> [[(Expression, ExferenceStats)]]
 exampleOutput heuristics (bindings, scontext) = map f exampleInput
   where
-    input = ExferenceInput
-    f (_, allowUnused, s) = takeFindSortNExpressions 5 10 $ ExferenceInput
+    f (_, allowUnused, s) = takeFindSortNExpressions 10 10 $ ExferenceInput
                 (readConstrainedType scontext s)
                 (filter (\(x,_,_) -> x/="join" && x/="liftA2") bindings)
                 scontext
