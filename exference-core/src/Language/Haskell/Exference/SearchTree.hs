@@ -10,6 +10,7 @@ module Language.Haskell.Exference.SearchTree
   , buildSearchTree
   , filterSearchTreeN
   , filterSearchTreeProcessedN
+  , takeSearchTree
   )  
 where
 
@@ -97,3 +98,9 @@ filterSearchTreeProcessedN n (Node d ts) = Node d (ts >>= f)
     f :: SearchTree -> [SearchTree]
     f (Node d'@(_,k,_,_) ts') | n>k = []
                               | otherwise = [Node d' $ ts' >>= f]
+
+-- limits depth of tree
+takeSearchTree :: Int -> SearchTree -> SearchTree
+takeSearchTree 0 (Node d _) = Node d []
+takeSearchTree n _ | n<0 = undefined
+takeSearchTree n (Node d ts) = Node d [takeSearchTree (n-1) t | t <- ts]
