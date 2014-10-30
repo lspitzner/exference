@@ -93,7 +93,7 @@ options =
   , Option ['v'] ["verbose"]     (NoArg Verbose)              ""
   , Option ['i'] ["input"]       (ReqArg Input "type")        "the type for which to generate an expression"
   , Option ['a'] ["all"]         (NoArg PrintAll)             "print all solutions (up to search step limit)"
-  , Option ['u'] ["envUsage"]    (NoArg EnvUsage)             "print a list of functions that got inserted at some point (regardless if successful or not), and how often"
+  , Option []    ["envUsage"]    (NoArg EnvUsage)             "print a list of functions that got inserted at some point (regardless if successful or not), and how often"
   , Option []    ["tree"]        (NoArg PrintTree)            "print tree of search space"
   , Option ['s'] ["serial"]      (NoArg Serial)               "use the non-parallelized version of the algorithm"
   , Option ['u'] ["allowUnused"] (NoArg Unused)               "allow unused input variables"
@@ -155,8 +155,8 @@ main = runO $ do
                   (filter (\(x,_,_) -> x/="join" && x/="liftA2") eSignatures)
                   scontext
                   (Unused `elem` flags)
-                  131072
-                  (Just 131072)
+                  32768
+                  (Just 32768)
                   testHeuristicsConfig
             if
               | PrintAll `elem` flags -> do
