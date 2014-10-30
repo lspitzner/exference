@@ -293,6 +293,55 @@ findExpressionsPar (ExferenceInput rawCType
                                )
       controller (nRunning, n, worst, bindingUsages, st@(stA, stB), states) = if
         | n > maxSteps -> mempty
+        | n < 768 && not (Q.null states) -> let
+            ((_,s), restStates) = Q.deleteFindMax states
+            rStates = stateStep heuristics s
+            (potentialSolutions, futures) = partition (null.state_goals) rStates
+            newBindingUsages = case state_lastStepBinding s of
+              Nothing -> bindingUsages
+              Just b  -> incBindingUsage b bindingUsages
+            out = [ (n, d, e)
+                  | solution <- potentialSolutions
+                  , null (state_constraintGoals solution)
+                  , let unusedVarCount = getUnusedVarCount
+                                           (state_varUses solution)
+                  , allowUnused || unusedVarCount==0
+                  , let e = -- trace (showStateDevelopment solution) $
+                            simplifyEta $ simplifyLets $ state_expression solution
+                  , let d = state_depth solution
+                          + ( heuristics_unusedVar heuristics
+                            * fromIntegral unusedVarCount
+                            )
+                          + ( heuristics_solutionLength heuristics
+                            * fromIntegral (length $ show e)
+                            )
+                  ]
+            f :: Float -> Float
+            f x | x>900 = 0.0
+                | k<-1.111e-3*x = 1 + 2*k**3 - 3*k**2
+            ratedNew    = [ ( rateState heuristics newS + 4.5*f (fromIntegral n)
+                            , newS )
+                          | newS <- futures ]
+            newStates = foldr (uncurry Q.insert) restStates ratedNew
+            newSearchTreeBuilder = if __debug
+              then ( [ unsafePerformIO $ do
+                         n1 <- makeStableName $! ns
+                         n2 <- makeStableName $! s
+                         return (n1,n2,state_expression ns)
+                     | ns<-rStates] ++ stA
+                   , unsafePerformIO (makeStableName $! s):stB)
+              else st
+            rest = controller
+              ( nRunning
+              , n+1
+              , minimum $ worst:map fst ratedNew
+              , newBindingUsages
+              , newSearchTreeBuilder
+              , newStates )
+            in ListT.cons ( newBindingUsages
+                          , newSearchTreeBuilder
+                          , out) rest
+
         | nRunning < 2+destParallelCount && not (Q.null states) -> do
             let ss = map snd $ Q.take ssCount states
                 restStates = Q.drop ssCount states
