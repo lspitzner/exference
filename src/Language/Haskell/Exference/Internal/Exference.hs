@@ -99,7 +99,7 @@ data ExferenceInput = ExferenceInput
                                                 -- of this type
   , input_envDict     :: [RatedFunctionBinding] -- ^ the list of functions
                                                 -- that may be used
-  , input_envContext  :: StaticContext
+  , input_envClasses  :: StaticClassEnv
   , input_allowUnused :: Bool                   -- ^ if false, forbid solutions
                                                 -- where any bind is unused
   , input_maxSteps    :: Int                    -- ^ the maximum number of
@@ -136,7 +136,7 @@ findExpressions :: ExferenceInput
                 -> [ExferenceChunkElement]
 findExpressions (ExferenceInput rawCType
                                 funcs
-                                staticContext
+                                sClassEnv
                                 allowUnused
                                 maxSteps -- since we output a [[x]],
                                          -- this would not really be
@@ -162,7 +162,7 @@ findExpressions (ExferenceInput rawCType
         initialScopes
         M.empty
         (map splitEnvElement funcs)
-        (mkDynContext staticContext cs)
+        (mkQueryClassEnv sClassEnv cs)
         (ExpHole 0)
         1
         (largestId t)
@@ -254,7 +254,7 @@ findExpressionsPar :: ExferenceInput
                    -> IO a
 findExpressionsPar (ExferenceInput rawCType
                                    funcs
-                                   staticContext
+                                   sClassEnv
                                    allowUnused
                                    maxSteps -- since we output a [[x]],
                                             -- this would not really be
@@ -424,7 +424,7 @@ findExpressionsPar (ExferenceInput rawCType
           initialScopes
           M.empty
           (map splitEnvElement funcs)
-          (mkDynContext staticContext cs)
+          (mkQueryClassEnv sClassEnv cs)
           (ExpHole 0)
           1
           (largestId t)
@@ -452,7 +452,7 @@ findExpressionsPar (ExferenceInput rawCType
 ctConstantifyVars :: HsConstrainedType -> HsConstrainedType
 ctConstantifyVars (HsConstrainedType a b) =
   HsConstrainedType
-    (map (\(Constraint c d) -> Constraint c $ map tConstantifyVars d) a)
+    (map (\(HsConstraint c d) -> HsConstraint c $ map tConstantifyVars d) a)
     (tConstantifyVars b)
 
 tConstantifyVars :: HsType -> HsType
@@ -534,7 +534,7 @@ stateStep2 h s
           newScopes
           newVarUses
           (state_functions s)
-          (state_context s)
+          (state_queryClassEnv s)
           newExpr
           vEnd
           (state_maxTVarId s)
@@ -547,7 +547,7 @@ stateStep2 h s
       byGenericUnify
         (Right provId)
         provT
-        (S.toList $ dynContext_constraints $ state_context s)
+        (S.toList $ qClassEnv_constraints $ state_queryClassEnv s)
         provPs
         (heuristics_stepProvidedGood h)
         (heuristics_stepProvidedBad h)
@@ -565,7 +565,7 @@ stateStep2 h s
         ("applying function " ++ show funcId)
     byGenericUnify :: Either String TVarId
                    -> HsType
-                   -> [Constraint]
+                   -> [HsConstraint]
                    -> [HsType]
                    -> Float
                    -> Float
@@ -602,7 +602,7 @@ stateStep2 h s
               newScopesRaw
               newVarUses
               (state_functions s)
-              (state_context s)
+              (state_queryClassEnv s)
               (fillExprHole var expr $ state_expression s)
               vEnd
               (maximum $ state_maxTVarId s
@@ -612,7 +612,7 @@ stateStep2 h s
               ("randomly trying to apply function " ++ show coreExp)
               bTrace
         Just substs -> do
-          let contxt = state_context s
+          let contxt = state_queryClassEnv s
               constrs1 = map (constraintApplySubsts substs)
                        $ state_constraintGoals s
               constrs2 = map (constraintApplySubsts substs)
@@ -638,7 +638,7 @@ stateStep2 h s
             (scopesApplySubsts substs $ state_providedScopes s)
             newVarUses
             (state_functions s)
-            (state_context s)
+            (state_queryClassEnv s)
             (fillExprHole var expr $ state_expression s)
             (vBase + paramN)
             (maximum $ state_maxTVarId s

@@ -1,7 +1,7 @@
 module Language.Haskell.Exference.FunctionBinding
   ( FunctionBinding
   , RatedFunctionBinding
-  , Context
+  , EnvDictionary
   )
 where
 
@@ -16,4 +16,4 @@ import Language.Haskell.Exference.TypeClasses
 type FunctionBinding = (String, HsConstrainedType)
 type RatedFunctionBinding = (String, Float, HsConstrainedType)
 
-type Context = ([RatedFunctionBinding], StaticContext)
+type EnvDictionary = ([RatedFunctionBinding], StaticClassEnv)

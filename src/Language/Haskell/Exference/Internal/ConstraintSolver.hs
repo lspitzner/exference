@@ -24,9 +24,9 @@ import Debug.Trace
 -- returns Nothing if one of the constraints is refutable
 -- otherwise Just a list of open constraints (that could neither be
 -- solved nor refuted).
-isPossible :: DynContext -> [Constraint] -> Maybe [Constraint]
-isPossible _dcontext [] = Just []
-isPossible dcontext (c:constraints) =
+isPossible :: QueryClassEnv -> [HsConstraint] -> Maybe [HsConstraint]
+isPossible _qClassEnv [] = Just []
+isPossible qClassEnv (c:constraints) =
   if constraintContainsVariables c
     then (c:) <$> rest
     else do
@@ -34,59 +34,23 @@ isPossible dcontext (c:constraints) =
       cs  <- rest
       return $ cs' ++ cs
   where
-    rest = isPossible dcontext constraints
-    (Constraint cclass cparams) = c
-    possibleFromGiven :: Maybe [Constraint]
+    rest = isPossible qClassEnv constraints
+    (HsConstraint cclass cparams) = c
+    possibleFromGiven :: Maybe [HsConstraint]
     possibleFromGiven =
-      if S.member c $ dynContext_inflatedConstraints dcontext
+      if S.member c $ qClassEnv_inflatedConstraints qClassEnv
         then Just []
         else Nothing
-    possibleFromInstance :: Maybe [Constraint]
+    possibleFromInstance :: Maybe [HsConstraint]
     possibleFromInstance = msum $ f <$> is
       where
         is = fromMaybe [] $ M.lookup (tclass_name cclass)
-                                     ( context_instances
-                          $ dynContext_context dcontext )
+                                     ( sClassEnv_instances
+                                     $ qClassEnv_env qClassEnv )
         f (HsInstance instConstrs _iclass instParams) = do
           let tempTuplePs     = foldl TypeApp (TypeCons "NTUPLE") cparams
           let tempTupleInstPs = foldl TypeApp (TypeCons "NTUPLE") instParams
           substs <- unifyRight tempTuplePs tempTupleInstPs
           isPossible
-            dcontext
+            qClassEnv
             (map (constraintApplySubsts substs) instConstrs)
-       
-
-
-
-
-
-
-{-
-isProvable :: DynContext -> [Constraint] -> Bool
-isProvable _ [] = True
-isProvable dcontext (c1:constraints) =
-  provableFromContext c1 || provableFromInstance c1
-  where
-    provableFromContext :: Constraint -> Bool
-    provableFromContext c = and
-      [ S.member c $ inflateConstraints
-                                (dynContext_context dcontext)
-                                (dynContext_constraints dcontext)
-      , isProvable dcontext constraints
-      ]
-    provableFromInstance :: Constraint -> Bool
-    provableFromInstance (Constraint c ps) = or $ do
-      HsInstance instConstrs inst instParams <- context_instances 
-                                              $ dynContext_context dcontext
-      guard $ inst==c
-      let tempTuplePs     = foldl TypeApp (TypeCons "NTUPLE") ps
-          tempTupleInstPs = foldl TypeApp (TypeCons "NTUPLE") instParams
-      case unifyRight tempTuplePs tempTupleInstPs of -- or other way round?
-        Nothing     -> []
-        Just substs ->
-          return $ isProvable dcontext
-                 $    [constraintApplySubsts substs instC
-                      | instC <- instConstrs
-                      ]
-                   ++ constraints
--}

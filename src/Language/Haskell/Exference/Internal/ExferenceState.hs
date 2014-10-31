@@ -47,7 +47,7 @@ import Debug.Hood.Observe
 
 
 type VarBinding = (TVarId, HsType)
-data FuncDictElem = SimpleBinding String Float HsType [HsType] [Constraint]
+data FuncDictElem = SimpleBinding String Float HsType [HsType] [HsConstraint]
                               -- name, results, params constraints
                   | MatchBinding  String [HsType] HsType
   deriving (Show, Generic)
@@ -143,11 +143,11 @@ mkGoals sid vbinds = [(b,sid)|b<-vbinds]
 
 data State = State
   { state_goals           :: [TGoal]
-  , state_constraintGoals :: [Constraint]
+  , state_constraintGoals :: [HsConstraint]
   , state_providedScopes  :: Scopes
   , state_varUses         :: VarUsageMap
   , state_functions       :: [FuncDictElem]
-  , state_context         :: DynContext
+  , state_queryClassEnv   :: QueryClassEnv
   , state_expression      :: Expression
   , state_nextVarId       :: TVarId
   , state_maxTVarId       :: TVarId
@@ -169,7 +169,7 @@ instance Show State where
               (Scopes _ scopeMap)
               _svarUses
               _sfuncs
-              scontext
+              qClassEnv
               sexpression
               snextVarId
               smaxTVarId
@@ -186,7 +186,7 @@ instance Show State where
       $$  (text   "scopes     = "
            <+> brackets (vcat $ punctuate (text ", ") $ map tScope $ M.toList scopeMap)
           )
-      $$  (text $ "context    = " ++ show scontext)
+      $$  (text $ "classEnv   = " ++ show qClassEnv)
       $$  (text $ "expression = " ++ show sexpression)
       $$  (text $ "reason     = " ++ reason)
       $$  (parens $    (text $ "nextVarId="++show snextVarId)

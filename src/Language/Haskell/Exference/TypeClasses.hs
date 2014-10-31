@@ -4,16 +4,16 @@
 module Language.Haskell.Exference.TypeClasses
   ( HsTypeClass (..)
   , HsInstance (..)
-  , Constraint (..)
-  , StaticContext (..)
-  , DynContext ( dynContext_context
-               , dynContext_constraints
-               , dynContext_inflatedConstraints
-               , dynContext_varConstraints )
+  , HsConstraint (..)
+  , StaticClassEnv (..)
+  , QueryClassEnv ( qClassEnv_env
+                  , qClassEnv_constraints
+                  , qClassEnv_inflatedConstraints
+                  , qClassEnv_varConstraints )
   , constraintApplySubsts
-  , mkStaticContext
-  , mkDynContext
-  , inflateConstraints
+  , mkStaticClassEnv
+  , mkQueryClassEnv
+  , inflateHsConstraints
   , constraintMapTypes
   , constraintContainsVariables
   , unknownTypeClass
@@ -44,126 +44,100 @@ import Debug.Hood.Observe
 data HsTypeClass = HsTypeClass
   { tclass_name :: String
   , tclass_params :: [TVarId]
-  , tclass_constraints :: [Constraint]
+  , tclass_constraints :: [HsConstraint]
   }
   deriving (Eq, Show, Ord, Generic)
 
 data HsInstance = HsInstance
-  { instance_constraints :: [Constraint]
+  { instance_constraints :: [HsConstraint]
   , instance_tclass :: HsTypeClass
   , instance_params :: [HsType]
   }
   deriving (Eq, Show, Ord, Generic)
 
-data Constraint = Constraint
+data HsConstraint = HsConstraint
   { constraint_tclass :: HsTypeClass
   , constraint_params :: [HsType]
   }
   deriving (Eq, Ord, Generic)
 
-data StaticContext = StaticContext
-  { context_tclasses :: [HsTypeClass]
-  , context_instances :: M.Map String [HsInstance]
+data StaticClassEnv = StaticClassEnv
+  { sClassEnv_tclasses :: [HsTypeClass]
+  , sClassEnv_instances :: M.Map String [HsInstance]
   }
   deriving (Show, Generic)
 
-data DynContext = DynContext
-  { dynContext_context :: StaticContext
-  , dynContext_constraints :: S.Set Constraint
-  , dynContext_inflatedConstraints :: S.Set Constraint
-  , dynContext_varConstraints :: M.Map TVarId (S.Set Constraint)
+data QueryClassEnv = QueryClassEnv
+  { qClassEnv_env :: StaticClassEnv
+  , qClassEnv_constraints :: S.Set HsConstraint
+  , qClassEnv_inflatedConstraints :: S.Set HsConstraint
+  , qClassEnv_varConstraints :: M.Map TVarId (S.Set HsConstraint)
   }
   deriving (Generic)
 
-instance NFData HsTypeClass   where rnf = genericRnf
-instance NFData HsInstance    where rnf = genericRnf
-instance NFData Constraint    where rnf = genericRnf
-instance NFData StaticContext where rnf = genericRnf
-instance NFData DynContext    where rnf = genericRnf
+instance NFData HsTypeClass    where rnf = genericRnf
+instance NFData HsInstance     where rnf = genericRnf
+instance NFData HsConstraint   where rnf = genericRnf
+instance NFData StaticClassEnv where rnf = genericRnf
+instance NFData QueryClassEnv  where rnf = genericRnf
 
-instance Show Constraint where
-  show (Constraint c ps) = unwords $ tclass_name c : map show ps
+instance Show HsConstraint where
+  show (HsConstraint c ps) = unwords $ tclass_name c : map show ps
 
-instance Show DynContext where
-  show (DynContext _ cs _ _) = "(DynContext _ " ++ show cs ++ " _)"
-instance Observable Constraint where
+instance Show QueryClassEnv where
+  show (QueryClassEnv _ cs _ _) = "(QueryClassEnv _ " ++ show cs ++ " _)"
+instance Observable HsConstraint where
   observer x = observeOpaque (show x) x
 
-instance Observable DynContext where
+instance Observable QueryClassEnv where
   observer x = observeOpaque (show x) x
 
 instance Observable HsInstance where
   observer x = observeOpaque (show x) x
 
-constraintMapTypes :: (HsType -> HsType) -> Constraint -> Constraint
-constraintMapTypes f (Constraint a ts) = Constraint a (map f ts)
+constraintMapTypes :: (HsType -> HsType) -> HsConstraint -> HsConstraint
+constraintMapTypes f (HsConstraint a ts) = HsConstraint a (map f ts)
 
 
-mkStaticContext :: [HsTypeClass] -> [HsInstance] -> StaticContext
-mkStaticContext tclasses insts = StaticContext tclasses (helper insts)
+mkStaticClassEnv :: [HsTypeClass] -> [HsInstance] -> StaticClassEnv
+mkStaticClassEnv tclasses insts = StaticClassEnv tclasses (helper insts)
   where
     helper :: [HsInstance] -> M.Map String [HsInstance]
     helper is = M.fromListWith (++)
               $ [ (tclass_name $ instance_tclass i, [i]) | i <- is ]
 
-mkDynContext :: StaticContext -> [Constraint] -> DynContext
-mkDynContext staticContext constrs = DynContext {
-  dynContext_context = staticContext,
-  dynContext_constraints = csSet,
-  dynContext_inflatedConstraints = inflateConstraints staticContext csSet,
-  dynContext_varConstraints = helper constrs
+mkQueryClassEnv :: StaticClassEnv -> [HsConstraint] -> QueryClassEnv
+mkQueryClassEnv sClassEnv constrs = QueryClassEnv {
+  qClassEnv_env = sClassEnv,
+  qClassEnv_constraints = csSet,
+  qClassEnv_inflatedConstraints = inflateHsConstraints csSet,
+  qClassEnv_varConstraints = helper constrs
 }
   where
     csSet = S.fromList constrs
-    helper :: [Constraint] -> M.Map TVarId (S.Set Constraint)
+    helper :: [HsConstraint] -> M.Map TVarId (S.Set HsConstraint)
     helper cs =
       let ids :: S.Set TVarId
           ids = fold $ freeVars <$> (constraint_params =<< cs)
-      in M.fromSet (flip filterConstraintsByVarId
-                    $ inflateConstraints staticContext csSet) ids
+      in M.fromSet (flip filterHsConstraintsByVarId
+                    $ inflateHsConstraints csSet) ids
 
-constraintApplySubsts :: Substs -> Constraint -> Constraint
-constraintApplySubsts ss (Constraint c ps) =
-  Constraint c $ map (applySubsts ss) ps
+constraintApplySubsts :: Substs -> HsConstraint -> HsConstraint
+constraintApplySubsts ss (HsConstraint c ps) =
+  HsConstraint c $ map (applySubsts ss) ps
 
-inflateConstraints :: StaticContext -> S.Set Constraint -> S.Set Constraint
-inflateConstraints _context = inflate (S.fromList . f)
+inflateHsConstraints :: S.Set HsConstraint -> S.Set HsConstraint
+inflateHsConstraints = inflate (S.fromList . f)
   where
-    f :: Constraint -> [Constraint]
-    f (Constraint (HsTypeClass _ ids constrs) ps) =
+    f :: HsConstraint -> [HsConstraint]
+    f (HsConstraint (HsTypeClass _ ids constrs) ps) =
       map (constraintApplySubsts $ M.fromList $ zip ids ps) constrs
 
-filterConstraintsByVarId :: TVarId -> S.Set Constraint -> S.Set Constraint
-filterConstraintsByVarId i = S.filter $ any (containsVar i) . constraint_params
-
-{-
--- the constraintsolving stuff was replaced by the functions in
--- Internal.ConstraintSolver. this method is no longer needed.
--- Also, no promises this function ever did what it was expected to do..
-constraintMatches :: DynContext -> TVarId -> HsType -> Bool
-constraintMatches dcontext constrVar providedType =
-  let contextConstraints  = dynContext_constraints dcontext
-      relevantConstraints = fromMaybe S.empty
-                          $ M.lookup constrVar
-                          $ dynContext_varConstraints dcontext
-      wantedConstraints   = S.map
-            (constraintApplySubsts $ M.singleton constrVar providedType)
-            relevantConstraints
-  in S.isSubsetOf wantedConstraints
-    $ inflateConstraints
-        (dynContext_context dcontext)
-        contextConstraints
--}
-
-{-
- problem:
-  given a set of constraints C over type variables a,b,c,..
-    (for example: C={Monad m, Num a, Num b, Ord b})
-  for each tuple of variables (v1,v2),
-  can v1 be replaced by v2 without breaking the constraints?
-  i.e. are the constraints for v1 a subset of the
-    constraints for v2?
--}
+filterHsConstraintsByVarId :: TVarId
+                           -> S.Set HsConstraint
+                           -> S.Set HsConstraint
+filterHsConstraintsByVarId i = S.filter
+                             $ any (containsVar i) . constraint_params
 
 -- uses f to find new elements. adds these new elements, and recursively
 -- tried to find even more elements. will not terminate if there are cycles
@@ -175,17 +149,11 @@ inflate f = fold . S.fromList . iterateWhileNonempty (foldMap f)
       then []
       else x : iterateWhileNonempty g (g x)
 
--- changing the DynContext no longer is necessary. see the comments
--- on DynContext definition.
-{-
-dynContextAddConstraints :: [Constraint] -> DynContext -> DynContext
-dynContextAddConstraints cs (DynContext a b _) =
-  mkDynContext a (cs ++ S.toList b)
--}
-
-constraintContainsVariables :: Constraint -> Bool
+constraintContainsVariables :: HsConstraint -> Bool
 constraintContainsVariables = any ((-1/=).largestId) . constraint_params
 
+-- TODO: it probably is a bad idea to have any unknown type class mapped to
+--       this, as they might unify at some point.. even if they distinct.
 unknownTypeClass :: HsTypeClass
 unknownTypeClass = HsTypeClass "EXFUnknownTC" [] []
 
@@ -197,7 +165,7 @@ inflateInstances is = S.toList $ S.unions $ map (S.fromList . f) is
       | (HsTypeClass _ tparams tconstrs) <- tclass
       , substs <- M.fromList $ zip tparams iparams
       = let 
-          g :: Constraint -> HsInstance
-          g (Constraint ctclass cparams) =
+          g :: HsConstraint -> HsInstance
+          g (HsConstraint ctclass cparams) =
             HsInstance iconstrs ctclass $ map (applySubsts substs) cparams
         in i : concatMap (f.g) tconstrs
