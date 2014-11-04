@@ -26,7 +26,7 @@ import Debug.Hood.Observe
 
 
 
-data HsConstrainedType = HsConstrainedType [Constraint] HsType
+data HsConstrainedType = HsConstrainedType [HsConstraint] HsType
   deriving (Ord, Eq)
 
 instance Show HsConstrainedType where
@@ -41,12 +41,12 @@ instance Show HsConstrainedType where
 instance Observable HsConstrainedType where
   observer state = observeOpaque (show state) state
 
-readConstrainedType :: StaticContext -> String -> HsConstrainedType
+readConstrainedType :: StaticClassEnv -> String -> HsConstrainedType
 readConstrainedType c s = case parseConstrainedType c s of
   Just (x,[]) -> x
   _ -> error "readHsConstrainedType: no parse"
 
-parseConstrainedType :: StaticContext
+parseConstrainedType :: StaticClassEnv
                      -> String
                      -> Maybe (HsConstrainedType, String)
 parseConstrainedType c s = either (const Nothing) Just
@@ -57,7 +57,7 @@ parseConstrainedType c s = either (const Nothing) Just
                                      ""
                                      s
 
-constrainedTypeParser :: StaticContext -> Parser HsConstrainedType
+constrainedTypeParser :: StaticClassEnv -> Parser HsConstrainedType
 constrainedTypeParser c = spaces *> 
   ( try (HsConstrainedType <$> parseConstraints
                            <*> (spaces *> string "=>" *> spaces *> typeParser))
@@ -72,11 +72,13 @@ constrainedTypeParser c = spaces *>
           )
       <|>
           sepBy1 parseConstraint (spaces >> string "," >> spaces)
-    parseConstraint :: Parser Constraint
-    parseConstraint = Constraint
+    parseConstraint :: Parser HsConstraint
+    parseConstraint = HsConstraint
       <$> do
         cstr <- (:) <$> satisfy isUpper <*> many alphaNum
-        return $ fromMaybe unknownTypeClass $ find ((cstr ==) . tclass_name) $ context_tclasses c
+        return $ fromMaybe unknownTypeClass
+               $ find ((cstr ==) . tclass_name)
+               $ sClassEnv_tclasses c
       <*> many1 typeParser
 
 constrainedTypeApplySubsts :: Substs -> HsConstrainedType -> HsConstrainedType
