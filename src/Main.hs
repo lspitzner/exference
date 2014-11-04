@@ -50,6 +50,7 @@ import Language.Haskell.Exts.Parser ( parseModuleWithMode
 import Language.Haskell.Exts.Extension ( Language (..)
                                        , Extension (..)
                                        , KnownExtension (..) )
+import Language.Haskell.Exts.Pretty
 
 import Data.PPrint
 import Data.Tree ( drawTree )
@@ -121,7 +122,7 @@ main = runO $ do
       putStrLn $ "exference version " ++ showVersion version
       putStrLn $ "exference-core version " ++ showVersion Paths_exference_core.version
   if | [Version] == flags   -> printVersion
-     | Help    `elem` flags -> putStrLn $ "TODO"
+     | Help    `elem` flags -> putStrLn fullUsageInfo >> putStrLn "TODO"
      | otherwise -> do
         when (Version `elem` flags || verbose) printVersion
         --((eSignatures, StaticContext clss insts), messages) <- runWriter <$> parseExternal testBaseInput'
@@ -152,7 +153,7 @@ main = runO $ do
             when verbose $ putStrLn "[Custom Input]"
             let input = ExferenceInput
                   (readConstrainedType scontext x)
-                  (filter (\(x,_,_) -> x/="join" && x/="liftA2") eSignatures)
+                  eSignatures
                   scontext
                   (Unused `elem` flags)
                   32768
@@ -166,7 +167,7 @@ main = runO $ do
                     then putStrLn "[no results]"
                     else forM_ rs
                       $ \(e, ExferenceStats n d) ->
-                        putStrLn $ show e
+                        putStrLn $ prettyPrint (convert e)
                                     ++ " (depth " ++ show d
                                     ++ ", " ++ show n ++ " steps)"
               | PrintTree `elem` flags -> do
@@ -196,7 +197,7 @@ main = runO $ do
                   case r of
                     Nothing -> putStrLn "[no result]"
                     Just (e, ExferenceStats n d) ->
-                        putStrLn $ show e
+                        putStrLn $ prettyPrint (convert e)
                                     ++ " (depth " ++ show d
                                     ++ ", " ++ show n ++ " steps)"
 

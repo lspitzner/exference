@@ -26,6 +26,8 @@ import Control.Monad.State.Strict
 import qualified Data.Map as M
 import Data.List ( find )
 
+import Control.Monad.Trans.Maybe
+
 
 
 getBindings :: StaticContext -> Module -> [Either String FunctionBinding]
@@ -52,7 +54,7 @@ insName qtype = either (\x -> Left $ x ++ " in " ++ prettyPrint qtype) Right
 helper :: HsConstrainedType -> Name -> FunctionBinding
 helper ct x = (hsNameToString x, ct)
 
--- type ConversionMonad = StateT (Int, ConvMap) (Either String)
+-- type ConversionMonad = EitherT String (State (Int, ConvMap))
 getDataConss :: Module -> [Either String FunctionBinding]
 getDataConss (Module _loc _m _pragma _warning _mexp _imp decls) = do
   DataDecl _loc _newtflag cntxt name params conss _derives <- decls

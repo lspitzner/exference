@@ -47,7 +47,7 @@ convertInternal p (E.ExpApply e1 e2)
       if opId == ","
         then Tuple Boxed [convertInternal 0 e0, convertInternal 0 e2]
         else parens (p>=2) $ InfixApp (convertInternal 1 e0)
-                        (QVarOp $ UnQual $ Symbol $ opId)
+                        (QVarOp . UnQual . Symbol $ opId)
                         (convertInternal 2 e2)
   | otherwise = parens (p>=3)
               $ App (convertInternal 2 e1) (convertInternal 3 e2)
