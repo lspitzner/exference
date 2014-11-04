@@ -24,7 +24,7 @@ Library
                    Paths_exference_core
   other-modules: Language.Haskell.Exference.Internal.Unify,
                  Language.Haskell.Exference.Internal.ConstraintSolver,
-                 Language.Haskell.Exference.Internal.ExferenceState,
+                 Language.Haskell.Exference.Internal.ExferenceNode,
                  Language.Haskell.Exference.Internal.Exference
   extensions: NoMonomorphismRestriction
   hs-source-dirs: src

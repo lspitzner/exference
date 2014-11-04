@@ -1,7 +1,7 @@
 {-# LANGUAGE DeriveGeneric #-}
 
-module Language.Haskell.Exference.Internal.ExferenceState
-  ( State (..)
+module Language.Haskell.Exference.Internal.ExferenceNode
+  ( SearchNode (..)
   , FuncDictElem (..)
   , TGoal
   , Scopes (..)
@@ -12,7 +12,7 @@ module Language.Haskell.Exference.Internal.ExferenceState
   , varBindingApplySubsts
   , varPBindingApplySubsts
   , goalApplySubst
-  , showStateDevelopment
+  , showNodeDevelopment
   , scopesApplySubsts
   , mkGoals
   , addScope
@@ -141,30 +141,30 @@ mkGoals :: ScopeId
         -> [TGoal]
 mkGoals sid vbinds = [(b,sid)|b<-vbinds]
 
-data State = State
-  { state_goals           :: [TGoal]
-  , state_constraintGoals :: [HsConstraint]
-  , state_providedScopes  :: Scopes
-  , state_varUses         :: VarUsageMap
-  , state_functions       :: [FuncDictElem]
-  , state_queryClassEnv   :: QueryClassEnv
-  , state_expression      :: Expression
-  , state_nextVarId       :: TVarId
-  , state_maxTVarId       :: TVarId
-  , state_depth           :: Float
-  , state_previousState   :: Maybe State
-  , state_lastStepReason  :: String
-  , state_lastStepBinding :: Maybe String
+data SearchNode = SearchNode
+  { node_goals           :: [TGoal]
+  , node_constraintGoals :: [HsConstraint]
+  , node_providedScopes  :: Scopes
+  , node_varUses         :: VarUsageMap
+  , node_functions       :: [FuncDictElem]
+  , node_queryClassEnv   :: QueryClassEnv
+  , node_expression      :: Expression
+  , node_nextVarId       :: TVarId
+  , node_maxTVarId       :: TVarId
+  , node_depth           :: Float
+  , node_previousNode    :: Maybe SearchNode
+  , node_lastStepReason  :: String
+  , node_lastStepBinding :: Maybe String
   }
   deriving Generic
 
 instance NFData FuncDictElem where rnf = genericRnf
 instance NFData Scope        where rnf = genericRnf
 instance NFData Scopes       where rnf = genericRnf
-instance NFData State        where rnf = genericRnf
+instance NFData SearchNode        where rnf = genericRnf
 
-instance Show State where
-  show (State sgoals
+instance Show SearchNode where
+  show (SearchNode sgoals
               scgoals
               (Scopes _ scopeMap)
               _svarUses
@@ -178,7 +178,7 @@ instance Show State where
               reason
               _lastStepBinding)
     = show
-    $ text "State" <+> (
+    $ text "SearchNode" <+> (
           (text   "goals      ="
            <+> brackets (vcat $ punctuate (text ", ") $ map tgoal sgoals)
           )
@@ -210,13 +210,13 @@ instance Show State where
       tVarPType :: (TVarId, HsType, [HsType]) -> Doc
       tVarPType (i, t, ps) = tVarType (i, foldr TypeArrow t ps)
 
-showStateDevelopment :: State -> String
-showStateDevelopment s = maybe "" f (state_previousState s) ++ show s
+showNodeDevelopment :: SearchNode -> String
+showNodeDevelopment s = maybe "" f (node_previousNode s) ++ show s
   where
-    f :: State -> String
-    f x = showStateDevelopment x ++ "\n"
+    f :: SearchNode -> String
+    f x = showNodeDevelopment x ++ "\n"
 
-instance Observable State where
+instance Observable SearchNode where
   observer state = observeOpaque (show state) state
 
 splitBinding :: (a, HsType) -> (a, HsType, [HsType])
