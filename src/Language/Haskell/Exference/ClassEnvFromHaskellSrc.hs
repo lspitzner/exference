@@ -1,7 +1,7 @@
 {-# LANGUAGE PatternGuards #-}
 
-module Language.Haskell.Exference.ContextFromHaskellSrc
-  ( getContext
+module Language.Haskell.Exference.ClassEnvFromHaskellSrc
+  ( getClassEnv
   )
 where
 
@@ -9,7 +9,7 @@ where
 
 import Language.Haskell.Exts.Syntax
 import Language.Haskell.Exts.Pretty
-import Language.Haskell.Exference.FunctionBinding hiding (Context)
+import Language.Haskell.Exference.FunctionBinding
 import Language.Haskell.Exference.TypeFromHaskellSrc
 import Language.Haskell.Exference.ConstrainedType
 import Language.Haskell.Exference.Type
@@ -31,15 +31,15 @@ import Data.List ( find )
 
 
 
-getContext :: [Module] -> Writer [String] StaticContext
-getContext ms = do
+getClassEnv :: [Module] -> Writer [String] StaticClassEnv
+getClassEnv ms = do
   let etcs = getTypeClasses ms
   mapM_ (tell.return) $ lefts etcs
   let tcs = rights etcs
   let einsts = getInstances tcs ms
   mapM_ (tell.return) $ lefts einsts
   let insts = inflateInstances $ rights einsts
-  return $ mkStaticContext tcs insts
+  return $ mkStaticClassEnv tcs insts
 
 type RawMap = M.Map String (Context, [TyVarBind])
 
@@ -98,10 +98,10 @@ getInstances tcs ms = do
 
 constrTransform :: (String -> Either String HsTypeClass)
                 -> Asst
-                -> ConversionMonad Constraint
+                -> ConversionMonad HsConstraint
 constrTransform tcLookupF (ClassA qname types)
   | ctypes <- mapM convertTypeInternal types
   , constrClass <- tcLookupF $ hsQNameToString qname
-  = Constraint <$> hoistEither constrClass <*> ctypes
+  = HsConstraint <$> hoistEither constrClass <*> ctypes
 constrTransform tcLookupF (ParenA c) = constrTransform tcLookupF c
-constrTransform _ c = left $ "unknown constraint: " ++ show c
+constrTransform _ c = left $ "unknown HsConstraint: " ++ show c

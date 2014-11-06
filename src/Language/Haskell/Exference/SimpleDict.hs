@@ -3,10 +3,10 @@
 
 module Language.Haskell.Exference.SimpleDict
   ( defaultBindings
-  , emptyContext
-  , defaultContext
+  , emptyClassEnv
+  , defaultClassEnv
   , defaultHeuristicsConfig
-  , testDynContext
+  , testQueryClassEnv
   , typeId
   , typeReturn
   , typeUnsafe
@@ -41,7 +41,7 @@ typeJoin   = read "m (m a) -> m a"
 
 toBindings :: [(String, Float, String)] -> [(String, Float, HsConstrainedType)]
 toBindings = map (\(a,b,c) ->
-                   (a,b,readConstrainedType defaultContext c))
+                   (a,b,readConstrainedType defaultClassEnv c))
 
 -- function, penalty for using that function, type
 -- value ignored for pattern-matches
@@ -90,14 +90,14 @@ defaultBindings = toBindings
   , ("sequence", 3.0, "Monad m => List (m a) -> m (List a)")
   ]
 
-emptyContext :: StaticContext
-emptyContext = StaticContext {
-  context_tclasses = [],
-  context_instances = M.empty
+emptyClassEnv :: StaticClassEnv
+emptyClassEnv = StaticClassEnv {
+  sClassEnv_tclasses = [],
+  sClassEnv_instances = M.empty
 }
 
-defaultContext :: StaticContext
-defaultContext = mkStaticContext classes instances
+defaultClassEnv :: StaticClassEnv
+defaultClassEnv = mkStaticClassEnv classes instances
   where
     classes = [ c_show
               , c_functor, c_applicative, c_monad
@@ -113,13 +113,13 @@ defaultContext = mkStaticContext classes instances
 c_show            = HsTypeClass "Show" [badReadVar "a"] []
 c_functor         = HsTypeClass "Functor" [badReadVar "f"] []
 c_applicative     = HsTypeClass "Applicative" [badReadVar "f"]
-                                              [Constraint c_functor [read "f"]]
+                                              [HsConstraint c_functor [read "f"]]
 c_monad           = HsTypeClass "Monad" [badReadVar "m"]
-                                        [Constraint c_applicative [read "m"]]
+                                        [HsConstraint c_applicative [read "m"]]
 c_monadState      = HsTypeClass
                       "MonadState"
                       [badReadVar "s", badReadVar "m"]
-                      [Constraint c_monad [read "m"]]
+                      [HsConstraint c_monad [read "m"]]
 c_eq              = HsTypeClass
                       "Eq"
                       [badReadVar "a"]
@@ -127,21 +127,21 @@ c_eq              = HsTypeClass
 c_num             = HsTypeClass
                       "Num"
                       [badReadVar "a"]
-                      [ Constraint c_show [read "a"]
-                      , Constraint c_eq [read "a"]]
+                      [ HsConstraint c_show [read "a"]
+                      , HsConstraint c_eq [read "a"]]
 c_ord             = HsTypeClass
                       "Ord"
                       [badReadVar "a"]
-                      [Constraint c_eq [read "a"]]
+                      [HsConstraint c_eq [read "a"]]
 c_real            = HsTypeClass
                       "Real"
                       [badReadVar "a"]
-                      [ Constraint c_ord [read "a"]
-                      , Constraint c_num [read "a"]]
+                      [ HsConstraint c_ord [read "a"]
+                      , HsConstraint c_num [read "a"]]
 c_fractional      = HsTypeClass
                       "Fractional"
                       [badReadVar "a"]
-                      [Constraint c_num [read "a"]]
+                      [HsConstraint c_num [read "a"]]
 c_enum            = HsTypeClass
                       "Enum"
                       [badReadVar "a"]
@@ -149,33 +149,33 @@ c_enum            = HsTypeClass
 c_integral        = HsTypeClass
                       "Integral"
                       [badReadVar "a"]
-                      [ Constraint c_real [read "a"]
-                      , Constraint c_enum [read "a"]]
+                      [ HsConstraint c_real [read "a"]
+                      , HsConstraint c_enum [read "a"]]
 c_realfrac        = HsTypeClass
                       "RealFrac"
                       [badReadVar "a"]
-                      [ Constraint c_real [read "a"]
-                      , Constraint c_fractional [read "a"]]
+                      [ HsConstraint c_real [read "a"]
+                      , HsConstraint c_fractional [read "a"]]
 c_floating        = HsTypeClass
                       "Floating"
                       [badReadVar "a"]
-                      [Constraint c_fractional [read "a"]]
+                      [HsConstraint c_fractional [read "a"]]
 c_realfloat       = HsTypeClass
                       "RealFloat"
                       [badReadVar "a"]
-                      [ Constraint c_realfrac [read "a"]
-                      , Constraint c_floating [read "a"]]
+                      [ HsConstraint c_realfrac [read "a"]
+                      , HsConstraint c_floating [read "a"]]
 
-list_show         = HsInstance [Constraint c_show [read "a"]] c_show [read "List a"]
+list_show         = HsInstance [HsConstraint c_show [read "a"]] c_show [read "List a"]
 --list_functor      = HsInstance [] c_functor     [read "List"]
 --list_applicative  = HsInstance [] c_applicative [read "List"]
 list_monad        = HsInstance [] c_monad       [read "List"]
 --maybe_functor     = HsInstance [] c_functor     [read "Maybe"]
 --maybe_applicative = HsInstance [] c_functor     [read "Maybe"]
 maybe_monad       = HsInstance [] c_functor     [read "Maybe"]
-maybe_show        = HsInstance [Constraint c_show [read "a"]] c_show [read "Maybe a"]
-tuple_show        = HsInstance [Constraint c_show [read "a"]
-                               ,Constraint c_show [read "b"]] c_show [read "Tuple2 a b"]
+maybe_show        = HsInstance [HsConstraint c_show [read "a"]] c_show [read "Maybe a"]
+tuple_show        = HsInstance [HsConstraint c_show [read "a"]
+                               ,HsConstraint c_show [read "b"]] c_show [read "Tuple2 a b"]
 integral_instances  = mkInstances c_integral ["Int", "Integer"]
 realfloat_instances = mkInstances c_realfloat ["Float", "Double"]
 
@@ -185,14 +185,14 @@ mkInstances tc strs = map f strs
   where
     f s = HsInstance [] tc [read s]
 
-testDynContext = mkDynContext defaultContext
-    [ Constraint c_show [read "v"]
-    , Constraint c_show [read "w"]
-    , Constraint c_functor [read "x"]
-    , Constraint c_monad   [read "y"]
-    , Constraint c_monadState [read "s", read "z"]
-    , Constraint c_show [read "MyFoo"]
-    , Constraint c_show [read "B"]
+testQueryClassEnv = mkQueryClassEnv defaultClassEnv
+    [ HsConstraint c_show [read "v"]
+    , HsConstraint c_show [read "w"]
+    , HsConstraint c_functor [read "x"]
+    , HsConstraint c_monad   [read "y"]
+    , HsConstraint c_monadState [read "s", read "z"]
+    , HsConstraint c_show [read "MyFoo"]
+    , HsConstraint c_show [read "B"]
     ]
 
 defaultHeuristicsConfig :: ExferenceHeuristicsConfig

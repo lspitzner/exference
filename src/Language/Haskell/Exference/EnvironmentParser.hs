@@ -1,7 +1,7 @@
-module Language.Haskell.Exference.ContextParser
-  ( contextFromModules
-  , contextFromModuleSimple
-  , contextFromModuleAndRatings
+module Language.Haskell.Exference.EnvironmentParser
+  ( environmentFromModules
+  , environmentFromModuleSimple
+  , environmentFromModuleAndRatings
   , compileWithDict
   , ratingsFromFile
   )
@@ -12,7 +12,7 @@ where
 import Language.Haskell.Exference
 import Language.Haskell.Exference.ExpressionToHaskellSrc
 import Language.Haskell.Exference.BindingsFromHaskellSrc
-import Language.Haskell.Exference.ContextFromHaskellSrc
+import Language.Haskell.Exference.ClassEnvFromHaskellSrc
 import Language.Haskell.Exference.TypeFromHaskellSrc
 import Language.Haskell.Exference.FunctionBinding
 
@@ -54,7 +54,7 @@ import qualified Data.Map as M
 
 
 builtInBindings :: [FunctionBinding]
-builtInBindings = map (second $ readConstrainedType emptyContext)
+builtInBindings = map (second $ readConstrainedType emptyClassEnv)
   $ [ (,) "()" "Unit"
     , (,) "(,)" "Tuple2 a b -> INFPATTERN a b"
     , (,) "(,)" "a -> b -> Tuple2 a b"
@@ -90,13 +90,13 @@ compileWithDict ratings binds = forM ratings $ \(name, rating) ->
 -- | input: a list of filenames for haskell modules and the
 -- parsemode to use for it.
 --
--- output: the context extracted from these modules, wrapped
+-- output: the environment extracted from these modules, wrapped
 -- in a Writer that contains warnings/errors.
-contextFromModules :: [(ParseMode, String)]
+environmentFromModules :: [(ParseMode, String)]
                    -> IO (Writer
                            [String]
-                           ([FunctionBinding], StaticContext))
-contextFromModules l = do
+                           ([FunctionBinding], StaticClassEnv))
+environmentFromModules l = do
   rawTuples <- mapM hRead l
   let eParsed = map hParse rawTuples
   {-
@@ -111,7 +111,7 @@ contextFromModules l = do
   return $ do
     mapM_ (tell.return) $ lefts eParsed
     let mods = rights eParsed
-    cntxt@(StaticContext clss insts) <- getContext mods
+    cntxt@(StaticClassEnv clss insts) <- getClassEnv mods
     tell ["got " ++ show (length clss) ++ " classes"]
     tell ["and " ++ show (length $ concat $ M.elems insts) ++ " instances"]
     binds <- join <$> mapM (hExtractBinds cntxt) mods
@@ -124,7 +124,7 @@ contextFromModules l = do
     hParse (mode, content) = case parseModuleWithMode mode content of
       f@(ParseFailed _ _) -> Left $ show f
       ParseOk mod -> Right mod
-    hExtractBinds :: StaticContext
+    hExtractBinds :: StaticClassEnv
                   -> Module
                   -> Writer [String] [FunctionBinding]
     hExtractBinds cntxt mod@(Module _ (ModuleName mname) _ _ _ _ _) = do
@@ -136,16 +136,16 @@ contextFromModules l = do
       -- tell $ map show $ rights ebinds
       return $ rights ebinds
 
--- | A simplified version of contextFromModules where the input
+-- | A simplified version of environmentFromModules where the input
 -- is just one module, parsed with some default ParseMode;
 -- the output is transformed so that all functionsbindings get
 -- a rating of 0.0.
-contextFromModuleSimple :: String
+environmentFromModuleSimple :: String
                          -> IO (Writer
                               [String]
                               ( [RatedFunctionBinding]
-                              ,  StaticContext) )
-contextFromModuleSimple s = do
+                              ,  StaticClassEnv) )
+environmentFromModuleSimple s = do
   let exts1 = [ TypeOperators
               , ExplicitForAll
               , ExistentialQuantification
@@ -160,7 +160,7 @@ contextFromModuleSimple s = do
                        False
                        False
                        Nothing
-  r <- contextFromModules [(mode, s)]
+  r <- environmentFromModules [(mode, s)]
   let f (a,b) = (a,0.0,b)
   return $ first (map f) <$> r
 
@@ -190,13 +190,13 @@ ratingsFromFile s = do
     Right x -> Right x
 
 -- TODO: add warnings for ratings not applied
-contextFromModuleAndRatings :: String
+environmentFromModuleAndRatings :: String
                             -> String
                             -> IO (Writer
                                 [String]
                                 ( [RatedFunctionBinding]
-                                ,  StaticContext) )
-contextFromModuleAndRatings s1 s2 = do
+                                ,  StaticClassEnv) )
+environmentFromModuleAndRatings s1 s2 = do
   let exts1 = [ TypeOperators
               , ExplicitForAll
               , ExistentialQuantification
@@ -211,7 +211,7 @@ contextFromModuleAndRatings s1 s2 = do
                        False
                        False
                        Nothing
-  w <- contextFromModules [(mode, s1)]
+  w <- environmentFromModules [(mode, s1)]
   r <- ratingsFromFile s2
   return $ do
     (binds, cntxt) <- w

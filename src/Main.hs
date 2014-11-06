@@ -14,10 +14,10 @@ import Language.Haskell.ExferenceCore ( ExferenceHeuristicsConfig(..)
 import Language.Haskell.Exference
 import Language.Haskell.Exference.ExpressionToHaskellSrc
 import Language.Haskell.Exference.BindingsFromHaskellSrc
-import Language.Haskell.Exference.ContextFromHaskellSrc
+import Language.Haskell.Exference.ClassEnvFromHaskellSrc
 import Language.Haskell.Exference.TypeFromHaskellSrc
 import Language.Haskell.Exference.FunctionBinding
-import Language.Haskell.Exference.ContextParser
+import Language.Haskell.Exference.EnvironmentParser
 
 import Language.Haskell.Exference.ConstrainedType
 import Language.Haskell.Exference.SimpleDict
@@ -125,13 +125,13 @@ main = runO $ do
      | Help    `elem` flags -> putStrLn fullUsageInfo >> putStrLn "TODO"
      | otherwise -> do
         when (Version `elem` flags || verbose) printVersion
-        --((eSignatures, StaticContext clss insts), messages) <- runWriter <$> parseExternal testBaseInput'
+        --((eSignatures, StaticClassEnv clss insts), messages) <- runWriter <$> parseExternal testBaseInput'
         when verbose $ do
           putStrLn "[Environment]"
-          putStrLn "reading context from ExferenceDict.hs and ExferenceRatings.txt"
-        (context@(eSignatures, scontext@(StaticContext clss insts)), messages)
+          putStrLn "reading environment from ExferenceDict.hs and ExferenceRatings.txt"
+        (env@(eSignatures, sEnv@(StaticClassEnv clss insts)), messages)
           <- runWriter
-          <$> contextFromModuleAndRatings "ExferenceDict.hs" "ExferenceRatings.txt"
+          <$> environmentFromModuleAndRatings "ExferenceDict.hs" "ExferenceRatings.txt"
         when (verbose && not (null messages)) $ do
           forM_ messages $ \m -> putStrLn $ "environment warning: " ++ m
         when (Env `elem` flags) $ do
@@ -141,20 +141,20 @@ main = runO $ do
           mapM_ print $ eSignatures
         when (Examples `elem` flags) $ do
           when verbose $ putStrLn "[Examples]"
-          printAndStuff testHeuristicsConfig context
+          printAndStuff testHeuristicsConfig env
         when (Tests `elem` flags) $ do
           when verbose $ putStrLn "[Tests]"
           printCheckExpectedResults (not $ Serial `elem` flags)
                                     testHeuristicsConfig
-                                    context
+                                    env
         case [x|(Input x)<-flags] of
           []    -> return ()
           (x:_) -> do
             when verbose $ putStrLn "[Custom Input]"
             let input = ExferenceInput
-                  (readConstrainedType scontext x)
+                  (readConstrainedType sEnv x)
                   eSignatures
-                  scontext
+                  sEnv
                   (Unused `elem` flags)
                   32768
                   (Just 32768)
@@ -201,20 +201,12 @@ main = runO $ do
                                     ++ " (depth " ++ show d
                                     ++ ", " ++ show n ++ " steps)"
 
-        -- printChecks     testHeuristicsConfig context
-        -- printStatistics testHeuristicsConfig context
+        -- printChecks     testHeuristicsConfig env
+        -- printStatistics testHeuristicsConfig env
         
         -- print $ compileDict testDictRatings $ eSignatures
-        -- print $ parseConstrainedType defaultContext $ "(Show a) => [a] -> String"
-        -- print $ inflateConstraints a b
-        {-
-        print $ constraintMatches testDynContext (badReadVar "y") (read "x")
-        print $ constraintMatches testDynContext (badReadVar "x") (read "y")
-        print $ constraintMatches testDynContext (badReadVar "w") (read "MyFoo")
-        print $ constraintMatches testDynContext (badReadVar "w") (read "MyBar")
-        print $ constraintMatches testDynContext (badReadVar "y") (read "MyFoo")
-        print $ isProvable testDynContext [Constraint c_applicative [read "y"]]
-        -}
+        -- print $ parseConstrainedType defaultClassEnv $ "(Show a) => [a] -> String"
+        -- print $ inflateHsConstraints a b
         {-
         let t :: HsType
             t = read "m a->( ( a->m b)->( m b))"
@@ -254,8 +246,8 @@ tryParse shouldBangPattern s = do
     ParseOk mod -> do
       putStrLn s
       --mapM_ putStrLn $ map (either id show)
-      --               $ getBindings defaultContext mod
+      --               $ getBindings defaultClassEnv mod
       --mapM_ putStrLn $ map (either id show)
       --               $ getDataConss mod
       --mapM_ putStrLn $ map (either id show)
-      --               $ getClassMethods defaultContext mod
+      --               $ getClassMethods defaultClassEnv mod

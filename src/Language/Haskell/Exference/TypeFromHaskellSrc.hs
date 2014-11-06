@@ -75,14 +75,14 @@ convertTypeInternal' (TyPromoted _)   = left "promoted type"
 convertTypeInternal' (TyForall _ _ _) = left "forall type" -- TODO
 convertTypeInternal' x                = left $ "unknown type element: " ++ show x -- TODO
 
-convertCType :: TC.StaticContext -> Type -> Either String CT.HsConstrainedType
-convertCType context qt = evalState (runEitherT $ convertCTypeInternal context qt) (0, M.empty)
+convertCType :: TC.StaticClassEnv -> Type -> Either String CT.HsConstrainedType
+convertCType env qt = evalState (runEitherT $ convertCTypeInternal env qt) (0, M.empty)
 
-convertCTypeInternal :: TC.StaticContext
+convertCTypeInternal :: TC.StaticClassEnv
        -> Type
        -> ConversionMonad CT.HsConstrainedType
-convertCTypeInternal context (TyForall _ assertions t)
-  = CT.HsConstrainedType <$> (mapM (convertConstraint context) assertions)
+convertCTypeInternal env (TyForall _ assertions t)
+  = CT.HsConstrainedType <$> (mapM (convertConstraint env) assertions)
                          <*> (convertTypeInternal t)
 -- convertCTypeInternal _ (TyForall _ _ _) = left $ "forall"
 convertCTypeInternal _ t = CT.HsConstrainedType [] <$> convertTypeInternal t
@@ -114,19 +114,19 @@ hsNameToString :: Name -> String
 hsNameToString (Ident s) = s
 hsNameToString (Symbol s) = "(" ++ s ++ ")"
 
-convertConstraint :: TC.StaticContext
+convertConstraint :: TC.StaticClassEnv
                   -> Asst
-                  -> ConversionMonad TC.Constraint
-convertConstraint context (ClassA qname types)
+                  -> ConversionMonad TC.HsConstraint
+convertConstraint env (ClassA qname types)
   | str <- hsQNameToString qname
   , ctypes <- mapM convertTypeInternal types
-  = TC.Constraint ( fromMaybe TC.unknownTypeClass
+  = TC.HsConstraint ( fromMaybe TC.unknownTypeClass
                   $ find ((==str).TC.tclass_name)
-                  $ TC.context_tclasses context) <$> ctypes
-convertConstraint context (ParenA c) = convertConstraint context c
+                  $ TC.sClassEnv_tclasses env) <$> ctypes
+convertConstraint env (ParenA c) = convertConstraint env c
 convertConstraint _ c = left $ "bad constraint: " ++ show c
 
-parseConstrainedType :: TC.StaticContext -> String -> Either String CT.HsConstrainedType
+parseConstrainedType :: TC.StaticClassEnv -> String -> Either String CT.HsConstrainedType
 parseConstrainedType c s = case Language.Haskell.Exts.Parser.parseType s of
   f@(Language.Haskell.Exts.Parser.ParseFailed _ _) -> Left $ show f
   Language.Haskell.Exts.Parser.ParseOk t -> convertCType c t

@@ -14,7 +14,7 @@ import Language.Haskell.ExferenceCore ( ExferenceHeuristicsConfig(..)
 import Language.Haskell.Exference
 import Language.Haskell.Exference.ExpressionToHaskellSrc
 import Language.Haskell.Exference.BindingsFromHaskellSrc
-import Language.Haskell.Exference.ContextFromHaskellSrc
+import Language.Haskell.Exference.ClassEnvFromHaskellSrc
 import Language.Haskell.Exference.TypeFromHaskellSrc
 import Language.Haskell.Exference.FunctionBinding
 
@@ -180,22 +180,22 @@ exampleInput =
   ]
 
 checkInput :: ExferenceHeuristicsConfig
-           -> Context
+           -> EnvDictionary
            -> String
            -> Bool
            -> ExferenceInput
-checkInput heuristics (bindings, scontext) typeStr allowUnused =
+checkInput heuristics (bindings, sEnv) typeStr allowUnused =
   ExferenceInput
-    (readConstrainedType scontext typeStr)
+    (readConstrainedType sEnv typeStr)
     (filter (\(x,_,_) -> x/="join" && x/="liftA2") bindings)
-    scontext
+    sEnv
     allowUnused
     262144
     (Just 131072)
     heuristics
 
 checkExpectedResults :: ExferenceHeuristicsConfig
-                     -> Context
+                     -> EnvDictionary
                      -> [ ( String -- ^ name
                           , [String] -- ^ expected
                           , Maybe ( (Expression, ExferenceStats)
@@ -203,9 +203,9 @@ checkExpectedResults :: ExferenceHeuristicsConfig
                                   , Maybe (Int, ExferenceStats)
                                   ) -- ^ index and stats of expected
                           )]
-checkExpectedResults heuristics context = do
+checkExpectedResults heuristics env = do
   (name, allowUnused, typeStr, expected) <- checkData
-  let input = checkInput heuristics context typeStr allowUnused
+  let input = checkInput heuristics env typeStr allowUnused
   let getExp :: Int -> [(Expression, ExferenceStats)] -> Maybe (Int, ExferenceStats)
       getExp _ [] = Nothing
       getExp n ((e,s):r) | show e `elem` expected = Just (n,s)
@@ -219,7 +219,7 @@ checkExpectedResults heuristics context = do
     )
 
 checkExpectedResultsPar :: ExferenceHeuristicsConfig
-                        -> Context
+                        -> EnvDictionary
                         -> [IO ( String -- ^ name
                                , [String] -- ^ expected
                                , Maybe ( (Expression, ExferenceStats)
@@ -228,9 +228,9 @@ checkExpectedResultsPar :: ExferenceHeuristicsConfig
                                          -- ^ index and stats of expected
                                        ) 
                                )]
-checkExpectedResultsPar heuristics context = do
+checkExpectedResultsPar heuristics env = do
   (name, allowUnused, typeStr, expected) <- checkData
-  let input = checkInput heuristics context typeStr allowUnused
+  let input = checkInput heuristics env typeStr allowUnused
   let getExp :: Int -> [(Expression, ExferenceStats)] -> Maybe (Int, ExferenceStats)
       getExp _ [] = Nothing
       getExp n ((e,s):r) | show e `elem` expected = Just (n,s)
@@ -263,7 +263,7 @@ checkExpectedResultsPar heuristics context = do
   return $ (,,) name expected <$> findExpressionsPar input helper
 
 checkBestResults :: ExferenceHeuristicsConfig
-                 -> Context
+                 -> EnvDictionary
                  -> [ ( String
                       , [String]
                       , Maybe ( (Expression, ExferenceStats)
@@ -274,9 +274,9 @@ checkBestResults :: ExferenceHeuristicsConfig
                                   -- ^ expected
                               )
                       )]
-checkBestResults heuristics context = do
+checkBestResults heuristics env = do
   (name, allowUnused, typeStr, expected) <- checkData
-  let input = checkInput heuristics context typeStr allowUnused
+  let input = checkInput heuristics env typeStr allowUnused
   let getBest :: [(Expression, ExferenceStats)]
               -> (Int, Expression, ExferenceStats)
       getBest = maximumBy (comparing g) . zipWith (\a (b,c) -> (a,b,c)) [0..]
@@ -298,7 +298,7 @@ checkBestResults heuristics context = do
 
 {-
 checkBestResultsPar :: ExferenceHeuristicsConfig
-                    -> Context
+                    -> EnvDictionary
                     -> [ IO ( String
                             , [String]
                             , Maybe ( (Expression, ExferenceStats)
@@ -313,7 +313,7 @@ checkBestResultsPar :: ExferenceHeuristicsConfig
 
 {-
 checkResults :: ExferenceHeuristicsConfig
-             -> Context
+             -> EnvDictionary
              -> [IO ( String -- name
                     , [String] -- expected
                     , Maybe Expression -- first
@@ -322,12 +322,12 @@ checkResults :: ExferenceHeuristicsConfig
                                                   -- and had these stats
                     , [(Expression, ExferenceStats)]
                     )]
-checkResults heuristics (bindings, scontext) = do
+checkResults heuristics (bindings, sEnv) = do
   (name, allowUnused, typeStr, expected) <- checkData
   let input = ExferenceInput
-                (readConstrainedType scontext typeStr)
+                (readConstrainedType sEnv typeStr)
                 (filter (\(x,_,_) -> x/="join" && x/="liftA2") bindings)
-                scontext
+                sEnv
                 allowUnused
                 131072
                 (Just 131072)
@@ -351,22 +351,22 @@ checkResults heuristics (bindings, scontext) = do
 -}
 
 exampleOutput :: ExferenceHeuristicsConfig
-              -> Context
+              -> EnvDictionary
               -> [[(Expression, ExferenceStats)]]
-exampleOutput heuristics (bindings, scontext) = map f exampleInput
+exampleOutput heuristics (bindings, sEnv) = map f exampleInput
   where
     f (_, allowUnused, s) = takeFindSortNExpressions 10 10 $ ExferenceInput
-                (readConstrainedType scontext s)
+                (readConstrainedType sEnv s)
                 (filter (\(x,_,_) -> x/="join" && x/="liftA2") bindings)
-                scontext
+                sEnv
                 allowUnused
                 32768
                 (Just 32768)
                 heuristics
 
-exampleInOut h context = zip exampleInput (exampleOutput h context)
+exampleInOut h env = zip exampleInput (exampleOutput h env)
 
-printAndStuff h context = mapM_ f (exampleInOut h context)
+printAndStuff h env = mapM_ f (exampleInOut h env)
   where
     f ((name, _, _), []) = putStrLn $ "no results for "++name++"!"
     f ((name, _, _), results) = mapM_ g results
@@ -383,7 +383,7 @@ printAndStuff h context = mapM_ f (exampleInOut h context)
             putStrLn $ name ++ " = " ++ str
                        ++ " (depth " ++ show d ++ ", " ++ show n ++ " steps)"
 
-printStatistics h context = mapM_ f (exampleInOut h context)
+printStatistics h env = mapM_ f (exampleInOut h env)
   where
     f ((name, _, _), [])      = putStrLn $ printf "%10s: ---" name
     f ((name, _, _), results) =
@@ -399,11 +399,14 @@ printStatistics h context = mapM_ f (exampleInOut h context)
          , length steps
          )
 
-printCheckExpectedResults :: Bool -> ExferenceHeuristicsConfig -> Context -> IO ()
-printCheckExpectedResults par h context = do
+printCheckExpectedResults :: Bool
+                          -> ExferenceHeuristicsConfig
+                          -> EnvDictionary
+                          -> IO ()
+printCheckExpectedResults par h env = do
     let xs = if par
-          then            checkExpectedResultsPar h context
-          else return <$> checkExpectedResults    h context
+          then            checkExpectedResultsPar h env
+          else return <$> checkExpectedResults    h env
     stats <- (>>=helper) `mapM` xs
     print $ foldr g (0, 0, 0.0) $ catMaybes $ stats
   where
@@ -438,14 +441,14 @@ printCheckExpectedResults par h context = do
     g :: ExferenceStats -> (Int,Int,Float) -> (Int,Int,Float)
     g (ExferenceStats a b) (c,d,e) = (c+1,a+d,b+e)
 
-printMaxUsage :: ExferenceHeuristicsConfig -> Context -> IO ()
-printMaxUsage h (bindings, scontext) = mapM_ f checkData
+printMaxUsage :: ExferenceHeuristicsConfig -> EnvDictionary -> IO ()
+printMaxUsage h (bindings, sEnv) = mapM_ f checkData
   where
     f (name, allowUnused, typeStr, _expected) = do
       let input = ExferenceInput
-                    (readConstrainedType scontext typeStr)
+                    (readConstrainedType sEnv typeStr)
                     (filter (\(x,_,_) -> x/="join") bindings)
-                    scontext
+                    sEnv
                     allowUnused
                     16384
                     (Just 16384)
@@ -454,14 +457,14 @@ printMaxUsage h (bindings, scontext) = mapM_ f checkData
           highest = take 5 $ sortBy (flip $ comparing snd) $ M.toList stats
       putStrLn $ printf "%-10s: %s" name (show highest)
 
-printSearchTree :: ExferenceHeuristicsConfig -> Context -> IO ()
-printSearchTree h (bindings, scontext) = mapM_ f checkData
+printSearchTree :: ExferenceHeuristicsConfig -> EnvDictionary -> IO ()
+printSearchTree h (bindings, sEnv) = mapM_ f checkData
   where
     f (name, allowUnused, typeStr, _expected) = do
       let input = ExferenceInput
-                    (readConstrainedType scontext typeStr)
+                    (readConstrainedType sEnv typeStr)
                     (filter (\(x,_,_) -> x/="join") bindings)
-                    scontext
+                    sEnv
                     allowUnused
                     256
                     (Just 256)

@@ -30,22 +30,22 @@ import Control.Monad.Trans.Maybe
 
 
 
-getBindings :: StaticContext -> Module -> [Either String FunctionBinding]
-getBindings context (Module _loc _m _pragma _warning _mexp _imp decls)
-  = concatMap (either (return.Left) (map Right) . getFromDecls context) decls
+getBindings :: StaticClassEnv -> Module -> [Either String FunctionBinding]
+getBindings env (Module _loc _m _pragma _warning _mexp _imp decls)
+  = concatMap (either (return.Left) (map Right) . getFromDecls env) decls
 
-getFromDecls :: StaticContext -> Decl -> Either String [FunctionBinding]
-getFromDecls context (TypeSig _loc names qtype)
+getFromDecls :: StaticClassEnv -> Decl -> Either String [FunctionBinding]
+getFromDecls env (TypeSig _loc names qtype)
   = insName qtype
-  $ ((<$> names) . helper) <$> convertCType context qtype
+  $ ((<$> names) . helper) <$> convertCType env qtype
 getFromDecls _ _ = return []
 
-getFromDecls' :: StaticContext
+getFromDecls' :: StaticClassEnv
               -> Decl
               -> ConversionMonad [FunctionBinding]
-getFromDecls' context (TypeSig _loc names qtype)
+getFromDecls' env (TypeSig _loc names qtype)
   = mapEitherT (fmap $ insName qtype)
-  $ (<$> names) . helper <$> convertCTypeInternal context qtype
+  $ (<$> names) . helper <$> convertCTypeInternal env qtype
 getFromDecls' _ _ = return []
 
 insName :: Type -> Either String a -> Either String a
@@ -97,18 +97,18 @@ getDataConss (Module _loc _m _pragma _warning _mexp _imp decls) = do
       then x >>= \(a,b) -> [Right a, Right b]
       else x >>= \(a,_) -> [Right a]
 
-getClassMethods :: StaticContext -> Module -> [Either String FunctionBinding]
-getClassMethods context (Module _loc _m _pragma _warning _mexp _imp decls) =
+getClassMethods :: StaticClassEnv -> Module -> [Either String FunctionBinding]
+getClassMethods env (Module _loc _m _pragma _warning _mexp _imp decls) =
   do
     ClassDecl _ _ name vars _ cdecls <- decls
     let nameStr = hsNameToString name
     let errorMod = (++) ("class method for "++nameStr++": ")
     let instClass = find ((nameStr==).tclass_name)
-                  $ context_tclasses context
+                  $ sClassEnv_tclasses env
     case instClass of
       Nothing -> return $ Left $ "unknown type class: "++nameStr
       Just cls -> let
-        cnstrA = Constraint cls <$> mapM ((TypeVar <$>) . tyVarTransform) vars
+        cnstrA = HsConstraint cls <$> mapM ((TypeVar <$>) . tyVarTransform) vars
         action :: StateT (Int, ConvMap) Identity [Either String [FunctionBinding]]
         action = do
           cnstrE <- runEitherT cnstrA
@@ -117,13 +117,13 @@ getClassMethods context (Module _loc _m _pragma _warning _mexp _imp decls) =
             Right cnstr ->
               mapM ( runEitherT
                    . fmap (map (addConstraint cnstr))
-                   . getFromDecls' context)
+                   . getFromDecls' env)
                 $ [ d | ClsDecl d <- cdecls ]
         in concatMap (either (return . Left . errorMod)
                              (map Right))
                    $ runIdentity
                    $ evalStateT action (0, M.empty)
   where
-    addConstraint :: Constraint -> FunctionBinding -> FunctionBinding
+    addConstraint :: HsConstraint -> FunctionBinding -> FunctionBinding
     addConstraint c (n, HsConstrainedType constrs t) =
                     (n, HsConstrainedType (c:constrs) t)

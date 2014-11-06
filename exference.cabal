@@ -23,13 +23,13 @@ Library
                    Language.Haskell.Exference.ExpressionToHaskellSrc
                    Language.Haskell.Exference.TypeFromHaskellSrc
                    Language.Haskell.Exference.BindingsFromHaskellSrc
-                   Language.Haskell.Exference.ContextFromHaskellSrc
-                   Language.Haskell.Exference.ContextParser
+                   Language.Haskell.Exference.ClassEnvFromHaskellSrc
+                   Language.Haskell.Exference.EnvironmentParser
                    Paths_exference
   extensions: NoMonomorphismRestriction
   hs-source-dirs: src
   Build-Depends:
-    exference-core ==0.12.0.0,
+    exference-core ==0.13.0.0,
     base >=3 && <5,
     containers,
     transformers,
