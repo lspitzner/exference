@@ -8,6 +8,7 @@ module Language.Haskell.Exference.Internal.ExferenceNode
   , Scope (..)
   , ScopeId
   , VarPBinding
+  , VarBinding
   , VarUsageMap
   , varBindingApplySubsts
   , varPBindingApplySubsts
