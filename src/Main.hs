@@ -81,6 +81,7 @@ data Flag = Verbose
           | PrintTree -- TODO: more options to control core
           | EnvUsage -- TODO: option to specify dictionary to use
           | Serial
+          | Parallel
           | Unused
   deriving (Show, Eq)
 
@@ -96,7 +97,8 @@ options =
   , Option ['a'] ["all"]         (NoArg PrintAll)             "print all solutions (up to search step limit)"
   , Option []    ["envUsage"]    (NoArg EnvUsage)             "print a list of functions that got inserted at some point (regardless if successful or not), and how often"
   , Option []    ["tree"]        (NoArg PrintTree)            "print tree of search space"
-  , Option ['s'] ["serial"]      (NoArg Serial)               "use the non-parallelized version of the algorithm"
+  , Option ['s'] ["serial"]      (NoArg Serial)               "use the non-parallelized version of the algorithm (default)"
+  , Option ['p'] ["parallel"]    (NoArg Parallel)             "use the parallelized version of the algorithm"
   , Option ['u'] ["allowUnused"] (NoArg Unused)               "allow unused input variables"
   ]
 
@@ -124,6 +126,12 @@ main = runO $ do
   if | [Version] == flags   -> printVersion
      | Help    `elem` flags -> putStrLn fullUsageInfo >> putStrLn "TODO"
      | otherwise -> do
+        par <- case (Parallel `elem` flags, Serial `elem` flags) of
+          (False,False) -> return False
+          (True, False) -> return True
+          (False,True ) -> return False
+          (True, True ) -> do
+            error "--serial and --parallel are in conflict! aborting" 
         when (Version `elem` flags || verbose) printVersion
         --((eSignatures, StaticClassEnv clss insts), messages) <- runWriter <$> parseExternal testBaseInput'
         when verbose $ do
@@ -144,7 +152,7 @@ main = runO $ do
           printAndStuff testHeuristicsConfig env
         when (Tests `elem` flags) $ do
           when verbose $ putStrLn "[Tests]"
-          printCheckExpectedResults (not $ Serial `elem` flags)
+          printCheckExpectedResults par
                                     testHeuristicsConfig
                                     env
         case [x|(Input x)<-flags] of
@@ -187,13 +195,13 @@ main = runO $ do
                       highest = take 8 $ sortBy (flip $ comparing snd) $ M.toList stats
                   putStrLn $ show highest
               | otherwise -> do
-                  r <- if Serial `elem` flags
+                  r <- if par
                     then do
-                      when verbose $ putStrLn "[running findOneExpression ..]"
-                      return $ findOneExpression input
-                    else do
                       when verbose $ putStrLn "[running findOneExpressionPar ..]"
                       findOneExpressionPar input
+                    else do
+                      when verbose $ putStrLn "[running findOneExpression ..]"
+                      return $ findOneExpression input
                   case r of
                     Nothing -> putStrLn "[no result]"
                     Just (e, ExferenceStats n d) ->
