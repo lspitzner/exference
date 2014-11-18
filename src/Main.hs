@@ -19,7 +19,6 @@ import Language.Haskell.Exference.TypeFromHaskellSrc
 import Language.Haskell.Exference.FunctionBinding
 import Language.Haskell.Exference.EnvironmentParser
 
-import Language.Haskell.Exference.ConstrainedType
 import Language.Haskell.Exference.SimpleDict
 import Language.Haskell.Exference.TypeClasses
 import Language.Haskell.Exference.Expression
@@ -159,55 +158,60 @@ main = runO $ do
           []    -> return ()
           (x:_) -> do
             when verbose $ putStrLn "[Custom Input]"
-            let input = ExferenceInput
-                  (readConstrainedType sEnv x)
-                  eSignatures
-                  sEnv
-                  (Unused `elem` flags)
-                  32768
-                  (Just 32768)
-                  testHeuristicsConfig
-            if
-              | PrintAll `elem` flags -> do
-                  when verbose $ putStrLn "[running findExpressions ..]"
-                  let rs = findExpressions input
-                  if null rs
-                    then putStrLn "[no results]"
-                    else forM_ rs
-                      $ \(e, ExferenceStats n d) ->
-                        putStrLn $ prettyPrint (convert e)
-                                    ++ " (depth " ++ show d
-                                    ++ ", " ++ show n ++ " steps)"
-              | PrintTree `elem` flags -> do
-                  when verbose $ putStrLn "[running findExpressionsWithStats ..]"
-                  let (_, tree, _) = last $ findExpressionsWithStats input
-                  let showf (total,processed,expression,_)
-                        = printf "%d (+%d): %s" processed
-                                                (total-processed)
-                                                (show expression)
-                  putStrLn $ drawTree
-                           $ fmap showf
-                           -- $ filterSearchTreeProcessedN 2
-                           $ tree
-              | EnvUsage `elem` flags -> do
-                  when verbose $ putStrLn "[running findExpressionsWithStats ..]"
-                  let (stats, _, _) = last $ findExpressionsWithStats input
-                      highest = take 8 $ sortBy (flip $ comparing snd) $ M.toList stats
-                  putStrLn $ show highest
-              | otherwise -> do
-                  r <- if par
-                    then do
-                      when verbose $ putStrLn "[running findOneExpressionPar ..]"
-                      findOneExpressionPar input
-                    else do
-                      when verbose $ putStrLn "[running findOneExpression ..]"
-                      return $ findOneExpression input
-                  case r of
-                    Nothing -> putStrLn "[no result]"
-                    Just (e, ExferenceStats n d) ->
-                        putStrLn $ prettyPrint (convert e)
-                                    ++ " (depth " ++ show d
-                                    ++ ", " ++ show n ++ " steps)"
+            let mParsedType = parseConstrainedType sEnv x
+            case mParsedType of
+              Left err -> do
+                putStrLn "could not parse input type"
+              Right parsedType -> do
+                let input = ExferenceInput
+                      parsedType
+                      eSignatures
+                      sEnv
+                      (Unused `elem` flags)
+                      32768
+                      (Just 32768)
+                      testHeuristicsConfig
+                if
+                  | PrintAll `elem` flags -> do
+                      when verbose $ putStrLn "[running findExpressions ..]"
+                      let rs = findExpressions input
+                      if null rs
+                        then putStrLn "[no results]"
+                        else forM_ rs
+                          $ \(e, ExferenceStats n d) ->
+                            putStrLn $ prettyPrint (convert e)
+                                        ++ " (depth " ++ show d
+                                        ++ ", " ++ show n ++ " steps)"
+                  | PrintTree `elem` flags -> do
+                      when verbose $ putStrLn "[running findExpressionsWithStats ..]"
+                      let (_, tree, _) = last $ findExpressionsWithStats input
+                      let showf (total,processed,expression,_)
+                            = printf "%d (+%d): %s" processed
+                                                    (total-processed)
+                                                    (show expression)
+                      putStrLn $ drawTree
+                               $ fmap showf
+                               -- $ filterSearchTreeProcessedN 2
+                               $ tree
+                  | EnvUsage `elem` flags -> do
+                      when verbose $ putStrLn "[running findExpressionsWithStats ..]"
+                      let (stats, _, _) = last $ findExpressionsWithStats input
+                          highest = take 8 $ sortBy (flip $ comparing snd) $ M.toList stats
+                      putStrLn $ show highest
+                  | otherwise -> do
+                      r <- if par
+                        then do
+                          when verbose $ putStrLn "[running findOneExpressionPar ..]"
+                          findOneExpressionPar input
+                        else do
+                          when verbose $ putStrLn "[running findOneExpression ..]"
+                          return $ findOneExpression input
+                      case r of
+                        Nothing -> putStrLn "[no result]"
+                        Just (e, ExferenceStats n d) ->
+                            putStrLn $ prettyPrint (convert e)
+                                        ++ " (depth " ++ show d
+                                        ++ ", " ++ show n ++ " steps)"
 
         -- printChecks     testHeuristicsConfig env
         -- printStatistics testHeuristicsConfig env
