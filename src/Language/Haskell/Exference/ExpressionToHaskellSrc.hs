@@ -2,6 +2,7 @@
 
 module Language.Haskell.Exference.ExpressionToHaskellSrc
   ( convert
+  , convertToFunc
   )
 where
 
@@ -23,10 +24,18 @@ convert e = h e []
     h rhsExp [] = convertExp rhsExp
     h rhsExp is =
         Lambda noLoc params (convertExp rhsExp)
-        -- FunBind [Match noLoc (Ident "f") params Nothing rhs (BDecls[])]
       where
         params = map (PVar . Ident . T.showVar) $ reverse is
-        -- rhs = UnGuardedRhs $ convertExp rhsExp
+
+convertToFunc :: String -> E.Expression -> Decl
+convertToFunc ident e = h e []
+  where
+    h (E.ExpLambda i e1) is = h e1 (i:is)
+    h rhsExp is =
+        FunBind [Match noLoc (Ident ident) params Nothing rhs (BDecls[])]
+      where
+        params = map (PVar . Ident . T.showVar) $ reverse is
+        rhs = UnGuardedRhs $ convertExp rhsExp
 
 convertExp :: E.Expression -> Exp
 convertExp e = convertInternal 0 e
