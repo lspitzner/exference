@@ -20,7 +20,6 @@ module Language.Haskell.Exference.Internal.ExferenceNodeBuilder
   , builderAddConstraintGoals
   , builderSetConstraints
   , builderApplySubst
-  , __debug
   )
 where
 
@@ -40,11 +39,6 @@ import Control.Monad.State.Lazy ( State
 import Control.Applicative
 import qualified Data.Map as M
 import Data.Bool (bool)
-
-
-
-__debug :: Bool
-__debug = False
 
 
 
@@ -94,7 +88,9 @@ builderAddDepth f = SearchNodeBuilder $ modify $ \s ->
 builderSetReason :: String -> SearchNodeBuilder ()
 builderSetReason r = SearchNodeBuilder $ modify $ \s ->
   s { node_lastStepReason = r
-    , node_previousNode = bool Nothing (Just s) __debug
+#if LINK_NODES
+    , node_previousNode = Just s
+#endif
     }
 
 builderAddPBinding :: ScopeId -> VarPBinding -> SearchNodeBuilder ()

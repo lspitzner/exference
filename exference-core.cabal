@@ -1,7 +1,17 @@
 Name:          exference-core
-Version:       0.13.0.1
+Version:       0.13.1.0
 Cabal-Version: >= 1.8
 Build-Type:    Simple
+
+Flag linkNodes
+  description: nodes keep a reference to the precessor node, allowing returning
+               the path thad lead to a solution.
+  default: False
+
+Flag buildSearchTree
+  description: use dirty hacks to create the search tree that can be observed
+               afterwards. needs link-nodes flag.
+  default: False
 
 Library
   --ghc-options: -fllvm
@@ -13,6 +23,12 @@ Library
                -Wall
                -fno-warn-unused-imports
                -fno-warn-orphans
+  
+  If flag(linkNodes) || flag(buildSearchTree)
+    cpp-options: -DLINK_NODES
+  If flag(buildSearchTree)
+    cpp-options: -DBUILD_SEARCH_TREE
+
   exposed-modules: Language.Haskell.ExferenceCore
                    Language.Haskell.Exference.Type
                    Language.Haskell.Exference.ConstrainedType
@@ -22,12 +38,13 @@ Library
                    Language.Haskell.Exference.FunctionBinding
                    Language.Haskell.Exference.SearchTree
                    Paths_exference_core
+                   Flags_exference_core
   other-modules: Language.Haskell.Exference.Internal.Unify,
                  Language.Haskell.Exference.Internal.ConstraintSolver,
                  Language.Haskell.Exference.Internal.ExferenceNode,
                  Language.Haskell.Exference.Internal.ExferenceNodeBuilder,
                  Language.Haskell.Exference.Internal.Exference
-  extensions: NoMonomorphismRestriction
+  extensions: NoMonomorphismRestriction CPP
   hs-source-dirs: src
   Build-Depends:
     base >=3 && <5,

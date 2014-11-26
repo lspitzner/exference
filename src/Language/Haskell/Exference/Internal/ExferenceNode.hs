@@ -153,7 +153,9 @@ data SearchNode = SearchNode
   , node_nextVarId       :: TVarId
   , node_maxTVarId       :: TVarId
   , node_depth           :: Float
+#if LINK_NODES
   , node_previousNode    :: Maybe SearchNode
+#endif
   , node_lastStepReason  :: String
   , node_lastStepBinding :: Maybe String
   }
@@ -175,9 +177,12 @@ instance Show SearchNode where
               snextVarId
               smaxTVarId
               sdepth
+#if LINK_NODES
               _prev
+#endif
               reason
-              _lastStepBinding)
+              _lastStepBinding
+              )
     = show
     $ text "SearchNode" <+> (
           (text   "goals      ="
@@ -212,10 +217,14 @@ instance Show SearchNode where
       tVarPType (i, t, ps) = tVarType (i, foldr TypeArrow t ps)
 
 showNodeDevelopment :: SearchNode -> String
+#if LINK_NODES
 showNodeDevelopment s = maybe "" f (node_previousNode s) ++ show s
   where
     f :: SearchNode -> String
     f x = showNodeDevelopment x ++ "\n"
+#else
+showNodeDevelopment _ = "[showNodeDevelopment: exference-core was not compiled with -fLinkNodes]"
+#endif
 
 instance Observable SearchNode where
   observer state = observeOpaque (show state) state
