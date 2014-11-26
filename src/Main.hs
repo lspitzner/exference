@@ -60,6 +60,7 @@ import MainTest
 
 import Paths_exference
 import qualified Paths_exference_core
+import qualified Flags_exference_core
 
 import System.Environment ( getArgs )
 import System.Console.GetOpt
@@ -182,17 +183,20 @@ main = runO $ do
                             putStrLn $ prettyPrint (convert e)
                                         ++ " (depth " ++ show d
                                         ++ ", " ++ show n ++ " steps)"
-                  | PrintTree `elem` flags -> do
-                      when verbose $ putStrLn "[running findExpressionsWithStats ..]"
-                      let (_, tree, _) = last $ findExpressionsWithStats input
-                      let showf (total,processed,expression,_)
-                            = printf "%d (+%d): %s" processed
-                                                    (total-processed)
-                                                    (show expression)
-                      putStrLn $ drawTree
-                               $ fmap showf
-                               -- $ filterSearchTreeProcessedN 2
-                               $ tree
+                  | PrintTree `elem` flags ->
+                      if not Flags_exference_core.buildSearchTree
+                        then putStrLn "exference-core was not compiled with flag \"buildSearchTree\""
+                        else do
+                          when verbose $ putStrLn "[running findExpressionsWithStats ..]"
+                          let (_, tree, _) = last $ findExpressionsWithStats input
+                          let showf (total,processed,expression,_)
+                                = printf "%d (+%d): %s" processed
+                                                        (total-processed)
+                                                        (show expression)
+                          putStrLn $ drawTree
+                                   $ fmap showf
+                                   -- $ filterSearchTreeProcessedN 2
+                                   $ tree
                   | EnvUsage `elem` flags -> do
                       when verbose $ putStrLn "[running findExpressionsWithStats ..]"
                       let (stats, _, _) = last $ findExpressionsWithStats input
