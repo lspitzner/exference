@@ -45,7 +45,6 @@ import Control.Applicative ( (<$>), (<*>) )
 import Data.List ( partition, sortBy, groupBy )
 import Data.Ord ( comparing )
 import Data.Function ( on )
-import Data.Bool (bool)
 import Data.Monoid ( mempty, First(First), getFirst, mconcat )
 import Control.Monad.Morph ( lift )
 
