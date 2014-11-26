@@ -45,7 +45,6 @@ import Control.Applicative ( (<$>), (<*>) )
 import Data.List ( partition, sortBy, groupBy )
 import Data.Ord ( comparing )
 import Data.Function ( on )
-import Data.Bool (bool)
 import Data.Monoid ( mempty, First(First), getFirst, mconcat )
 import Control.Monad.Morph ( lift )
 
@@ -166,7 +165,9 @@ findExpressions (ExferenceInput rawCType
         1
         (largestId t)
         0.0
+#if LINK_NODES
         Nothing
+#endif
         ""
         Nothing
     initNodeName = unsafePerformIO $ makeStableName $! rootSearchNode
@@ -177,7 +178,7 @@ findExpressions (ExferenceInput rawCType
                           , Q.singleton 0.0 rootSearchNode
                           )
     helper :: FindExpressionsState -> [(BindingUsages, SearchTree, [(Int,Float,Expression)])]
-    helper (n, worst, bindingUsages, st@(stA, stB), states)
+    helper (n, worst, bindingUsages, st, states)
       | Q.null states || n > maxSteps = []
       | ((_,s), restNodes) <- Q.deleteFindMax states =
         let rNodes = stateStep heuristics s
@@ -221,14 +222,18 @@ findExpressions (ExferenceInput rawCType
                     filter ((>cutoff) . fst) ratedNew
               else ratedNew
             newNodes = foldr (uncurry Q.insert) restNodes filteredNew
-            newSearchTreeBuilder = if __debug
-              then ( [ unsafePerformIO $ do
-                         n1 <- makeStableName $! ns
-                         n2 <- makeStableName $! s
-                         return (n1,n2,node_expression ns)
-                     | ns<-rNodes] ++ stA
-                   , unsafePerformIO (makeStableName $! s):stB)
-              else st
+            newSearchTreeBuilder =
+#if BUILD_SEARCH_TREE
+              let (stA,stB)=st in
+                    ( [ unsafePerformIO $ do
+                          n1 <- makeStableName $! ns
+                          n2 <- makeStableName $! s
+                          return (n1,n2,node_expression ns)
+                      | ns<-rNodes] ++ stA
+                    , unsafePerformIO (makeStableName $! s):stB)
+#else
+              st
+#endif
             rest = helper
               ( n+1
               , minimum $ worst:map fst filteredNew
@@ -290,7 +295,7 @@ findExpressionsPar (ExferenceInput rawCType
                                , SearchTreeBuilder (StableName SearchNode)
                                , [(Int,Float,Expression)]
                                )
-      controller (nRunning, n, worst, bindingUsages, st@(stA, stB), states) = if
+      controller (nRunning, n, worst, bindingUsages, st, states) = if
         | n > maxSteps -> mempty
         | n < 768 && not (Q.null states) -> let
             ((_,s), restNodes) = Q.deleteFindMax states
@@ -322,14 +327,18 @@ findExpressionsPar (ExferenceInput rawCType
                             , newS )
                           | newS <- futures ]
             newNodes = foldr (uncurry Q.insert) restNodes ratedNew
-            newSearchTreeBuilder = if __debug
-              then ( [ unsafePerformIO $ do
-                         n1 <- makeStableName $! ns
-                         n2 <- makeStableName $! s
-                         return (n1,n2,node_expression ns)
-                     | ns<-rNodes] ++ stA
-                   , unsafePerformIO (makeStableName $! s):stB)
-              else st
+            newSearchTreeBuilder =
+#if BUILD_SEARCH_TREE
+              let (stA, stB) = st in
+                    ( [ unsafePerformIO $ do
+                          n1 <- makeStableName $! ns
+                          n2 <- makeStableName $! s
+                          return (n1,n2,node_expression ns)
+                      | ns<-rNodes] ++ stA
+                    , unsafePerformIO (makeStableName $! s):stB)
+#else
+              st
+#endif
             rest = controller
               ( nRunning
               , n+1
@@ -349,13 +358,17 @@ findExpressionsPar (ExferenceInput rawCType
                   Nothing -> old
                   Just b  -> incBindingUsage b old
             let newBindingUsages = foldr calcNew bindingUsages ss
-            let newSearchTreeBuilder = if __debug
-                  then ( stA
-                       , [ unsafePerformIO (makeStableName $! s)
-                         | s <- ss
-                         ]++stB
-                       )
-                  else st
+#if BUILD_SEARCH_TREE
+            let (stA, stB) = st
+            let newSearchTreeBuilder =
+                  ( stA
+                  , [ unsafePerformIO (makeStableName $! s)
+                    | s <- ss
+                    ]++stB
+                  )
+#else
+            let newSearchTreeBuilder = st
+#endif
             controller ( nRunning+1
                        , n + length ss
                        , worst
@@ -399,14 +412,18 @@ findExpressionsPar (ExferenceInput rawCType
                         filter (\(a,_,_) -> a>cutoff) futures
                   else futures
                 newNodes   = foldr (\(r,x,_) -> Q.insert r x) states filteredNew
-                newSearchTreeBuilder = if __debug
-                  then ( [ unsafePerformIO $ do
-                             s <- makeStableName $! newS
-                             p <- makeStableName $! oldS
-                             return (s,p,node_expression newS)
-                         | (_,newS,oldS) <-res] ++ stA
-                       , stB)
-                  else st
+#if BUILD_SEARCH_TREE
+                (stA, stB) = st
+                newSearchTreeBuilder =
+                  ( [ unsafePerformIO $ do
+                        s <- makeStableName $! newS
+                        p <- makeStableName $! oldS
+                        return (s,p,node_expression newS)
+                    | (_,newS,oldS) <-res] ++ stA
+                  , stB)
+#else
+                newSearchTreeBuilder = st
+#endif
                 rest = controller
                   ( nRunning-1
                   , n
@@ -428,7 +445,9 @@ findExpressionsPar (ExferenceInput rawCType
           1
           (largestId t)
           0.0
+#if LINK_NODES
           Nothing
+#endif
           ""
           Nothing
       initNodeName = unsafePerformIO $ makeStableName $! rootSearchNode
