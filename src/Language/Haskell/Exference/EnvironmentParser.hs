@@ -111,10 +111,11 @@ environmentFromModules l = do
   return $ do
     mapM_ (tell.return) $ lefts eParsed
     let mods = rights eParsed
-    cntxt@(StaticClassEnv clss insts) <- getClassEnv mods
-    tell ["got " ++ show (length clss) ++ " classes"]
-    tell ["and " ++ show (length $ concat $ M.elems insts) ++ " instances"]
+    (cntxt@(StaticClassEnv clss insts), n_insts) <- getClassEnv mods
     binds <- join <$> mapM (hExtractBinds cntxt) mods
+    tell ["got " ++ show (length clss) ++ " classes"]
+    tell ["and " ++ show (n_insts) ++ " instances"]
+    tell ["(-> " ++ show (length $ concat $ M.elems $ insts) ++ " instances after inflation)"]
     tell ["and " ++ show (length binds) ++ " bindings"]
     return $ (builtInBindings++binds, cntxt)
   where

@@ -31,15 +31,21 @@ import Data.List ( find )
 
 
 
-getClassEnv :: [Module] -> Writer [String] StaticClassEnv
+-- | returns the environment and the number of class instances
+--   found (before inflating the instances). The number of
+--   classes can be derived from the other output.
+--   The count may be used to inform the user (post-inflation count
+--   would be bad for that purpose.)
+getClassEnv :: [Module] -> Writer [String] (StaticClassEnv, Int)
 getClassEnv ms = do
   let etcs = getTypeClasses ms
   mapM_ (tell.return) $ lefts etcs
   let tcs = rights etcs
   let einsts = getInstances tcs ms
   mapM_ (tell.return) $ lefts einsts
-  let insts = inflateInstances $ rights einsts
-  return $ mkStaticClassEnv tcs insts
+  let insts_uninflated = rights einsts
+  let insts = inflateInstances insts_uninflated
+  return $ (mkStaticClassEnv tcs insts, length insts_uninflated)
 
 type RawMap = M.Map String (Context, [TyVarBind])
 
