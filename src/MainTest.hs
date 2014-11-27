@@ -26,8 +26,6 @@ import Language.Haskell.Exference.SearchTree
 
 import Control.DeepSeq
 
-import System.Process
-
 import Control.Applicative ( (<$>), (<*>) )
 import Control.Arrow ( second, (***) )
 import Control.Monad ( when, forM_, guard, forM, mplus, mzero )
@@ -235,11 +233,7 @@ checkExpectedResultsPar :: ExferenceHeuristicsConfig
 checkExpectedResultsPar heuristics env = do
   (name, allowUnused, typeStr, expected) <- checkData
   let input = checkInput heuristics env typeStr allowUnused
-  let getExp :: Int -> [(Expression, ExferenceStats)] -> Maybe (Int, ExferenceStats)
-      getExp _ [] = Nothing
-      getExp n ((e,s):r) | show e `elem` expected = Just (n,s)
-                         | otherwise              = getExp (n+1) r
-      helper :: ListT.ListT IO ExferenceOutputElement
+  let helper :: ListT.ListT IO ExferenceOutputElement
              -> IO (Maybe ( (Expression, ExferenceStats)
                           , Maybe (Int, ExferenceStats)))
       helper l = do
@@ -251,8 +245,8 @@ checkExpectedResultsPar heuristics env = do
             -> return $ Just ((e,s), Just (0,s))
             | otherwise
             -> do
-              exp <- helper2 1 rest
-              return $ Just ((e,s), exp)
+              expr <- helper2 1 rest
+              return $ Just ((e,s), expr)
       helper2 :: Int
               -> ListT.ListT IO ExferenceOutputElement
               -> IO (Maybe (Int, ExferenceStats))
@@ -266,6 +260,7 @@ checkExpectedResultsPar heuristics env = do
                                -> helper2 (n+1) rest
   return $ (,,) name expected <$> findExpressionsPar input helper
 
+{-
 checkBestResults :: ExferenceHeuristicsConfig
                  -> EnvDictionary
                  -> [ ( String
@@ -299,6 +294,7 @@ checkBestResults heuristics env = do
         [] -> Nothing
         xs@(x:_) -> Just (x, getBest xs, getExp 0 xs)
     )
+-}
 
 {-
 checkBestResultsPar :: ExferenceHeuristicsConfig
@@ -368,8 +364,12 @@ exampleOutput heuristics (bindings, sEnv) = map f exampleInput
                 (Just 32768)
                 heuristics
 
+exampleInOut :: ExferenceHeuristicsConfig
+             -> EnvDictionary
+             -> [((String, Bool, String), [(Expression, ExferenceStats)])]
 exampleInOut h env = zip exampleInput (exampleOutput h env)
 
+printAndStuff :: ExferenceHeuristicsConfig -> EnvDictionary -> IO ()
 printAndStuff h env = mapM_ f (exampleInOut h env)
   where
     f ((name, _, _), []) = putStrLn $ "no results for "++name++"!"
@@ -377,22 +377,24 @@ printAndStuff h env = mapM_ f (exampleInOut h env)
       where
         g (expr, ExferenceStats n d) = do
           let str = show expr
-              doPf = False
+          {-
           if doPf then do
             pf <- pointfree $ str
             putStrLn $ name ++ " = " ++ pf
                        ++ "    FROM    " ++ name ++ " = " ++ str
                        ++ " (depth " ++ show d ++ ", " ++ show n ++ " steps)"
            else
-            putStrLn $ name ++ " = " ++ str
+          -}
+          putStrLn $ name ++ " = " ++ str
                        ++ " (depth " ++ show d ++ ", " ++ show n ++ " steps)"
 
+printStatistics :: ExferenceHeuristicsConfig -> EnvDictionary -> IO ()
 printStatistics h env = mapM_ f (exampleInOut h env)
   where
     f ((name, _, _), [])      = putStrLn $ printf "%10s: ---" name
     f ((name, _, _), results) =
-      let (hd, avg, min, max, n) = getStats results
-      in putStrLn $ printf "%10s: head=%6d avg=%6d min=%6d max=%6d %s" name hd avg min max
+      let (hd, avg, minV, maxV, n) = getStats results
+      in putStrLn $ printf "%10s: head=%6d avg=%6d min=%6d max=%6d %s" name hd avg minV maxV
                                      (if n==6 then "" else " n = " ++ show n)
     getStats results =
       let steps = map (exference_steps.snd) results
@@ -431,7 +433,7 @@ printCheckExpectedResults par h env = do
       putStrLn $ "  expected solutions:   " ++ intercalate ", " e
       putStrLn $ "  " ++ show (show first)
       return Nothing
-    helper (name, e, Just (_, Just (0, stats))) = do
+    helper (name, _, Just (_, Just (0, stats))) = do
       putStrLn $ printf "%-10s: %s" name (show stats)
       return (Just stats)
     helper (name, e, Just ((first, fstats), Just (n, stats))) = do
@@ -478,8 +480,5 @@ printSearchTree h (bindings, sEnv) = mapM_ f checkData
             = printf "%d (+%d): %s" processed
                                     (total-processed)
                                     (show expression)
+      putStrLn $ name
       putStrLn $ drawTree $ fmap showf $ filterSearchTreeProcessedN 2 $ tree
-
--- TODO: remove duplication
-pointfree :: String -> IO String
-pointfree s = (!!1) <$> lines <$> readProcess "pointfree" ["--verbose", s] ""

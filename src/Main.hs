@@ -27,7 +27,7 @@ import Language.Haskell.Exference.SearchTree
 
 import Control.DeepSeq
 
-import System.Process
+import System.Process hiding ( env )
 
 import Control.Applicative ( (<$>), (<*>) )
 import Control.Arrow ( first, second, (***) )
@@ -111,10 +111,12 @@ mainOpts argv =
     ([], _, [])   -> return ([Tests],[])
     (_,  _, errs) -> ioError (userError (concat errs ++ fullUsageInfo))
 
+fullUsageInfo :: String
 fullUsageInfo = usageInfo header options
   where
     header = "Usage: exference [OPTION...]"
 
+main :: IO ()
 main = runO $ do
   argv <- getArgs
   (flags, params) <- mainOpts argv
@@ -162,7 +164,7 @@ main = runO $ do
             let mParsedType = parseConstrainedType sEnv x
             case mParsedType of
               Left err -> do
-                putStrLn "could not parse input type"
+                putStrLn $ "could not parse input type: " ++ err
               Right parsedType -> do
                 let input = ExferenceInput
                       parsedType
@@ -229,14 +231,14 @@ main = runO $ do
         print $ t
         -}
 
-pointfree :: String -> IO String
-pointfree s = (!!1) <$> lines <$> readProcess "pointfree" ["--verbose", s] ""
+_pointfree :: String -> IO String
+_pointfree s = (!!1) <$> lines <$> readProcess "pointfree" ["--verbose", s] ""
 
-pointful :: String -> IO String
-pointful s = (!!0) <$> lines <$> readProcess "pointful" [s] ""
+_pointful :: String -> IO String
+_pointful s = (!!0) <$> lines <$> readProcess "pointful" [s] ""
 
-tryParse :: Bool -> String -> IO ()
-tryParse shouldBangPattern s = do
+_tryParse :: Bool -> String -> IO ()
+_tryParse shouldBangPattern s = do
   content <- readFile $ "/home/lsp/asd/prog/haskell/exference/BaseContext/preprocessed/"++s++".hs"
   let exts1 = (if shouldBangPattern then (BangPatterns:) else id)
               [ UnboxedTuples
@@ -259,7 +261,7 @@ tryParse shouldBangPattern s = do
                            content of
     f@(ParseFailed _ _) -> do
       print f
-    ParseOk mod -> do
+    ParseOk _modul -> do
       putStrLn s
       --mapM_ putStrLn $ map (either id show)
       --               $ getBindings defaultClassEnv mod

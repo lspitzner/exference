@@ -117,7 +117,7 @@ findFirstExpressionLookahead n input = f n Nothing (findExpressionsChunked input
     f _ x        []      = x
     f 0 best     _       = best
     f r best     ([]:sr) = f (r-1) best sr
-    f r Nothing  (s:sr)  = f n (Just $ minElem s) sr
+    f _ Nothing  (s:sr)  = f n (Just $ minElem s) sr
     f r (Just b) (s:sr)  | sbest <- minElem s
                          , exference_complexityRating (snd sbest)
                          < exference_complexityRating (snd b)

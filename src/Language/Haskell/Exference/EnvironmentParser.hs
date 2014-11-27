@@ -124,15 +124,15 @@ environmentFromModules l = do
     hParse :: (ParseMode, String) -> Either String Module
     hParse (mode, content) = case parseModuleWithMode mode content of
       f@(ParseFailed _ _) -> Left $ show f
-      ParseOk mod -> Right mod
+      ParseOk modul       -> Right modul
     hExtractBinds :: StaticClassEnv
                   -> Module
                   -> Writer [String] [FunctionBinding]
-    hExtractBinds cntxt mod@(Module _ (ModuleName mname) _ _ _ _ _) = do
+    hExtractBinds cntxt modul@(Module _ (ModuleName _mname) _ _ _ _ _) = do
       -- tell $ return $ mname
-      let ebinds = getBindings cntxt mod
-                ++ getDataConss mod
-                ++ getClassMethods cntxt mod
+      let ebinds = getBindings cntxt modul
+                ++ getDataConss modul
+                ++ getClassMethods cntxt modul
       mapM_ (tell.return) $ lefts ebinds
       -- tell $ map show $ rights ebinds
       return $ rights ebinds
@@ -174,9 +174,9 @@ ratingsFromFile s = do
       (many $ try $ do
         spaces
         name <- many1 (noneOf " ")
-        space
+        _ <- space
         spaces
-        char '='
+        _ <- char '='
         spaces
         minus <- optionMaybe $ char '-'
         a <- many1 digit

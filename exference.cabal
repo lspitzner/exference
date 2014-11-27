@@ -69,6 +69,7 @@ Executable test-main
                -rtsopts
                -O2
                -j
+               -Wall
                -fno-warn-unused-imports
                -fno-warn-orphans
                -threaded
