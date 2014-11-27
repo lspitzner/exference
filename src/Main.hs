@@ -88,7 +88,7 @@ data Flag = Verbose
 options :: [OptDescr Flag]
 options =
   [ Option []    ["version"]     (NoArg Version)              ""
-  , Option ['h'] ["help"]        (NoArg Help)                 "prints basic program info"
+  , Option []    ["help"]        (NoArg Help)                 "prints basic program info"
   , Option ['t'] ["tests"]       (NoArg Tests)                "run the standard validity/performance tests"
   , Option ['x'] ["examples"]    (NoArg Examples)             "prints the first few results for the examples; useful for debugging"
   , Option ['e'] ["environment"] (NoArg Env)                  "print the environment to be used for queries"
@@ -97,8 +97,8 @@ options =
   , Option ['a'] ["all"]         (NoArg PrintAll)             "print all solutions (up to search step limit)"
   , Option []    ["envUsage"]    (NoArg EnvUsage)             "print a list of functions that got inserted at some point (regardless if successful or not), and how often"
   , Option []    ["tree"]        (NoArg PrintTree)            "print tree of search space"
-  , Option ['s'] ["serial"]      (NoArg Serial)               "use the non-parallelized version of the algorithm (default)"
-  , Option ['p'] ["parallel"]    (NoArg Parallel)             "use the parallelized version of the algorithm"
+  , Option []    ["serial"]      (NoArg Serial)               "use the non-parallelized version of the algorithm (default)"
+  , Option ['j'] ["parallel"]    (NoArg Parallel)             "use the parallelized version of the algorithm"
   , Option ['u'] ["allowUnused"] (NoArg Unused)               "allow unused input variables"
   ]
 
