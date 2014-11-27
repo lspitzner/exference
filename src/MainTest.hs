@@ -134,6 +134,10 @@ checkData =
                              ["\\b -> (\\c -> (\\d -> (\\e -> (\\f -> (\\g -> (d b) ((mapM (\\m -> (fmap (\\s -> (g s) m)) ((f c) b))) e))))))"
                              ,"\\b -> (\\c -> (\\d -> (\\e -> (\\f -> (\\g -> (d b) ((mapM (\\m -> (fmap (\\q -> (g q) m)) ((f c) b))) e))))))"
                              ,"\\b -> (\\c -> (\\d -> (\\e -> (\\f -> (\\g -> (d b) ((mapM (\\m -> ((>>=) ((f c) b)) (\\s -> pure ((g s) m)))) e))))))"]
+  , (,,,) "contRet"    False "a -> Cont r a"
+                             ["\\b -> Cont (\\e -> e b)"]
+  , (,,,) "contBind"   False "Cont r a -> (a -> Cont r b) -> Cont r b"
+                             ["\\b -> (\\c -> let (Cont e) = b in Cont (\\g -> e (\\j -> let (Cont n) = c j in n g)))"]
   ]
 
 {-

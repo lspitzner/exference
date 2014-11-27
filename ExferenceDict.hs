@@ -106,6 +106,8 @@ class Monad m => MonadPlus m where
 
 newtype State s a = State (s -> (a,s))
 
+newtype Cont r a = Cont ((a -> r) -> r)
+
 instance Monad (State s)
 
 -- ****
