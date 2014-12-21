@@ -46,6 +46,7 @@ import Data.List ( partition, sortBy, groupBy )
 import Data.Ord ( comparing )
 import Data.Function ( on )
 import Data.Monoid ( mempty, First(First), getFirst, mconcat )
+import Data.Foldable ( foldMap )
 import Control.Monad.Morph ( lift )
 
 import Control.Concurrent.Chan
@@ -98,8 +99,11 @@ data ExferenceHeuristicsConfig = ExferenceHeuristicsConfig
 data ExferenceInput = ExferenceInput
   { input_goalType    :: HsConstrainedType      -- ^ try to find a expression
                                                 -- of this type
-  , input_envDict     :: [RatedFunctionBinding] -- ^ the list of functions
+  , input_envFuncs    :: [FunctionBinding]      -- ^ the list of functions
                                                 -- that may be used
+  , input_envDeconsS  :: [DeconstructorBinding] -- ^ the list of deconstructors
+                                                -- that may be used for pattern
+                                                -- matching
   , input_envClasses  :: StaticClassEnv
   , input_allowUnused :: Bool                   -- ^ if false, forbid solutions
                                                 -- where any bind is unused
@@ -134,6 +138,7 @@ findExpressions :: ExferenceInput
                 -> [ExferenceChunkElement]
 findExpressions (ExferenceInput rawCType
                                 funcs
+                                deconss
                                 sClassEnv
                                 allowUnused
                                 maxSteps -- since we output a [[x]],
@@ -159,7 +164,8 @@ findExpressions (ExferenceInput rawCType
         []
         initialScopes
         M.empty
-        (map splitEnvElement funcs)
+        funcs
+        deconss
         (mkQueryClassEnv sClassEnv cs)
         (ExpHole 0)
         1
@@ -258,6 +264,7 @@ findExpressionsPar :: ExferenceInput
                    -> IO a
 findExpressionsPar (ExferenceInput rawCType
                                    funcs
+                                   deconss
                                    sClassEnv
                                    allowUnused
                                    maxSteps -- since we output a [[x]],
@@ -439,7 +446,8 @@ findExpressionsPar (ExferenceInput rawCType
           []
           initialScopes
           M.empty
-          (map splitEnvElement funcs)
+          funcs
+          deconss
           (mkQueryClassEnv sClassEnv cs)
           (ExpHole 0)
           1
@@ -563,7 +571,7 @@ stateStep2 h s
         (heuristics_stepProvidedBad h)
         ("inserting given value " ++ show provId ++ "::" ++ show provT)
     byFunctionSimple = do
-      SimpleBinding funcId funcRating funcR funcParams funcConstrs <- node_functions s
+      (funcR, funcId, funcRating, funcConstrs, funcParams) <- node_functions s
       let incF = incVarIds (+(1+node_maxTVarId s))
       byGenericUnify
         (Left funcId)
@@ -652,43 +660,23 @@ addScopePatternMatch vid sid bindings = mapM_ helper bindings where
       TypeArrow _ _ -> undefined  -- should never happen, given a pbinding..
       TypeForall _ _ -> undefined -- todo when we do RankNTypes
       _ -> when (null vtParams) $ do -- SearchNodeBuilder
-        funcs <- builderFunctions
+        deconss <- builderDeconss
         fromMaybe (return ()) $ getFirst
-                              $ mconcat
-                              $ (<$> funcs)
-                              $ \f -> case f of
-          SimpleBinding {} -> mempty
-          MatchBinding matchId matchRs matchParam -> let
+                              $ foldMap First
+                              $ deconss <&> \decons -> case decons of
+          (matchParam, [(matchId, matchRs)], False) -> let -- forbid recursive stuff for now
             resultTypes = map incF matchRs
             inputType = incF matchParam
-           in First
-            $ flip fmap (unifyRight vtResult inputType)
-            $ \substs -> do -- SearchNodeBuilder
-                vars <- replicateM (length resultTypes) builderAllocVar
-                builderAddVarUsage v
-                builderSetReason $ "pattern matching on " ++ showVar v
-                let newProvTypes = map (applySubsts substs) resultTypes
-                    newBinds = zipWith (curry splitBinding) vars newProvTypes
-                    expr = ExpLetMatch matchId vars (ExpVar v) (ExpHole vid)
-                builderFillExprHole vid expr
-                builderFixMaxTVarId $ maximum $ map largestId newProvTypes 
-                addScopePatternMatch vid sid $ reverse newBinds
-
-
-
-splitEnvElement :: RatedFunctionBinding -> FuncDictElem
-splitEnvElement (a,r,HsConstrainedType constrs b) =
-  case f b of
-    (Left  t,  ps) -> SimpleBinding a r t ps constrs
-    (Right ts, [p]) | null constrs -> MatchBinding a ts p
-    _ -> error "wrong INFPATTERN usage"
-  where
-    f :: HsType -> (Either HsType [HsType], [HsType])
-    f (TypeArrow t1 t2) = let (c',d') = f t2 in (c', t1:d')
-    f t  = case g t of
-      Nothing -> (Left t, [])
-      Just ts -> (Right ts, [])
-    g :: HsType -> Maybe [HsType]
-    g (TypeCons "INFPATTERN") = Just []
-    g (TypeApp t1 t2)         = (++[t2]) <$> g t1
-    g _                       = Nothing
+            in unifyRight vtResult inputType <&> \substs -> do -- SearchNodeBuilder
+            vars <- replicateM (length resultTypes) builderAllocVar
+            builderAddVarUsage v
+            builderSetReason $ "pattern matching on " ++ showVar v
+            let newProvTypes = map (applySubsts substs) resultTypes
+                newBinds = zipWith (curry splitBinding) vars newProvTypes
+                expr = ExpLetMatch matchId vars (ExpVar v) (ExpHole vid)
+            builderFillExprHole vid expr
+            builderFixMaxTVarId $ maximum $ map largestId newProvTypes 
+            addScopePatternMatch vid sid $ reverse newBinds
+          (_matchParam, _matchers, False) -> Nothing -- TODO: multi-decons
+          _ -> Nothing -- TODO: decons for recursive data types
+  (<&>) = flip (<$>)
