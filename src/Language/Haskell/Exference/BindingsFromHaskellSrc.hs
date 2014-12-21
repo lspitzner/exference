@@ -70,23 +70,24 @@ getDataConss (Module _loc _m _pragma _warning _mexp _imp decls) = do
   --  tTransform x              = lift $ left $ "unknown Type: " ++ show x
   let
     typeM :: QualConDecl -> ConversionMonad (FunctionBinding, FunctionBinding)
-    typeM (QualConDecl _loc cbindings ccntxt conDecl) =
-      case (cntxt, cbindings, ccntxt, conDecl) of
-        ([], [], [], ConDecl cname tys) -> do
-          convTs <- mapM convertTypeInternal tys
-          rtype  <- rTypeM
-          let cons   = HsConstrainedType [] (foldr TypeArrow rtype convTs)
-          let decons = HsConstrainedType []
-                          (TypeArrow
-                            rtype
-                            (foldl TypeApp (TypeCons "INFPATTERN") convTs))
-          return $ (helper cons cname, helper decons cname)
-        ([], [], [], x) ->
-          left $ "unknown ConDecl: " ++ show x
-        ([], _, _, _) ->
-          left $ "constraint or existential type for constructor"
-        _ ->
-          left $ "context in data type"
+    typeM (QualConDecl _loc cbindings ccntxt conDecl) = do
+      case cntxt of
+        [] -> right ()
+        _  -> left $ "context in data type"
+      case (cbindings, ccntxt) of
+        ([],[]) -> right ()
+        _       -> left $ "constraint or existential type for constructor"
+      (cname,tys) <- case conDecl of
+        ConDecl c t -> right (c, t)
+        x           -> left $ "unknown ConDecl: " ++ show x
+      convTs <- mapM convertTypeInternal tys
+      rtype  <- rTypeM
+      let cons   = HsConstrainedType [] (foldr TypeArrow rtype convTs)
+      let decons = HsConstrainedType []
+                      (TypeArrow
+                        rtype
+                        (foldl TypeApp (TypeCons "INFPATTERN") convTs))
+      return $ (helper cons cname, helper decons cname)
   let
     addConsMsg = (++) $ hsNameToString name ++ ": "
   let
