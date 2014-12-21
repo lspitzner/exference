@@ -110,6 +110,9 @@ newtype Cont r a = Cont ((a -> r) -> r)
 
 instance Monad (State s)
 
+data Maybe a = Just a
+             | Nothing
+
 -- ****
 -- **** plain old function signatures ****
 -- ****

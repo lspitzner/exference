@@ -15,12 +15,13 @@ floor        = 16.0
 repeat       = 5.0
 ()           = 9.9
 []           = 40.0
+Nothing      = 40.0
 State        = 3.0
 get          = 10.0
 put          = 10.0
 state        = 10.0
 (:)          = 4.0
-Just         = 5.0
+Just         = 999.0
 sequence     = 6.0
 
 minBound     = 16.0
