@@ -680,9 +680,8 @@ splitEnvElement :: RatedFunctionBinding -> FuncDictElem
 splitEnvElement (a,r,HsConstrainedType constrs b) =
   case f b of
     (Left  t,  ps) -> SimpleBinding a r t ps constrs
-    (Right ts, [p]) -> if null constrs then MatchBinding a ts p
-                                       else undefined
-    _ -> undefined
+    (Right ts, [p]) | null constrs -> MatchBinding a ts p
+    _ -> error "wrong INFPATTERN usage"
   where
     f :: HsType -> (Either HsType [HsType], [HsType])
     f (TypeArrow t1 t2) = let (c',d') = f t2 in (c', t1:d')

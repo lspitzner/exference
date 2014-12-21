@@ -49,7 +49,7 @@ import Debug.Hood.Observe
 
 type VarBinding = (TVarId, HsType)
 data FuncDictElem = SimpleBinding String Float HsType [HsType] [HsConstraint]
-                              -- name, results, params constraints
+                         -- name, penalty, results, params constraints
                   | MatchBinding  String [HsType] HsType
   deriving (Show, Generic)
 
