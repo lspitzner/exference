@@ -119,7 +119,7 @@ fullUsageInfo = usageInfo header options
 main :: IO ()
 main = runO $ do
   argv <- getArgs
-  (flags, params) <- mainOpts argv
+  (flags, _params) <- mainOpts argv -- TODO: use params for input
   let verbose = Verbose `elem` flags
   let
     printVersion = do
