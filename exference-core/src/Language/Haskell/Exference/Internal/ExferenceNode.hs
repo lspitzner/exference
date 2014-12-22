@@ -2,7 +2,6 @@
 
 module Language.Haskell.Exference.Internal.ExferenceNode
   ( SearchNode (..)
-  , FuncDictElem (..)
   , TGoal
   , Scopes (..)
   , Scope (..)
@@ -32,6 +31,7 @@ import Language.Haskell.Exference.Type
 import Language.Haskell.Exference.TypeClasses
 import Language.Haskell.Exference.Expression
 import Language.Haskell.Exference.ExferenceStats
+import Language.Haskell.Exference.FunctionBinding
 
 import qualified Data.Map.Strict as M
 
@@ -48,11 +48,6 @@ import Debug.Hood.Observe
 
 
 type VarBinding = (TVarId, HsType)
-data FuncDictElem = SimpleBinding String Float HsType [HsType] [HsConstraint]
-                              -- name, results, params constraints
-                  | MatchBinding  String [HsType] HsType
-  deriving (Show, Generic)
-
 type VarPBinding = (TVarId, HsType, [HsType])
                 -- var, result, params
 
@@ -147,7 +142,8 @@ data SearchNode = SearchNode
   , node_constraintGoals :: [HsConstraint]
   , node_providedScopes  :: Scopes
   , node_varUses         :: VarUsageMap
-  , node_functions       :: [FuncDictElem]
+  , node_functions       :: [FunctionBinding]
+  , node_deconss         :: [DeconstructorBinding]
   , node_queryClassEnv   :: QueryClassEnv
   , node_expression      :: Expression
   , node_nextVarId       :: TVarId
@@ -161,10 +157,9 @@ data SearchNode = SearchNode
   }
   deriving Generic
 
-instance NFData FuncDictElem where rnf = genericRnf
 instance NFData Scope        where rnf = genericRnf
 instance NFData Scopes       where rnf = genericRnf
-instance NFData SearchNode        where rnf = genericRnf
+instance NFData SearchNode   where rnf = genericRnf
 
 instance Show SearchNode where
   show (SearchNode sgoals
@@ -172,6 +167,7 @@ instance Show SearchNode where
               (Scopes _ scopeMap)
               _svarUses
               _sfuncs
+              _sdeconss
               qClassEnv
               sexpression
               snextVarId

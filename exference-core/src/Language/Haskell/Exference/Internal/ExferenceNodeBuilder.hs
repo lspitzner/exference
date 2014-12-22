@@ -11,6 +11,7 @@ module Language.Haskell.Exference.Internal.ExferenceNodeBuilder
   , builderSetReason
   , builderAddPBinding
   , builderFunctions
+  , builderDeconss
   , builderGetTVarOffset
   , builderAllocVar
   , builderAllocHole
@@ -29,6 +30,7 @@ import Language.Haskell.Exference.Type
 import Language.Haskell.Exference.Expression
 import Language.Haskell.Exference.Internal.ExferenceNode
 import Language.Haskell.Exference.TypeClasses
+import Language.Haskell.Exference.FunctionBinding
 
 import Control.Monad.State.Lazy ( State
                                 , execState
@@ -98,8 +100,11 @@ builderAddPBinding sid pbind = SearchNodeBuilder $ modify $ \s ->
     $ node_providedScopes s
     }
 
-builderFunctions :: SearchNodeBuilder [FuncDictElem]
+builderFunctions :: SearchNodeBuilder [FunctionBinding]
 builderFunctions = SearchNodeBuilder $ node_functions <$> get
+
+builderDeconss :: SearchNodeBuilder [DeconstructorBinding]
+builderDeconss = SearchNodeBuilder $ node_deconss <$> get
 
 builderGetTVarOffset :: SearchNodeBuilder TVarId
 builderGetTVarOffset = SearchNodeBuilder $ (+1) . node_maxTVarId <$> get

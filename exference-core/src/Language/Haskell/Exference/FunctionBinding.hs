@@ -1,6 +1,6 @@
 module Language.Haskell.Exference.FunctionBinding
   ( FunctionBinding
-  , RatedFunctionBinding
+  , DeconstructorBinding
   , EnvDictionary
   )
 where
@@ -13,7 +13,13 @@ import Language.Haskell.Exference.TypeClasses
 
 
 
-type FunctionBinding = (String, HsConstrainedType)
-type RatedFunctionBinding = (String, Float, HsConstrainedType)
+type FunctionBinding = (HsType, String, Float, [HsConstraint], [HsType])
+                      -- input-type, name, rating, contraints, result-types
 
-type EnvDictionary = ([RatedFunctionBinding], StaticClassEnv)
+type DeconstructorBinding = (HsType, [(String, [HsType])], Bool)
+                      -- input-type, (name, result-types)s, is-recursive
+
+type EnvDictionary = ( [FunctionBinding]
+                     , [DeconstructorBinding]
+                     , StaticClassEnv
+                     )
