@@ -82,6 +82,8 @@ data Flag = Verbose
           | EnvUsage -- TODO: option to specify dictionary to use
           | Serial
           | Parallel
+          | Shortest
+          | FirstSol
           | Unused
   deriving (Show, Eq)
 
@@ -99,6 +101,8 @@ options =
   , Option []    ["tree"]        (NoArg PrintTree)            "print tree of search space"
   , Option []    ["serial"]      (NoArg Serial)               "use the non-parallelized version of the algorithm (default)"
   , Option ['j'] ["parallel"]    (NoArg Parallel)             "use the parallelized version of the algorithm"
+  , Option ['o'] ["short"]       (NoArg Shortest)             "prefer shorter solutions"
+  , Option ['f'] ["first"]       (NoArg FirstSol)             "stop after finding the first solution"
   , Option ['u'] ["allowUnused"] (NoArg Unused)               "allow unused input variables"
   ]
 
@@ -174,7 +178,11 @@ main = runO $ do
                       (Unused `elem` flags)
                       32768
                       (Just 32768)
-                      testHeuristicsConfig
+                      (if Shortest `elem` flags then
+                         testHeuristicsConfig
+                       else
+                         testHeuristicsConfig { heuristics_solutionLength = 0.0 })
+                    firstSol = FirstSol `elem` flags
                 if
                   | PrintAll `elem` flags -> do
                       when verbose $ putStrLn "[running findExpressions ..]"
@@ -206,16 +214,23 @@ main = runO $ do
                           highest = take 8 $ sortBy (flip $ comparing snd) $ M.toList stats
                       putStrLn $ show highest
                   | otherwise -> do
-                      r <- if par
-                        then do
+                      r <- case (par,firstSol) of
+                        (True, True) -> do
                           when verbose $ putStrLn "[running findOneExpressionPar ..]"
-                          findOneExpressionPar input
-                        else do
+                          maybeToList <$> findOneExpressionPar input
+                        (True, False) -> do
+                          putStrLn $ "WARNING: parallel version not implemented for given flags, falling back to serial!"
+                          when verbose $ putStrLn "[running findFirstBestExpressions ..]"
+                          return $ findFirstBestExpressions input
+                        (False, True) -> do
                           when verbose $ putStrLn "[running findOneExpression ..]"
-                          return $ findOneExpression input
-                      case r of
-                        Nothing -> putStrLn "[no result]"
-                        Just (e, ExferenceStats n d) ->
+                          return $ maybeToList $ findOneExpression input
+                        (False, False) -> do
+                          when verbose $ putStrLn "[running findFirstBestExpressions ..]"
+                          return $ findFirstBestExpressions input
+                      case r :: [ExferenceOutputElement] of
+                        [] -> putStrLn "[no results]"
+                        rs -> rs `forM_` \(e, ExferenceStats n d) ->
                             putStrLn $ prettyPrint (convert e)
                                         ++ " (depth " ++ show d
                                         ++ ", " ++ show n ++ " steps)"
