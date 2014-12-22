@@ -1,6 +1,7 @@
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE PatternGuards #-}
 
 module Main
   ( main
@@ -109,10 +110,11 @@ options =
 mainOpts :: [String] -> IO ([Flag], [String])
 mainOpts argv =
   case getOpt Permute options argv of
-    (o, n, []  ) | not $ null $ intersect o [Version, Help, Tests, Examples, Env]
-                                ++ [x|x@(Input _) <- o]
-                 -> return (o, n)
-    ([], _, [])   -> return ([Tests],[])
+    (o, n, []  )  | inputs <- [x|(Input x) <- o] ++ n
+                  -> if null (intersect o [Version, Help, Tests, Examples, Env])
+                     && null inputs
+                    then return (Tests:o, inputs)
+                    else return (o      , inputs)
     (_,  _, errs) -> ioError (userError (concat errs ++ fullUsageInfo))
 
 fullUsageInfo :: String
@@ -123,7 +125,7 @@ fullUsageInfo = usageInfo header options
 main :: IO ()
 main = runO $ do
   argv <- getArgs
-  (flags, _params) <- mainOpts argv -- TODO: use params for input
+  (flags, inputs) <- mainOpts argv
   let verbose = Verbose `elem` flags
   let
     printVersion = do
@@ -161,8 +163,8 @@ main = runO $ do
           printCheckExpectedResults par
                                     testHeuristicsConfig
                                     env
-        case [x|(Input x)<-flags] of
-          []    -> return ()
+        case inputs of
+          []    -> return () -- probably impossible..
           (x:_) -> do
             when verbose $ putStrLn "[Custom Input]"
             let mParsedType = parseConstrainedType sEnv x
