@@ -186,10 +186,11 @@ checkInput :: ExferenceHeuristicsConfig
            -> String
            -> Bool
            -> ExferenceInput
-checkInput heuristics (bindings, sEnv) typeStr allowUnused =
+checkInput heuristics (bindings, deconss, sEnv) typeStr allowUnused =
   ExferenceInput
     (readConstrainedType sEnv typeStr)
-    (filter (\(x,_,_) -> x/="join" && x/="liftA2") bindings)
+    (filter (\(_,x,_,_,_) -> x/="join" && x/="liftA2") bindings)
+    deconss
     sEnv
     allowUnused
     262144
@@ -353,11 +354,12 @@ checkResults heuristics (bindings, sEnv) = do
 exampleOutput :: ExferenceHeuristicsConfig
               -> EnvDictionary
               -> [[(Expression, ExferenceStats)]]
-exampleOutput heuristics (bindings, sEnv) = map f exampleInput
+exampleOutput heuristics (bindings, deconss, sEnv) = map f exampleInput
   where
     f (_, allowUnused, s) = takeFindSortNExpressions 10 10 $ ExferenceInput
                 (readConstrainedType sEnv s)
-                (filter (\(x,_,_) -> x/="join" && x/="liftA2") bindings)
+                (filter (\(_,x,_,_,_) -> x/="join" && x/="liftA2") bindings)
+                deconss
                 sEnv
                 allowUnused
                 32768
@@ -448,12 +450,13 @@ printCheckExpectedResults par h env = do
     g (ExferenceStats a b) (c,d,e) = (c+1,a+d,b+e)
 
 printMaxUsage :: ExferenceHeuristicsConfig -> EnvDictionary -> IO ()
-printMaxUsage h (bindings, sEnv) = mapM_ f checkData
+printMaxUsage h (bindings, deconss, sEnv) = mapM_ f checkData
   where
     f (name, allowUnused, typeStr, _expected) = do
       let input = ExferenceInput
                     (readConstrainedType sEnv typeStr)
-                    (filter (\(x,_,_) -> x/="join") bindings)
+                    (filter (\(_,x,_,_,_) -> x/="join") bindings)
+                    deconss
                     sEnv
                     allowUnused
                     16384
@@ -464,12 +467,13 @@ printMaxUsage h (bindings, sEnv) = mapM_ f checkData
       putStrLn $ printf "%-10s: %s" name (show highest)
 
 printSearchTree :: ExferenceHeuristicsConfig -> EnvDictionary -> IO ()
-printSearchTree h (bindings, sEnv) = mapM_ f checkData
+printSearchTree h (bindings, deconss, sEnv) = mapM_ f checkData
   where
     f (name, allowUnused, typeStr, _expected) = do
       let input = ExferenceInput
                     (readConstrainedType sEnv typeStr)
-                    (filter (\(x,_,_) -> x/="join") bindings)
+                    (filter (\(_,x,_,_,_) -> x/="join") bindings)
+                    deconss
                     sEnv
                     allowUnused
                     256

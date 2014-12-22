@@ -139,7 +139,7 @@ main = runO $ do
         when verbose $ do
           putStrLn "[Environment]"
           putStrLn "reading environment from ExferenceDict.hs and ExferenceRatings.txt"
-        (env@(eSignatures, sEnv@(StaticClassEnv clss insts)), messages)
+        (env@(eSignatures, eDeconss, sEnv@(StaticClassEnv clss insts)), messages)
           <- runWriter
           <$> environmentFromModuleAndRatings "ExferenceDict.hs" "ExferenceRatings.txt"
         when (verbose && not (null messages)) $ do
@@ -169,6 +169,7 @@ main = runO $ do
                 let input = ExferenceInput
                       parsedType
                       eSignatures
+                      eDeconss
                       sEnv
                       (Unused `elem` flags)
                       32768

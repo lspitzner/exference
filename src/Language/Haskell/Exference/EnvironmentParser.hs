@@ -1,6 +1,6 @@
 module Language.Haskell.Exference.EnvironmentParser
-  ( environmentFromModules
-  , environmentFromModuleSimple
+  ( parseModules
+  , parseModulesSimple
   , environmentFromModuleAndRatings
   , compileWithDict
   , ratingsFromFile
@@ -15,6 +15,7 @@ import Language.Haskell.Exference.BindingsFromHaskellSrc
 import Language.Haskell.Exference.ClassEnvFromHaskellSrc
 import Language.Haskell.Exference.TypeFromHaskellSrc
 import Language.Haskell.Exference.FunctionBinding
+import Language.Haskell.Exference.FunctionDecl
 
 import Language.Haskell.Exference.ConstrainedType
 import Language.Haskell.Exference.SimpleDict
@@ -53,22 +54,32 @@ import Text.ParserCombinators.Parsec.Char
 import qualified Data.Map as M
 
 
-builtInBindings :: [FunctionBinding]
-builtInBindings = map (second $ readConstrainedType emptyClassEnv)
+builtInDecls :: [HsFunctionDecl]
+builtInDecls = map (second $ readConstrainedType emptyClassEnv)
   $ [ (,) "()" "Unit"
-    , (,) "(,)" "Tuple2 a b -> INFPATTERN a b"
     , (,) "(,)" "a -> b -> Tuple2 a b"
-    , (,) "(,,)" "Tuple3 a b c -> INFPATTERN a b c"
     , (,) "(,,)" "a -> b -> c -> Tuple3 a b c"
-    , (,) "(,,,)" "Tuple4 a b c d -> INFPATTERN a b c d"
     , (,) "(,,,)" "a -> b -> c -> d -> Tuple4 a b c d"
-    , (,) "(,,,,)" "Tuple5 a b c d e -> INFPATTERN a b c d e"
     , (,) "(,,,,)" "a -> b -> c -> d -> e -> Tuple5 a b c d e"
-    , (,) "(,,,,,)" "Tuple6 a b c d e f -> INFPATTERN a b c d e f"
     , (,) "(,,,,,)" "a -> b -> c -> d -> e -> f -> Tuple6 a b c d e f"
-    , (,) "(,,,,,,)" "Tuple7 a b c d e f g -> INFPATTERN a b c d e f g"
     , (,) "(,,,,,,)" "a -> b -> c -> d -> e -> f -> g -> Tuple7 a b c d e f g"
     ]
+
+builtInDeconstructors :: [DeconstructorBinding]
+builtInDeconstructors = map helper ds
+ where
+  helper (t, xs) = ( read t
+                   , [ (n, read <$> ts)
+                       |(n, ts) <- xs]
+                   , False
+                   )
+  ds = [ (,) "Tuple2 a b" [("(,)", ["a", "b"])]
+       , (,) "Tuple3 a b c" [("(,,)", ["a", "b", "c"])]
+       , (,) "Tuple4 a b c d" [("(,,,)", ["a", "b", "c", "d"])]
+       , (,) "Tuple5 a b c d e" [("(,,,,)", ["a", "b", "c", "d", "e"])]
+       , (,) "Tuple6 a b c d e f" [("(,,,,,)", ["a", "b", "c", "d", "e", "f"])]
+       , (,) "Tuple7 a b c d e f g" [("(,,,,,,)", ["a", "b", "c", "d", "e", "f", "g"])]
+       ]
 
 -- | Takes a list of bindings, and a dictionary of desired
 -- functions and their rating, and compiles a list of
@@ -79,8 +90,8 @@ builtInBindings = map (second $ readConstrainedType emptyClassEnv)
 --
 -- Otherwise, the result is Right.
 compileWithDict :: [(String, Float)]
-                -> [FunctionBinding]
-                -> Either String [RatedFunctionBinding]
+                -> [HsFunctionDecl]
+                -> Either String [RatedHsFunctionDecl]
                 -- function_not_found or all bindings
 compileWithDict ratings binds = forM ratings $ \(name, rating) ->
   case find ((name==).fst) binds of
@@ -92,11 +103,13 @@ compileWithDict ratings binds = forM ratings $ \(name, rating) ->
 --
 -- output: the environment extracted from these modules, wrapped
 -- in a Writer that contains warnings/errors.
-environmentFromModules :: [(ParseMode, String)]
-                   -> IO (Writer
-                           [String]
-                           ([FunctionBinding], StaticClassEnv))
-environmentFromModules l = do
+parseModules :: [(ParseMode, String)]
+             -> IO (Writer
+                      [String]
+                      ( [HsFunctionDecl]
+                      , [DeconstructorBinding]
+                      , StaticClassEnv))
+parseModules l = do
   rawTuples <- mapM hRead l
   let eParsed = map hParse rawTuples
   {-
@@ -112,12 +125,18 @@ environmentFromModules l = do
     mapM_ (tell.return) $ lefts eParsed
     let mods = rights eParsed
     (cntxt@(StaticClassEnv clss insts), n_insts) <- getClassEnv mods
-    binds <- join <$> mapM (hExtractBinds cntxt) mods
+    -- TODO: try to exfere this stuff
+    (decls, deconss) <- do
+      stuff <- mapM (hExtractBinds cntxt) mods
+      return $ concat *** concat $ unzip stuff
     tell ["got " ++ show (length clss) ++ " classes"]
     tell ["and " ++ show (n_insts) ++ " instances"]
     tell ["(-> " ++ show (length $ concat $ M.elems $ insts) ++ " instances after inflation)"]
-    tell ["and " ++ show (length binds) ++ " bindings"]
-    return $ (builtInBindings++binds, cntxt)
+    tell ["and " ++ show (length decls) ++ " function decls"]
+    return $ ( builtInDecls++decls
+             , builtInDeconstructors++deconss
+             , cntxt
+             )
   where
     hRead :: (ParseMode, String) -> IO (ParseMode, String)
     hRead (mode, s) = (,) mode <$> readFile s
@@ -127,43 +146,46 @@ environmentFromModules l = do
       ParseOk modul       -> Right modul
     hExtractBinds :: StaticClassEnv
                   -> Module
-                  -> Writer [String] [FunctionBinding]
+                  -> Writer [String] ([HsFunctionDecl], [DeconstructorBinding])
     hExtractBinds cntxt modul@(Module _ (ModuleName _mname) _ _ _ _ _) = do
       -- tell $ return $ mname
-      let ebinds = getBindings cntxt modul
-                ++ getDataConss modul
-                ++ getClassMethods cntxt modul
-      mapM_ (tell.return) $ lefts ebinds
+      let eFromData = getDataConss modul
+          eDecls = getDecls cntxt modul
+                 ++ getClassMethods cntxt modul
+      mapM_ (tell.return) $ lefts eFromData ++ lefts eDecls
       -- tell $ map show $ rights ebinds
-      return $ rights ebinds
+      let (binds1s, deconss) = unzip $ rights eFromData
+          binds2 = rights eDecls
+      return $ ( concat binds1s ++ binds2, deconss )
 
 -- | A simplified version of environmentFromModules where the input
 -- is just one module, parsed with some default ParseMode;
 -- the output is transformed so that all functionsbindings get
 -- a rating of 0.0.
-environmentFromModuleSimple :: String
-                         -> IO (Writer
-                              [String]
-                              ( [RatedFunctionBinding]
-                              ,  StaticClassEnv) )
-environmentFromModuleSimple s = do
-  let exts1 = [ TypeOperators
-              , ExplicitForAll
-              , ExistentialQuantification
-              , TypeFamilies
-              , FunctionalDependencies
-              , FlexibleContexts
-              , MultiParamTypeClasses ]
-      exts2 = map EnableExtension exts1
-      mode = ParseMode (s++".hs")
-                       Haskell2010
-                       exts2
-                       False
-                       False
-                       Nothing
-  r <- environmentFromModules [(mode, s)]
-  let f (a,b) = (a,0.0,b)
-  return $ first (map f) <$> r
+parseModulesSimple :: String
+                   -> IO (Writer
+                        [String]
+                        ( [RatedHsFunctionDecl]
+                        , [DeconstructorBinding]
+                        , StaticClassEnv) )
+parseModulesSimple s = (helper <$>) <$> parseModules [(mode, s)]
+ where
+  exts1 = [ TypeOperators
+          , ExplicitForAll
+          , ExistentialQuantification
+          , TypeFamilies
+          , FunctionalDependencies
+          , FlexibleContexts
+          , MultiParamTypeClasses ]
+  exts2 = map EnableExtension exts1
+  mode  = ParseMode (s++".hs")
+                    Haskell2010
+                    exts2
+                    False
+                    False
+                    Nothing
+  addRating (a,b) = (a,0.0,b)
+  helper (decls, deconss, cntxt) = (addRating <$> decls, deconss, cntxt)
 
 
 ratingsFromFile :: String -> IO (Either String [(String, Float)])
@@ -195,8 +217,9 @@ environmentFromModuleAndRatings :: String
                             -> String
                             -> IO (Writer
                                 [String]
-                                ( [RatedFunctionBinding]
-                                ,  StaticClassEnv) )
+                                ( [FunctionBinding]
+                                , [DeconstructorBinding]
+                                , StaticClassEnv) )
 environmentFromModuleAndRatings s1 s2 = do
   let exts1 = [ TypeOperators
               , ExplicitForAll
@@ -212,17 +235,18 @@ environmentFromModuleAndRatings s1 s2 = do
                        False
                        False
                        Nothing
-  w <- environmentFromModules [(mode, s1)]
+  w <- parseModules [(mode, s1)]
   r <- ratingsFromFile s2
   return $ do
-    (binds, cntxt) <- w
+    (decls, deconss, cntxt) <- w
     case r of
       Left e -> do
         tell ["could not parse ratings!",e]
-        return ([], cntxt)
+        return ([], [], cntxt)
       Right x -> do
-        let f (a,b) = ( a
+        let f (a,b) = declToBinding
+                    $ ( a
                       , fromMaybe 0.0 (lookup a x)
                       , b
                       )
-        return $ (map f binds, cntxt)
+        return $ (map f decls, deconss, cntxt)

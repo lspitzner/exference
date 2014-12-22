@@ -21,7 +21,7 @@ import Language.Haskell.ExferenceCore ( ExferenceHeuristicsConfig(..) )
 import Language.Haskell.Exference.Type
 import Language.Haskell.Exference.ConstrainedType
 import Language.Haskell.Exference.TypeClasses
-import Language.Haskell.Exference.FunctionBinding
+import Language.Haskell.Exference.FunctionDecl
 
 import qualified Data.Set as S
 import qualified Data.Map.Strict as M
@@ -45,7 +45,7 @@ toBindings = map (\(a,b,c) ->
 
 -- function, penalty for using that function, type
 -- value ignored for pattern-matches
-defaultBindings :: [RatedFunctionBinding]
+defaultBindings :: [RatedHsFunctionDecl]
 defaultBindings = toBindings
   [
   -- functor

@@ -1,7 +1,8 @@
 {-# LANGUAGE TupleSections #-}
 
 module Language.Haskell.Exference.BindingsFromHaskellSrc
-  ( getBindings
+  ( getDecls
+  , declToBinding
   , getDataConss
   , getClassMethods
   )
@@ -16,46 +17,47 @@ import Language.Haskell.Exference.TypeFromHaskellSrc
 import Language.Haskell.Exference.ConstrainedType
 import Language.Haskell.Exference.Type
 import Language.Haskell.Exference.TypeClasses
+import Language.Haskell.Exference.FunctionDecl
 
 import Control.Applicative ( (<$>), (<*>) )
 
 import Control.Monad ( join )
 import Control.Monad.Identity
+import Control.Monad.Trans.Maybe
 import Control.Monad.Trans.Either
 import Control.Monad.State.Strict
 import qualified Data.Map as M
 import Data.List ( find )
 
-import Control.Monad.Trans.Maybe
 
 
+getDecls :: StaticClassEnv -> Module -> [Either String HsFunctionDecl]
+getDecls env (Module _loc _m _pragma _warning _mexp _imp decls)
+  = concatMap (either (return.Left) (map Right) . transformDecl env) decls
 
-getBindings :: StaticClassEnv -> Module -> [Either String FunctionBinding]
-getBindings env (Module _loc _m _pragma _warning _mexp _imp decls)
-  = concatMap (either (return.Left) (map Right) . getFromDecls env) decls
-
-getFromDecls :: StaticClassEnv -> Decl -> Either String [FunctionBinding]
-getFromDecls env (TypeSig _loc names qtype)
+transformDecl :: StaticClassEnv -> Decl -> Either String [HsFunctionDecl]
+transformDecl env (TypeSig _loc names qtype)
   = insName qtype
   $ ((<$> names) . helper) <$> convertCType env qtype
-getFromDecls _ _ = return []
+transformDecl _ _ = return []
 
-getFromDecls' :: StaticClassEnv
+transformDecl' :: StaticClassEnv
               -> Decl
-              -> ConversionMonad [FunctionBinding]
-getFromDecls' env (TypeSig _loc names qtype)
-  = mapEitherT (fmap $ insName qtype)
+              -> ConversionMonad [HsFunctionDecl]
+transformDecl' env (TypeSig _loc names qtype)
+  = mapEitherT (insName qtype <$>)
   $ (<$> names) . helper <$> convertCTypeInternal env qtype
-getFromDecls' _ _ = return []
+transformDecl' _ _ = return []
 
 insName :: Type -> Either String a -> Either String a
 insName qtype = either (\x -> Left $ x ++ " in " ++ prettyPrint qtype) Right
 
-helper :: HsConstrainedType -> Name -> FunctionBinding
+helper :: HsConstrainedType -> Name -> HsFunctionDecl
 helper ct x = (hsNameToString x, ct)
 
 -- type ConversionMonad = EitherT String (State (Int, ConvMap))
-getDataConss :: Module -> [Either String FunctionBinding]
+getDataConss :: Module -> [Either String ( [HsFunctionDecl]
+                                         , DeconstructorBinding )]
 getDataConss (Module _loc _m _pragma _warning _mexp _imp decls) = do
   DataDecl _loc _newtflag cntxt name params conss _derives <- decls
   let
@@ -69,7 +71,7 @@ getDataConss (Module _loc _m _pragma _warning _mexp _imp decls) = do
   --  tTransform (UnBangedTy t) = convertTypeInternal t
   --  tTransform x              = lift $ left $ "unknown Type: " ++ show x
   let
-    typeM :: QualConDecl -> ConversionMonad (FunctionBinding, FunctionBinding)
+    typeM :: QualConDecl -> ConversionMonad (String, [HsType])
     typeM (QualConDecl _loc cbindings ccntxt conDecl) = do
       case cntxt of
         [] -> right ()
@@ -81,24 +83,26 @@ getDataConss (Module _loc _m _pragma _warning _mexp _imp decls) = do
         ConDecl c t -> right (c, t)
         x           -> left $ "unknown ConDecl: " ++ show x
       convTs <- mapM convertTypeInternal tys
-      rtype  <- rTypeM
-      let cons   = HsConstrainedType [] (foldr TypeArrow rtype convTs)
-      let decons = HsConstrainedType []
-                      (TypeArrow
-                        rtype
-                        (foldl TypeApp (TypeCons "INFPATTERN") convTs))
-      return $ (helper cons cname, helper decons cname)
+      let nameStr = hsNameToString cname
+      return $ (nameStr, convTs)
   let
     addConsMsg = (++) $ hsNameToString name ++ ": "
   let
-    consDeconss = mapM (\x -> evalState (runEitherT $ typeM x) (0, M.empty)) conss
-  case consDeconss of
-    Left  x -> return $ Left $ addConsMsg x
-    Right x -> if length conss == 1
-      then x >>= \(a,b) -> [Right a, Right b]
-      else x >>= \(a,_) -> [Right a]
+    convAction :: ConversionMonad ([HsFunctionDecl], DeconstructorBinding)
+    convAction = do
+      rtype  <- rTypeM
+      consDatas <- mapM typeM conss
+      return $ ( [ (n, HsConstrainedType [] $ foldr TypeArrow rtype ts)
+                 | (n, ts) <- consDatas
+                 ]
+               , (rtype, consDatas, False)
+               )
+        -- TODO: actually determine if stuff is recursive or not
+  return $ either (Left . addConsMsg) Right
+         $ evalState (runEitherT $ convAction) (0, M.empty)
+    -- TODO: replace this by bimap..
 
-getClassMethods :: StaticClassEnv -> Module -> [Either String FunctionBinding]
+getClassMethods :: StaticClassEnv -> Module -> [Either String HsFunctionDecl]
 getClassMethods env (Module _loc _m _pragma _warning _mexp _imp decls) =
   do
     ClassDecl _ _ name vars _ cdecls <- decls
@@ -110,7 +114,7 @@ getClassMethods env (Module _loc _m _pragma _warning _mexp _imp decls) =
       Nothing -> return $ Left $ "unknown type class: "++nameStr
       Just cls -> let
         cnstrA = HsConstraint cls <$> mapM ((TypeVar <$>) . tyVarTransform) vars
-        action :: StateT (Int, ConvMap) Identity [Either String [FunctionBinding]]
+        action :: StateT (Int, ConvMap) Identity [Either String [HsFunctionDecl]]
         action = do
           cnstrE <- runEitherT cnstrA
           case cnstrE of
@@ -118,13 +122,13 @@ getClassMethods env (Module _loc _m _pragma _warning _mexp _imp decls) =
             Right cnstr ->
               mapM ( runEitherT
                    . fmap (map (addConstraint cnstr))
-                   . getFromDecls' env)
+                   . transformDecl' env)
                 $ [ d | ClsDecl d <- cdecls ]
         in concatMap (either (return . Left . errorMod)
                              (map Right))
                    $ runIdentity
                    $ evalStateT action (0, M.empty)
   where
-    addConstraint :: HsConstraint -> FunctionBinding -> FunctionBinding
+    addConstraint :: HsConstraint -> HsFunctionDecl -> HsFunctionDecl
     addConstraint c (n, HsConstrainedType constrs t) =
                     (n, HsConstrainedType (c:constrs) t)

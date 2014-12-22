@@ -1,5 +1,5 @@
 Name:          exference
-Version:       0.6.0.0
+Version:       0.7.0.0
 Cabal-Version: >= 1.8
 Build-Type:    Simple
 
@@ -25,11 +25,12 @@ Library
                    Language.Haskell.Exference.BindingsFromHaskellSrc
                    Language.Haskell.Exference.ClassEnvFromHaskellSrc
                    Language.Haskell.Exference.EnvironmentParser
+                   Language.Haskell.Exference.FunctionDecl
                    Paths_exference
   extensions: NoMonomorphismRestriction
   hs-source-dirs: src
   Build-Depends:
-    exference-core ==0.13.1.0,
+    exference-core ==0.14.0.0,
     base >=3 && <5,
     containers,
     transformers,
@@ -70,6 +71,7 @@ Executable test-main
                -O2
                -j
                -Wall
+               -Werror
                -fno-warn-unused-imports
                -fno-warn-orphans
                -threaded
