@@ -85,26 +85,28 @@ data Flag = Verbose
           | Parallel
           | Shortest
           | FirstSol
+          | Best
           | Unused
   deriving (Show, Eq)
 
 options :: [OptDescr Flag]
 options =
-  [ Option []    ["version"]     (NoArg Version)              ""
-  , Option []    ["help"]        (NoArg Help)                 "prints basic program info"
-  , Option ['t'] ["tests"]       (NoArg Tests)                "run the standard validity/performance tests"
-  , Option ['x'] ["examples"]    (NoArg Examples)             "prints the first few results for the examples; useful for debugging"
-  , Option ['e'] ["environment"] (NoArg Env)                  "print the environment to be used for queries"
-  , Option ['v'] ["verbose"]     (NoArg Verbose)              ""
-  , Option ['i'] ["input"]       (ReqArg Input "type")        "the type for which to generate an expression"
-  , Option ['a'] ["all"]         (NoArg PrintAll)             "print all solutions (up to search step limit)"
-  , Option []    ["envUsage"]    (NoArg EnvUsage)             "print a list of functions that got inserted at some point (regardless if successful or not), and how often"
-  , Option []    ["tree"]        (NoArg PrintTree)            "print tree of search space"
-  , Option []    ["serial"]      (NoArg Serial)               "use the non-parallelized version of the algorithm (default)"
-  , Option ['j'] ["parallel"]    (NoArg Parallel)             "use the parallelized version of the algorithm"
-  , Option ['o'] ["short"]       (NoArg Shortest)             "prefer shorter solutions"
-  , Option ['f'] ["first"]       (NoArg FirstSol)             "stop after finding the first solution"
-  , Option ['u'] ["allowUnused"] (NoArg Unused)               "allow unused input variables"
+  [ Option []    ["version"]     (NoArg Version)       ""
+  , Option []    ["help"]        (NoArg Help)          "prints basic program info"
+  , Option ['t'] ["tests"]       (NoArg Tests)         "run the standard validity/performance tests"
+  , Option ['x'] ["examples"]    (NoArg Examples)      "prints the first few results for the examples; useful for debugging"
+  , Option ['e'] ["environment"] (NoArg Env)           "print the environment to be used for queries"
+  , Option ['v'] ["verbose"]     (NoArg Verbose)       ""
+  , Option ['i'] ["input"]       (ReqArg Input "type") "the type for which to generate an expression"
+  , Option ['a'] ["all"]         (NoArg PrintAll)      "print all solutions (up to search step limit)"
+  , Option []    ["envUsage"]    (NoArg EnvUsage)      "print a list of functions that got inserted at some point (regardless if successful or not), and how often"
+  , Option []    ["tree"]        (NoArg PrintTree)     "print tree of search space"
+  , Option []    ["serial"]      (NoArg Serial)        "use the non-parallelized version of the algorithm (default)"
+  , Option ['j'] ["parallel"]    (NoArg Parallel)      "use the parallelized version of the algorithm"
+  , Option ['o'] ["short"]       (NoArg Shortest)      "prefer shorter solutions"
+  , Option ['f'] ["first"]       (NoArg FirstSol)      "stop after finding the first solution"
+  , Option ['b'] ["best"]        (NoArg Best)          "calculate all solutions, and print the best one"
+  , Option ['u'] ["allowUnused"] (NoArg Unused)        "allow unused input variables"
   ]
 
 mainOpts :: [String] -> IO ([Flag], [String])
@@ -184,7 +186,6 @@ main = runO $ do
                          testHeuristicsConfig
                        else
                          testHeuristicsConfig { heuristics_solutionLength = 0.0 })
-                    firstSol = FirstSol `elem` flags
                 if
                   | PrintAll `elem` flags -> do
                       when verbose $ putStrLn "[running findExpressions ..]"
@@ -216,20 +217,30 @@ main = runO $ do
                           highest = take 8 $ sortBy (flip $ comparing snd) $ M.toList stats
                       putStrLn $ show highest
                   | otherwise -> do
-                      r <- case (par,firstSol) of
-                        (True, True) -> do
-                          when verbose $ putStrLn "[running findOneExpressionPar ..]"
-                          maybeToList <$> findOneExpressionPar input
-                        (True, False) -> do
-                          putStrLn $ "WARNING: parallel version not implemented for given flags, falling back to serial!"
-                          when verbose $ putStrLn "[running findFirstBestExpressions ..]"
-                          return $ findFirstBestExpressions input
-                        (False, True) -> do
-                          when verbose $ putStrLn "[running findOneExpression ..]"
-                          return $ maybeToList $ findOneExpression input
-                        (False, False) -> do
-                          when verbose $ putStrLn "[running findFirstBestExpressions ..]"
-                          return $ findFirstBestExpressions input
+                      r <- if
+                        | FirstSol `elem` flags -> if par
+                          then do
+                            when verbose $ putStrLn "[running findOneExpressionPar ..]"
+                            maybeToList <$> findOneExpressionPar input
+                          else do 
+                            when verbose $ putStrLn "[running findOneExpression ..]"
+                            return $ maybeToList $ findOneExpression input
+                        | Best `elem` flags -> if par
+                          then do
+                            putStrLn $ "WARNING: parallel version not implemented for given flags, falling back to serial!"
+                            when verbose $ putStrLn "[running findBestNExpressions ..]"
+                            return $ findBestNExpressions 999 input
+                          else do
+                            when verbose $ putStrLn "[running findBestNExpressions ..]"
+                            return $ findBestNExpressions 999 input
+                        | otherwise -> if par
+                          then do
+                            putStrLn $ "WARNING: parallel version not implemented for given flags, falling back to serial!"
+                            when verbose $ putStrLn "[running findFirstBestExpressions ..]"
+                            return $ findFirstBestExpressions input
+                          else do
+                            when verbose $ putStrLn "[running findFirstBestExpressions ..]"
+                            return $ findFirstBestExpressions input
                       case r :: [ExferenceOutputElement] of
                         [] -> putStrLn "[no results]"
                         rs -> rs `forM_` \(e, ExferenceStats n d) ->
