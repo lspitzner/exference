@@ -75,6 +75,16 @@ convertInternal p (E.ExpLetMatch n ids bindE inE) =
                    (UnGuardedRhs $ convertInternal 0 bindE)
                    (BDecls [])
   in parens (p>=2) $ mergeLet convBind (convertInternal 0 inE)
+convertInternal p (E.ExpCaseMatch bindE alts) =
+  let e = convertInternal 0 bindE
+      as = [ Alt noLoc
+                 (PApp (UnQual $ Ident $ c)
+                       (map (PVar . Ident . T.showVar) vars))
+                 (UnGuardedRhs $ convertInternal 0 expr)
+                 (BDecls [])
+           | (c, vars, expr) <- alts
+           ]
+  in parens (p>=2) $ Case e as
 
 mergeLet :: Decl -> Exp -> Exp
 mergeLet convBind (Let (BDecls otherBinds) finalIn)

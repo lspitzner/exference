@@ -87,6 +87,7 @@ data Flag = Verbose
           | FirstSol
           | Best
           | Unused
+          | PatternMatchMC
   deriving (Show, Eq)
 
 options :: [OptDescr Flag]
@@ -107,6 +108,7 @@ options =
   , Option ['f'] ["first"]       (NoArg FirstSol)      "stop after finding the first solution"
   , Option ['b'] ["best"]        (NoArg Best)          "calculate all solutions, and print the best one"
   , Option ['u'] ["allowUnused"] (NoArg Unused)        "allow unused input variables"
+  , Option ['c'] ["patternMatchMC"] (NoArg PatternMatchMC) "pattern match on multi-constructor data types (might lead to hang-ups at the moment)"
   ]
 
 mainOpts :: [String] -> IO ([Flag], [String])
@@ -180,6 +182,7 @@ main = runO $ do
                       eDeconss
                       sEnv
                       (Unused `elem` flags)
+                      (PatternMatchMC `elem` flags)
                       32768
                       (Just 32768)
                       (if Shortest `elem` flags then
