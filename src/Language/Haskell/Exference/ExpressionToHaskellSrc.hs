@@ -49,17 +49,25 @@ convertInternal _ (E.ExpVar i) = Var $ UnQual $ Ident $ T.showVar i
 convertInternal _ (E.ExpLit c) = Con $ UnQual $ Ident $ c
 convertInternal p (E.ExpLambda i e) = parens (p>=1) $
     Lambda noLoc [PVar $ Ident $ T.showVar i] (convertInternal 0 e)
-convertInternal p (E.ExpApply e1 e2)
-  | (E.ExpApply op e0) <- e1,
-    (E.ExpLit ('(':opId1)) <- op,
-    opId <- takeWhile (/=')') opId1 =
-      if opId == ","
-        then Tuple Boxed [convertInternal 0 e0, convertInternal 0 e2]
-        else parens (p>=2) $ InfixApp (convertInternal 1 e0)
-                        (QVarOp . UnQual . Symbol $ opId)
-                        (convertInternal 2 e2)
-  | otherwise = parens (p>=3)
-              $ App (convertInternal 2 e1) (convertInternal 3 e2)
+convertInternal p (E.ExpApply e1 pe) = recurseApply e1 [pe]
+  where
+    recurseApply e pes
+      |   (E.ExpApply e1' pe')     <- e
+        = recurseApply e1' (pe':pes)
+      |   (E.ExpLit ('(':',':opR)) <- e
+      ,   length opR+1==length pes
+        = Tuple Boxed $ map (convertInternal 0) pes
+      |   (E.ExpLit ('(':opR))     <- e
+      ,   [p1,p2] <- pes
+        = parens (p>=2)
+        $ InfixApp (convertInternal 1 p1)
+                   (QVarOp $ UnQual $ Symbol $ takeWhile (/=')') opR)
+                   (convertInternal 2 p2)
+      |   otherwise
+        = parens (p>=3)
+        $ foldl App
+                (convertInternal 2 e)
+                (map (convertInternal 3) pes)
 convertInternal _ (E.ExpHole i) = Var $ UnQual $ Ident $ "_"++T.showVar i
 convertInternal p (E.ExpLet i bindE inE) =
   let convBind = PatBind noLoc
