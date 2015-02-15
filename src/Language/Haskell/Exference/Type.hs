@@ -62,7 +62,7 @@ showVar i = if i<26 then [chr (ord 'a' + i)] else "t"++show (i-26)
 
 badReadVar :: String -> TVarId
 badReadVar [c] = ord c - ord 'a'
-badReadVar _ = undefined
+badReadVar _ = error "badReadVar: that's why it is called badReadVar"
 
 instance Show HsType where
   showsPrec _ (TypeVar i) = showString $ showVar i
