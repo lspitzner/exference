@@ -59,3 +59,7 @@ mapLookup    = -2.0
 
 (>>=)        = -4.0
 mapM         = -4.0
+
+mempty       = 10.0
+mappend      = 5.0
+mconcat      = 5.0

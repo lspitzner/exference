@@ -165,7 +165,7 @@ main = runO $ do
         when (Tests `elem` flags) $ do
           when verbose $ putStrLn "[Tests]"
           printCheckExpectedResults par
-                                    testHeuristicsConfig
+                                    testHeuristicsConfig { heuristics_solutionLength = 0.0 }
                                     env
         case inputs of
           []    -> return () -- probably impossible..

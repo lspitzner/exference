@@ -95,10 +95,27 @@ class Ord a => Ix a where
   rangeSize :: (a, a) -> Int
   -- same restriction as for Bounded: better don't define instances for now.
 
+class Monoid a where
+  mempty :: a
+  mappend :: a -> a -> a
+  mconcat :: [a] -> a
+
 class Monad m => MonadPlus m where
   -- mzero :: m a -- this is a critical case: too generic, yet we might need it
                   -- at times
   mplus :: m a -> m a -> m a
+
+class Foldable t where
+  f_fold :: Monoid m => t m -> m
+  f_foldMap :: Monoid m => (a -> m) -> t a -> m
+  f_foldr :: (a -> b -> b) -> b -> t a -> b
+  f_foldl :: (b -> a -> b) -> b -> t a -> b
+
+class (Functor t, Foldable t) => Traversable t where
+  t_traverse :: Applicative f => (a -> f b) -> t a -> f (t b)
+  t_sequenceA :: Applicative f => t (f a) -> f (t a)
+  t_mapM :: Monad m => (a -> m b) -> t a -> m (t b)
+  t_sequence :: Monad m => t (m a) -> m (t a)
 
 -- ****
 -- **** data types (constructors and deconstructors aka pattern matching)
@@ -227,6 +244,28 @@ instance Monad m => Applicative (WrappedMonad m)
 instance Monoid m => Applicative (Const m)
 instance Arrow a => Applicative (WrappedArrow a b)
 -- instance Typeable ((* -> *) -> Constraint) Applicative
+
+instance Monoid Ordering  
+instance Monoid ()  
+instance Monoid Any   
+instance Monoid All   
+instance Monoid Event   
+instance Monoid [a]   
+instance Monoid a => Monoid (Maybe a)  
+instance Monoid (Last a)  
+instance Monoid (First a)   
+instance Num a => Monoid (Product a)  
+instance Num a => Monoid (Sum a)  
+instance Monoid (Endo a)  
+instance Monoid a => Monoid (Dual a)  
+instance Monoid b => Monoid (a -> b)  
+instance (Monoid a, Monoid b) => Monoid (a, b)  
+-- instance Monoid (Proxy * s)   
+instance Monoid a => Monoid (Const a b)   
+-- instance Typeable (* -> Constraint) Monoid  
+instance (Monoid a, Monoid b, Monoid c) => Monoid (a, b, c)   
+instance (Monoid a, Monoid b, Monoid c, Monoid d) => Monoid (a, b, c, d)  
+instance (Monoid a, Monoid b, Monoid c, Monoid d, Monoid e) => Monoid (a, b, c, d, e)
 
 instance Monad []
 instance Monad IO

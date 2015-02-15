@@ -95,7 +95,9 @@ checkData =
                                     ["show"
                                     ,"\\b -> let ((,) d e) = b in show (((,) d) e)"]
   , (,,,,) "FloatToInt" False False "Float -> Int"
-                                    ["truncate"]
+                                    ["truncate"
+                                    , "ceiling"
+                                    ]
   , (,,,,) "FloatToIntL" False False "List Float -> List Int"
                                     ["fmap round"
                                     ,"fmap floor"
