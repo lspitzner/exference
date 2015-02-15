@@ -1,4 +1,5 @@
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE PatternGuards #-}
 
 module Language.Haskell.Exference.Internal.ExferenceNode
   ( SearchNode (..)
@@ -19,6 +20,7 @@ module Language.Haskell.Exference.Internal.ExferenceNode
   , scopeGetAllBindings
   , scopesAddPBinding
   , splitBinding
+  , splitArrowResultParams
   , addNewScopeGoal
   , initialScopes
   , addGoalProvided -- unused atm
@@ -226,8 +228,12 @@ instance Observable SearchNode where
   observer state = observeOpaque (show state) state
 
 splitBinding :: (a, HsType) -> (a, HsType, [HsType])
-splitBinding (a,b) = let (c,d) = f b in (a,c,d)
-  where
-    f :: HsType -> (HsType, [HsType])
-    f (TypeArrow t1 t2) = let (c',d') = f t2 in (c', t1:d')
-    f t = (t, [])
+splitBinding (a,b) = let (c,d) = splitArrowResultParams b in (a,c,d)
+
+splitArrowResultParams :: HsType -> (HsType, [HsType])
+splitArrowResultParams t
+  | TypeArrow t1 t2 <- t
+  , (c',d') <- splitArrowResultParams t2
+  = (c', t1:d')
+  | otherwise
+  = (t, [])
