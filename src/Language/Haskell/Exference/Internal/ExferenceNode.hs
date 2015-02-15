@@ -59,9 +59,11 @@ varBindingApplySubsts = second . applySubsts
 
 varPBindingApplySubsts :: Substs -> VarPBinding -> VarPBinding
 varPBindingApplySubsts ss (a,b,c) =
+  let (newResult, params) = splitArrowResultParams $ applySubsts ss b
+  in
   ( a
-  , applySubsts ss b
-  , map (applySubsts ss) c
+  , newResult
+  , map (applySubsts ss) c ++ params
   )
 
 type ScopeId = Int
