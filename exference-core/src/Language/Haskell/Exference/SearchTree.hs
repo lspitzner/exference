@@ -102,5 +102,5 @@ filterSearchTreeProcessedN n (Node d ts) = Node d (ts >>= f)
 -- limits depth of tree
 takeSearchTree :: Int -> SearchTree -> SearchTree
 takeSearchTree 0 (Node d _) = Node d []
-takeSearchTree n _ | n<0 = undefined
+takeSearchTree n _ | n<0 = error "takeSearchTree: negative depth"
 takeSearchTree n (Node d ts) = Node d [takeSearchTree (n-1) t | t <- ts]

@@ -629,7 +629,7 @@ stateStep2 multiPM h s
               goalType
               var
               newScopeId
-              [(vResult, provided, ds)]
+              (let (r,ps) = splitArrowResultParams provided in [(vResult, r, ds++ps)])
         Just substs -> do
           let contxt = node_queryClassEnv s
               constrs1 = map (constraintApplySubsts substs)
@@ -676,8 +676,10 @@ addScopePatternMatch multiPM goalType vid sid bindings = case bindings of
     let defaultHandleRest = addScopePatternMatch multiPM goalType vid sid bindingRest
     case vtResult of
       TypeVar _     -> defaultHandleRest -- dont pattern-match on variables, even if it unifies
-      TypeArrow _ _ -> undefined  -- should never happen, given a pbinding..
-      TypeForall _ _ -> undefined -- todo when we do RankNTypes
+      TypeArrow _ _ -> error $ "addScopePatternMatch: TypeArrow: " ++ show vtResult  -- should never happen, given a pbinding..
+      TypeForall _ _ -> error
+                       $ "addScopePatternMatch: TypeForall (RankNTypes not yet implemented)" -- todo when we do RankNTypes
+                       ++ show vtResult
       _ | not $ null vtParams -> defaultHandleRest
         | otherwise -> do -- SearchNodeBuilder
         deconss <- builderDeconss
