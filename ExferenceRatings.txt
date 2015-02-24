@@ -51,6 +51,7 @@ mplus        = 20.0
 
 mfilter      = 3.0
 realToFrac   = 20.0
+fromIntegral = 20.0
 state        = 20.0
 
 maybe        = -1.0

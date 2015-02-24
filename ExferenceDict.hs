@@ -176,6 +176,7 @@ liftA3 :: Applicative f => (a1 -> a2 -> a3 -> r) -> f a1 -> f a2 -> f a3 -> f r
 liftA4 :: Applicative f => (a1 -> a2 -> a3 -> a4 -> r) -> f a1 -> f a2 -> f a3 -> f a4 -> f r 
 liftA5 :: Applicative f => (a1 -> a2 -> a3 -> a4 -> a5 -> r) -> f a1 -> f a2 -> f a3 -> f a4 -> f a5 -> f r 
 
+fromIntegral :: (Integral a, Num b) => a -> b
 realToFrac :: (Real a, Fractional b) => a -> b
 
 mapLookup :: Ord k => k -> Map k a -> Maybe a
