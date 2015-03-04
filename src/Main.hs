@@ -52,7 +52,7 @@ import Language.Haskell.Exts.Extension ( Language (..)
                                        , KnownExtension (..) )
 import Language.Haskell.Exts.Pretty
 
-import Data.PPrint
+-- import Data.PPrint
 import Data.Tree ( drawTree )
 
 
