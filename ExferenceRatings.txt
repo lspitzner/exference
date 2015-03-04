@@ -20,7 +20,7 @@ State        = 3.0
 get          = 10.0
 put          = 10.0
 state        = 10.0
-(:)          = 4.0
+(:)          = 5.0
 Just         = 999.0
 sequence     = 6.0
 

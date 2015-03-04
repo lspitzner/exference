@@ -18,6 +18,7 @@ import Language.Haskell.Exference.FunctionBinding
 import Language.Haskell.Exference.FunctionDecl
 
 import Language.Haskell.Exference.ConstrainedType
+import Language.Haskell.Exference.Type
 import Language.Haskell.Exference.SimpleDict
 import Language.Haskell.Exference.TypeClasses
 import Language.Haskell.Exference.Expression
@@ -55,8 +56,15 @@ import qualified Data.Map as M
 
 
 builtInDecls :: [HsFunctionDecl]
-builtInDecls = map (second $ readConstrainedType emptyClassEnv)
-  $ [ (,) "()" "Unit"
+builtInDecls = 
+  ("(:)", HsConstrainedType [] (TypeArrow
+                                 (TypeVar 0)
+                                 (TypeArrow (TypeApp (TypeCons "List")
+                                                     (TypeVar 0))
+                                            (TypeApp (TypeCons "List")
+                                                     (TypeVar 0)))))
+  : map (second $ readConstrainedType emptyClassEnv)
+    [ (,) "()" "Unit"
     , (,) "(,)" "a -> b -> Tuple2 a b"
     , (,) "(,,)" "a -> b -> c -> Tuple3 a b c"
     , (,) "(,,,)" "a -> b -> c -> d -> Tuple4 a b c d"
