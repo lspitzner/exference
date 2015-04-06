@@ -146,6 +146,8 @@ checkData =
                                     ["\\b -> Cont (\\e -> e b)"]
   , (,,,,) "contBind"   False False "Cont r a -> (a -> Cont r b) -> Cont r b"
                                     ["\\b -> (\\c -> let (Cont e) = b in Cont (\\g -> e (\\j -> let (Cont n) = c j in n g)))"]
+  , (,,,,) "ap"         False False "Monad m => m (a->b) -> m a -> m b"
+                                    ["ap"]
   ]
 
 {-

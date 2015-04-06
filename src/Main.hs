@@ -239,11 +239,11 @@ main = runO $ do
                         | otherwise -> if par
                           then do
                             putStrLn $ "WARNING: parallel version not implemented for given flags, falling back to serial!"
-                            when verbose $ putStrLn "[running findFirstBestExpressions ..]"
-                            return $ findFirstBestExpressions input
+                            when verbose $ putStrLn "[running findFirstBestExpressionsLookahead ..]"
+                            return $ findFirstBestExpressionsLookahead 250 input
                           else do
-                            when verbose $ putStrLn "[running findFirstBestExpressions ..]"
-                            return $ findFirstBestExpressions input
+                            when verbose $ putStrLn "[running findFirstBestExpressionsLookahead ..]"
+                            return $ findFirstBestExpressionsLookahead 250 input
                       case r :: [ExferenceOutputElement] of
                         [] -> putStrLn "[no results]"
                         rs -> rs `forM_` \(e, ExferenceStats n d) ->

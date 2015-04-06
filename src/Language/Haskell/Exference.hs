@@ -1,4 +1,5 @@
 {-# LANGUAGE PatternGuards #-}
+{-# LANGUAGE MultiWayIf #-}
 
 module Language.Haskell.Exference
   ( findExpressions
@@ -10,6 +11,7 @@ module Language.Haskell.Exference
   , findFirstBestExpressions
   , takeFindSortNExpressions
   , findFirstExpressionLookahead
+  , findFirstBestExpressionsLookahead
   , ExferenceInput ( .. )
   , ExferenceOutputElement
   , ExferenceStats (..)
@@ -114,7 +116,7 @@ findFirstExpressionLookahead n input = f n Nothing (findExpressionsChunked input
       -> Maybe ExferenceOutputElement
       -> [[ExferenceOutputElement]]
       -> Maybe ExferenceOutputElement
-    f _ x        []      = x
+    f _ best     []      = best
     f 0 best     _       = best
     f r best     ([]:sr) = f (r-1) best sr
     f _ Nothing  (s:sr)  = f n (Just $ minElem s) sr
@@ -125,6 +127,31 @@ findFirstExpressionLookahead n input = f n Nothing (findExpressionsChunked input
                          | otherwise = f (r-1) (Just b) sr
     minElem :: [ExferenceOutputElement] -> ExferenceOutputElement
     minElem = minimumBy (comparing (exference_complexityRating.snd))
+
+-- a combination of the return-multiple-if-same-rating and the
+-- look-some-steps-ahead-for-better-solution functionalities.
+-- for example,
+-- [2,3,2,2,4,5,6,7] -> [2,2,2]
+--  does not stop at 3, but looks ahead, then returns all the 2-rated solutions
+findFirstBestExpressionsLookahead :: Int
+                                  -> ExferenceInput
+                                  -> [ExferenceOutputElement]
+findFirstBestExpressionsLookahead n input =
+  f n 99999.9 [] (findExpressionsChunked input)
+ where
+  f :: Int
+    -> Float
+    -> [ExferenceOutputElement]
+    -> [[ExferenceOutputElement]]
+    -> [ExferenceOutputElement]
+  f _ _ ss []           = ss
+  f 0 _ ss _            = ss
+  f i r ss ([]:qss)     = f (i-1) r ss qss
+  f i r ss ((q:qs):qss) | rq <- exference_complexityRating (snd q)
+                        = if
+                        | rq < r    -> f n rq [q] (qs:qss)
+                        | rq == r   -> f n r (q:ss) (qs:qss)
+                        | otherwise -> f i r ss (qs:qss)
 
 -- like findSortNExpressions, but retains only the best rating
 findBestNExpressions :: Int
