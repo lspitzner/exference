@@ -174,8 +174,9 @@ findExpressions (ExferenceInput rawCType
         deconss
         (mkQueryClassEnv sClassEnv cs)
         (ExpHole 0)
-        1
+        1 -- TODO: change to 0?
         (largestId t)
+        0
         0.0
 #if LINK_NODES
         Nothing
@@ -459,6 +460,7 @@ findExpressionsPar (ExferenceInput rawCType
           (ExpHole 0)
           1
           (largestId t)
+          0
           0.0
 #if LINK_NODES
           Nothing
@@ -547,6 +549,7 @@ stateStep2 :: Bool -> ExferenceHeuristicsConfig -> SearchNode -> [SearchNode]
 stateStep2 multiPM h s
   | node_depth s > 200.0 = []
   | (TypeArrow _ _) <- goalType = [ modifyNodeBy s' $ arrowStep goalType [] ]
+  | (TypeForall is t) <- goalType = [ modifyNodeBy s' $ forallStep is t ]
   | otherwise = byProvided ++ byFunctionSimple
   where
     (((var, goalType), scopeId):gr) = node_goals s
@@ -569,13 +572,24 @@ stateStep2 multiPM h s
                                       $ reverse
                                       $ ts
                                       )
+    forallStep :: [TVarId] -> HsType -> SearchNodeBuilder ()
+    forallStep vs t = do
+      dataIds <- mapM (const builderAllocNVar) vs
+      builderAddDepth (heuristics_functionGoalTransform h) -- TODO: different heuristic?
+      builderSetReason "forall-type goal transformation"
+      builderSetLastStepBinding Nothing
+      let substs = M.fromList $ zip vs $ TypeCons  . ("EXFN"++) . show <$> dataIds
+      builderPrependGoal ((var, applySubsts substs t), scopeId)
+      return ()
     byProvided = do
-      (provId, provT, provPs) <- scopeGetAllBindings (node_providedScopes s) scopeId
+      (provId, provT, provPs, forallTypes) <- scopeGetAllBindings (node_providedScopes s) scopeId
+      let incF = incVarIds (+(1+node_maxTVarId s))
+      let ss = M.fromList $ zip forallTypes (incF . TypeVar <$> forallTypes)
       byGenericUnify
         (Right provId)
-        provT
+        (applySubsts ss provT)
         (S.toList $ qClassEnv_constraints $ node_queryClassEnv s)
-        provPs
+        (applySubsts ss <$> provPs)
         (heuristics_stepProvidedGood h)
         (heuristics_stepProvidedBad h)
         ("inserting given value " ++ show provId ++ "::" ++ show provT)
@@ -629,7 +643,8 @@ stateStep2 multiPM h s
               goalType
               var
               newScopeId
-              (let (r,ps) = splitArrowResultParams provided in [(vResult, r, ds++ps)])
+              (let (r,ps,fs) = splitArrowResultParams provided
+                in [(vResult, r, ds++ps, fs)])
         Just substs -> do
           let contxt = node_queryClassEnv s
               constrs1 = map (constraintApplySubsts substs)
@@ -662,15 +677,16 @@ stateStep2 multiPM h s
                               ++ " and because " ++ provableTxt
             builderSetLastStepBinding bTrace
 
-addScopePatternMatch :: Bool
-                     -> HsType
-                     -> Int
-                     -> ScopeId
+addScopePatternMatch :: Bool -- should p-m on anything but newtypes?
+                     -> HsType -- the current goal (should be returned in one
+                               --  form or another)
+                     -> Int    -- goal id (hole id)
+                     -> ScopeId -- scope for this goal
                      -> [VarPBinding]
                      -> SearchNodeBuilder [TGoal]
 addScopePatternMatch multiPM goalType vid sid bindings = case bindings of
   []                                    -> return [((vid, goalType), sid)]
-  (b@(v,vtResult,vtParams):bindingRest) -> do
+  (b@(v,vtResult,vtParams,_):bindingRest) -> do
     incF <- incVarIds . (+) <$> builderGetTVarOffset
     builderAddPBinding sid b
     let defaultHandleRest = addScopePatternMatch multiPM goalType vid sid bindingRest

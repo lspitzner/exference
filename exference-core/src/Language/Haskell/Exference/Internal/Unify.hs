@@ -24,7 +24,7 @@ occursIn i (TypeVar j) = i==j
 occursIn _ (TypeCons _) = False
 occursIn i (TypeArrow t1 t2) = occursIn i t1 || occursIn i t2
 occursIn i (TypeApp t1 t2)   = occursIn i t1 || occursIn i t2
-occursIn i (TypeForall j t)  = i/=j && occursIn i t
+occursIn i (TypeForall js t)  = not (i `elem` js) && occursIn i t
 
 unify :: HsType -> HsType -> Maybe Substs
 unify ut1 ut2 = unify' $ UniState [(ut1, ut2)] M.empty

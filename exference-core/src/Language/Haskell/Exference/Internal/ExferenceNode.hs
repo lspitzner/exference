@@ -50,20 +50,24 @@ import Debug.Hood.Observe
 
 
 type VarBinding = (TVarId, HsType)
-type VarPBinding = (TVarId, HsType, [HsType])
-                -- var, result, params
+type VarPBinding = (TVarId, HsType, [HsType], [TVarId])
+                -- var, result, params, forallTypes
 
 
 varBindingApplySubsts :: Substs -> VarBinding -> VarBinding
 varBindingApplySubsts = second . applySubsts
 
 varPBindingApplySubsts :: Substs -> VarPBinding -> VarPBinding
-varPBindingApplySubsts ss (a,b,c) =
-  let (newResult, params) = splitArrowResultParams $ applySubsts ss b
+varPBindingApplySubsts ss (a,b,c,d) =
+  let
+    relevantSS = foldr M.delete ss d
+    (newResult, params, newForalls) = splitArrowResultParams
+                                    $ applySubsts relevantSS b
   in
   ( a
   , newResult
-  , map (applySubsts ss) c ++ params
+  , map (applySubsts relevantSS) c ++ params
+  , newForalls ++ d
   )
 
 type ScopeId = Int
@@ -152,6 +156,7 @@ data SearchNode = SearchNode
   , node_expression      :: Expression
   , node_nextVarId       :: TVarId
   , node_maxTVarId       :: TVarId
+  , node_nextNVarId      :: TVarId -- id used when resolving rankN-types
   , node_depth           :: Float
 #if LINK_NODES
   , node_previousNode    :: Maybe SearchNode
@@ -176,6 +181,7 @@ instance Show SearchNode where
               sexpression
               snextVarId
               smaxTVarId
+              snextNVarId
               sdepth
 #if LINK_NODES
               _prev
@@ -197,6 +203,7 @@ instance Show SearchNode where
       $$  (text $ "reason     = " ++ reason)
       $$  (parens $    (text $ "nextVarId="++show snextVarId)
                    <+> (text $ "maxTVarId="++show smaxTVarId)
+                   <+> (text $ "nextNVarId="++show snextNVarId)
                    <+> (text $ "depth="++show sdepth))
     )
     where
@@ -213,8 +220,9 @@ instance Show SearchNode where
                             )
       tVarType :: (TVarId, HsType) -> Doc
       tVarType (i, t) = text $ showVar i ++ " :: " ++ show t
-      tVarPType :: (TVarId, HsType, [HsType]) -> Doc
-      tVarPType (i, t, ps) = tVarType (i, foldr TypeArrow t ps)
+      tVarPType :: (TVarId, HsType, [HsType], [TVarId]) -> Doc
+      tVarPType (i, t, ps, []) = tVarType (i, foldr TypeArrow t ps)
+      tVarPType (i, t, ps, fs) = tVarType (i, TypeForall fs (foldr TypeArrow t ps))
 
 showNodeDevelopment :: SearchNode -> String
 #if LINK_NODES
@@ -229,13 +237,16 @@ showNodeDevelopment _ = "[showNodeDevelopment: exference-core was not compiled w
 instance Observable SearchNode where
   observer state = observeOpaque (show state) state
 
-splitBinding :: (a, HsType) -> (a, HsType, [HsType])
-splitBinding (a,b) = let (c,d) = splitArrowResultParams b in (a,c,d)
+splitBinding :: (TVarId, HsType) -> VarPBinding
+splitBinding (a,b) = let (c,d,e) = splitArrowResultParams b in (a,c,d,e)
 
-splitArrowResultParams :: HsType -> (HsType, [HsType])
+splitArrowResultParams :: HsType -> (HsType, [HsType], [TVarId])
 splitArrowResultParams t
   | TypeArrow t1 t2 <- t
-  , (c',d') <- splitArrowResultParams t2
-  = (c', t1:d')
+  , (c',d',e') <- splitArrowResultParams t2
+  = (c', t1:d', e')
+  | TypeForall vs t1 <- t
+  , (c', d', e') <- splitArrowResultParams t1
+  = (c', d', vs++e')
   | otherwise
-  = (t, [])
+  = (t, [], [])
