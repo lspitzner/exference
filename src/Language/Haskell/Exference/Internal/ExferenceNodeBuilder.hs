@@ -15,6 +15,7 @@ module Language.Haskell.Exference.Internal.ExferenceNodeBuilder
   , builderGetTVarOffset
   , builderAllocVar
   , builderAllocHole
+  , builderAllocNVar
   , builderFixMaxTVarId
   , builderSetLastStepBinding
   , builderAddScope
@@ -124,6 +125,13 @@ builderAllocVar = SearchNodeBuilder $ do
   let vid = node_nextVarId s
   put $ s { node_nextVarId = vid+1
           , node_varUses = M.insert vid 0 $ node_varUses s }
+  return vid
+
+builderAllocNVar :: SearchNodeBuilder TVarId
+builderAllocNVar = SearchNodeBuilder $ do
+  s <- get
+  let vid = node_nextNVarId s
+  put $ s { node_nextNVarId = vid+1 }
   return vid
 
 {-
