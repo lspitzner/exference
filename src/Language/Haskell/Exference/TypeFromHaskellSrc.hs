@@ -19,7 +19,7 @@ where
 
 
 import Language.Haskell.Exts.Syntax
-import qualified Language.Haskell.Exts.Parser
+import qualified Language.Haskell.Exts.Parser as P
 
 import qualified Language.Haskell.Exference.Type as T
 import qualified Language.Haskell.Exference.ConstrainedType as CT
@@ -72,7 +72,13 @@ convertTypeInternal' (TyParen t)  = convertTypeInternal' t
 convertTypeInternal' (TyInfix _ _ _)  = left "infix operator"
 convertTypeInternal' (TyKind _ _)     = left "kind annotation"
 convertTypeInternal' (TyPromoted _)   = left "promoted type"
-convertTypeInternal' (TyForall _ _ _) = left "forall type" -- TODO
+convertTypeInternal' (TyForall maybeTVars [] t) =
+  T.TypeForall
+    <$> case maybeTVars of
+          Nothing -> return []
+          Just tvs -> tyVarTransform `mapM` tvs
+    <*> convertTypeInternal' t
+convertTypeInternal' (TyForall _ _ _) = left $ "constraint in forall not yet supported!"
 convertTypeInternal' x                = left $ "unknown type element: " ++ show x -- TODO
 
 convertCType :: TC.StaticClassEnv -> Type -> Either String CT.HsConstrainedType
@@ -81,10 +87,9 @@ convertCType env qt = evalState (runEitherT $ convertCTypeInternal env qt) (0, M
 convertCTypeInternal :: TC.StaticClassEnv
        -> Type
        -> ConversionMonad CT.HsConstrainedType
-convertCTypeInternal env (TyForall _ assertions t)
+convertCTypeInternal env (TyForall _v assertions t)
   = CT.HsConstrainedType <$> (mapM (convertConstraint env) assertions)
-                         <*> (convertTypeInternal t)
--- convertCTypeInternal _ (TyForall _ _ _) = left $ "forall"
+                         <*> (id <$> (convertTypeInternal t)) -- TODO FORALL
 convertCTypeInternal _ t = CT.HsConstrainedType [] <$> convertTypeInternal t
 
 type ConvMap = M.Map Name Int
@@ -126,10 +131,10 @@ convertConstraint env (ClassA qname types)
 convertConstraint env (ParenA c) = convertConstraint env c
 convertConstraint _ c = left $ "bad constraint: " ++ show c
 
-parseConstrainedType :: TC.StaticClassEnv -> String -> Either String CT.HsConstrainedType
-parseConstrainedType c s = case Language.Haskell.Exts.Parser.parseType s of
-  f@(Language.Haskell.Exts.Parser.ParseFailed _ _) -> Left $ show f
-  Language.Haskell.Exts.Parser.ParseOk t -> convertCType c t
+parseConstrainedType :: TC.StaticClassEnv -> P.ParseMode -> String -> Either String CT.HsConstrainedType
+parseConstrainedType c m s = case P.parseTypeWithMode m s of
+  f@(P.ParseFailed _ _) -> Left $ show f
+  P.ParseOk t -> convertCType c t
 
 tyVarTransform :: TyVarBind
                -> ConversionMonad T.TVarId

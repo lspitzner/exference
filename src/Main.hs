@@ -171,7 +171,7 @@ main = runO $ do
           []    -> return () -- probably impossible..
           (x:_) -> do
             when verbose $ putStrLn "[Custom Input]"
-            let mParsedType = parseConstrainedType sEnv x
+            let mParsedType = parseConstrainedType sEnv (haskellSrcExtsParseMode "inputtype") x
             case mParsedType of
               Left err -> do
                 putStrLn $ "could not parse input type: " ++ err

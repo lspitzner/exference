@@ -2,6 +2,7 @@ module Language.Haskell.Exference.EnvironmentParser
   ( parseModules
   , parseModulesSimple
   , environmentFromModuleAndRatings
+  , haskellSrcExtsParseMode
   , compileWithDict
   , ratingsFromFile
   )
@@ -176,25 +177,28 @@ parseModulesSimple :: String
                         ( [RatedHsFunctionDecl]
                         , [DeconstructorBinding]
                         , StaticClassEnv) )
-parseModulesSimple s = (helper <$>) <$> parseModules [(mode, s)]
+parseModulesSimple s = (helper <$>)
+                   <$> parseModules [(haskellSrcExtsParseMode s, s)]
  where
-  exts1 = [ TypeOperators
-          , ExplicitForAll
-          , ExistentialQuantification
-          , TypeFamilies
-          , FunctionalDependencies
-          , FlexibleContexts
-          , MultiParamTypeClasses ]
-  exts2 = map EnableExtension exts1
-  mode  = ParseMode (s++".hs")
-                    Haskell2010
-                    exts2
-                    False
-                    False
-                    Nothing
   addRating (a,b) = (a,0.0,b)
   helper (decls, deconss, cntxt) = (addRating <$> decls, deconss, cntxt)
 
+haskellSrcExtsParseMode :: String -> ParseMode
+haskellSrcExtsParseMode s = ParseMode (s++".hs")
+                                      Haskell2010
+                                      exts2
+                                      False
+                                      False
+                                      Nothing
+  where
+    exts1 = [ TypeOperators
+            , ExplicitForAll
+            , ExistentialQuantification
+            , TypeFamilies
+            , FunctionalDependencies
+            , FlexibleContexts
+            , MultiParamTypeClasses ]
+    exts2 = map EnableExtension exts1
 
 ratingsFromFile :: String -> IO (Either String [(String, Float)])
 ratingsFromFile s = do
