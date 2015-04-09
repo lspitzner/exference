@@ -120,7 +120,8 @@ checkData =
                                     ,"\\b -> (\\c -> (\\d -> ((>>=) c) (\\h -> ((>>=) d) (\\l -> pure (((>>=) l) (\\q -> (fmap (\\u -> (b u) q)) ((mapM (\\t0 -> t0)) h)))))))"
                                     ,"\\b -> (\\c -> (\\d -> ((>>=) c) (\\h -> ((>>=) d) (\\l -> pure (((>>=) l) (\\q -> (fmap (\\u -> (b u) q)) (sequence h)))))))"
                                     ,"\\b -> (\\c -> (\\d -> ((>>=) d) (\\h -> ((>>=) c) (\\l -> pure (((>>=) h) (\\q -> (fmap (\\u -> (b u) q)) (sequence l)))))))"
-                                    ,"\\b -> (\\c -> (\\d -> ((>>=) d) (\\h -> (fmap (\\l -> ((>>=) ((mapM (\\t -> t)) l)) (\\r -> (fmap (b r)) h))) c)))"]
+                                    ,"\\b -> (\\c -> (\\d -> ((>>=) d) (\\h -> (fmap (\\l -> ((>>=) ((mapM (\\t -> t)) l)) (\\r -> (fmap (b r)) h))) c)))"
+                                    ,"\\b -> (\\c -> (\\d -> ((>>=) d) (mapM (\\l -> (fmap (\\p -> (b (fold ((mapM (\\w -> w)) p))) l)) c))))"]
   , (,,,,) "joinBlub"   False False "Monad m => List Decl -> (Decl -> m (List FunctionBinding)) -> m (List FunctionBinding)"
                                     ["\\b -> (\\c -> ((>>=) ((mapM c) b)) (\\i -> pure (((>>=) i) (\\q -> q))))"
                                     ,"\\b -> (\\c -> (fmap (\\g -> ((>>=) g) (\\k -> k))) ((mapM c) b))"

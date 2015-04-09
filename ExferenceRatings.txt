@@ -60,10 +60,17 @@ mapLookup    = -2.0
 
 (>>=)        = -4.0
 mapM         = -4.0
-ap           = 0.5
+ap           = 0.3
 
 mempty       = 12.5
 mappend      = 5.0
 mconcat      = 5.0
 
 Cont         = 5.0
+
+fold         = 2.0
+foldMap      = 2.0
+foldr        = 0.0
+foldl        = 0.0
+
+sequenceA    = 8.0

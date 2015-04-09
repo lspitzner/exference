@@ -106,16 +106,16 @@ class Monad m => MonadPlus m where
   mplus :: m a -> m a -> m a
 
 class Foldable t where
-  f_fold :: Monoid m => t m -> m
-  f_foldMap :: Monoid m => (a -> m) -> t a -> m
-  f_foldr :: (a -> b -> b) -> b -> t a -> b
-  f_foldl :: (b -> a -> b) -> b -> t a -> b
+  fold :: Monoid m => t m -> m
+  foldMap :: Monoid m => (a -> m) -> t a -> m
+  foldr :: (a -> b -> b) -> b -> t a -> b
+  foldl :: (b -> a -> b) -> b -> t a -> b
 
 class (Functor t, Foldable t) => Traversable t where
-  t_traverse :: Applicative f => (a -> f b) -> t a -> f (t b)
-  t_sequenceA :: Applicative f => t (f a) -> f (t a)
-  t_mapM :: Monad m => (a -> m b) -> t a -> m (t b)
-  t_sequence :: Monad m => t (m a) -> m (t a)
+  traverse :: Applicative f => (a -> f b) -> t a -> f (t b)
+  sequenceA :: Applicative f => t (f a) -> f (t a)
+  mapM :: Monad m => (a -> m b) -> t a -> m (t b)
+  sequence :: Monad m => t (m a) -> m (t a)
 
 -- ****
 -- **** data types (constructors and deconstructors aka pattern matching)
@@ -149,11 +149,11 @@ either :: (a->c) -> (b->c) -> Either a b -> c
 curry :: ((a, b) -> c) -> a -> b -> c
 uncurry :: (a -> b -> c) -> ((a, b) -> c)
 -}
-mapM :: Monad m => (a -> m b) -> [a] -> m [b]
+-- mapM :: Monad m => (a -> m b) -> [a] -> m [b]
 -- no forM, see rule 2
-sequence :: Monad m => [m a] -> m [a] -- Traversable version better?
-foldl :: (a -> b -> a) -> a -> [b] -> a
-foldr :: (a -> b -> b) -> b -> [a] -> b
+-- sequence :: Monad m => [m a] -> m [a] -- Traversable version better?
+-- foldl :: (a -> b -> a) -> a -> [b] -> a
+-- foldr :: (a -> b -> b) -> b -> [a] -> b
 concat :: [[a]] -> [a]
 zip :: [a] -> [b] -> [(a, b)]
 zip3 :: [a] -> [b] -> [c] -> [(a,b,c)]
@@ -268,6 +268,14 @@ instance Monoid a => Monoid (Const a b)
 instance (Monoid a, Monoid b, Monoid c) => Monoid (a, b, c)   
 instance (Monoid a, Monoid b, Monoid c, Monoid d) => Monoid (a, b, c, d)  
 instance (Monoid a, Monoid b, Monoid c, Monoid d, Monoid e) => Monoid (a, b, c, d, e)
+
+instance Traversable []
+instance Traversable Maybe
+instance Traversable Identity
+-- instance Traversable (Either a)  -- cause "unused" problems
+-- instance Traversable ((,) a)     -- cause "unused" problems
+-- instance Traversable (Proxy *)
+instance Traversable (Const m)
 
 instance Monad []
 instance Monad IO
