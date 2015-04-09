@@ -110,7 +110,7 @@ findFirstBestExpressions input
 findFirstExpressionLookahead :: Int
                              -> ExferenceInput
                              -> Maybe ExferenceOutputElement
-findFirstExpressionLookahead n input = f n Nothing (findExpressionsChunked input)
+findFirstExpressionLookahead n input = f 999999 Nothing (findExpressionsChunked input)
   where
     f :: Int
       -> Maybe ExferenceOutputElement
@@ -137,7 +137,7 @@ findFirstBestExpressionsLookahead :: Int
                                   -> ExferenceInput
                                   -> [ExferenceOutputElement]
 findFirstBestExpressionsLookahead n input =
-  f n 99999.9 [] (findExpressionsChunked input)
+  f 999999 99999.9 [] (findExpressionsChunked input)
  where
   f :: Int
     -> Float
