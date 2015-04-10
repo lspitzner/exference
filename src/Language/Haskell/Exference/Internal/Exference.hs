@@ -566,13 +566,14 @@ stateStep2 multiPM h s
       builderAddGivenConstraints $ constraintApplySubsts substs <$> cs
       return ()
     byProvided = do
-      (provId, provT, provPs, forallTypes) <- scopeGetAllBindings (node_providedScopes s) scopeId
+      (provId, provT, provPs, forallTypes, constraints) <- scopeGetAllBindings (node_providedScopes s) scopeId
       let incF = incVarIds (+(1+node_maxTVarId s))
       let ss = M.fromList $ zip forallTypes (incF . TypeVar <$> forallTypes)
       byGenericUnify
         (Right provId)
         (applySubsts ss provT)
-        (S.toList $ qClassEnv_constraints $ node_queryClassEnv s)
+        (S.toList $           qClassEnv_constraints (node_queryClassEnv s)
+                    `S.union` S.fromList (constraintApplySubsts ss <$> constraints))
         (applySubsts ss <$> provPs)
         (heuristics_stepProvidedGood h)
         (heuristics_stepProvidedBad h)
@@ -627,15 +628,16 @@ stateStep2 multiPM h s
               goalType
               var
               newScopeId
-              (let (r,ps,fs) = splitArrowResultParams provided
-                in [(vResult, r, ds++ps, fs)])
+              (let (r,ps,fs,cs) = splitArrowResultParams provided
+                in [(vResult, r, ds++ps, fs, cs)])
         Just substs -> do
           let contxt = node_queryClassEnv s
               constrs1 = map (constraintApplySubsts substs)
                        $ node_constraintGoals s
               constrs2 = map (constraintApplySubsts substs)
                        $ provConstrs
-          newConstraints <- maybeToList $ isPossible contxt (constrs1++constrs2)
+          newConstraints <- maybeToList
+                          $ isPossible contxt (constrs1++constrs2)
           return $ modifyNodeBy s' $ do
             let paramN = length dependencies
             vars <- replicateM paramN builderAllocHole
@@ -670,7 +672,7 @@ addScopePatternMatch :: Bool -- should p-m on anything but newtypes?
                      -> SearchNodeBuilder [TGoal]
 addScopePatternMatch multiPM goalType vid sid bindings = case bindings of
   []                                    -> return [((vid, goalType), sid)]
-  (b@(v,vtResult,vtParams,_):bindingRest) -> do
+  (b@(v,vtResult,vtParams,_,_):bindingRest) -> do
     incF <- incVarIds . (+) <$> builderGetTVarOffset
     builderAddPBinding sid b
     let defaultHandleRest = addScopePatternMatch multiPM goalType vid sid bindingRest
