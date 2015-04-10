@@ -10,7 +10,7 @@ where
 
 
 
-import Language.Haskell.Exference.Type
+import Language.Haskell.Exference.Types
 import Data.List ( intercalate )
 import Data.Function ( on )
 

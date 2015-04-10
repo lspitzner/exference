@@ -7,9 +7,7 @@ where
 
 
 
-import Language.Haskell.Exference.Type
-import Language.Haskell.Exference.ConstrainedType
-import Language.Haskell.Exference.TypeClasses
+import Language.Haskell.Exference.Types
 
 
 

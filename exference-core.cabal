@@ -31,9 +31,9 @@ Library
     cpp-options: -DBUILD_SEARCH_TREE
 
   exposed-modules: Language.Haskell.ExferenceCore
-                   Language.Haskell.Exference.Type
+                   Language.Haskell.Exference.Types
                    Language.Haskell.Exference.ConstrainedType
-                   Language.Haskell.Exference.TypeClasses
+                   Language.Haskell.Exference.TypeUtils
                    Language.Haskell.Exference.ExferenceStats
                    Language.Haskell.Exference.Expression
                    Language.Haskell.Exference.FunctionBinding

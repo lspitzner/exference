@@ -29,8 +29,7 @@ where
 
 
 
-import Language.Haskell.Exference.Type
-import Language.Haskell.Exference.TypeClasses
+import Language.Haskell.Exference.Types
 import Language.Haskell.Exference.Expression
 import Language.Haskell.Exference.ExferenceStats
 import Language.Haskell.Exference.FunctionBinding

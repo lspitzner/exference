@@ -10,8 +10,8 @@ where
 
 
 
-import Language.Haskell.Exference.Type
-import Language.Haskell.Exference.TypeClasses
+import Language.Haskell.Exference.Types
+import Language.Haskell.Exference.TypeUtils
 import Data.List ( intersperse, find )
 import Data.Maybe ( fromMaybe )
 

@@ -6,7 +6,7 @@ where
 
 
 
-import Language.Haskell.Exference.Type
+import Language.Haskell.Exference.Types
 import qualified Data.Map.Strict as M
 import Data.Maybe
 

@@ -5,9 +5,9 @@ where
 
 
 
-import Language.Haskell.Exference.Type
+import Language.Haskell.Exference.Types
+import Language.Haskell.Exference.TypeUtils
 import Language.Haskell.Exference.Internal.Unify
-import Language.Haskell.Exference.TypeClasses
 
 import qualified Data.Set as S
 import Control.Monad ( mplus, guard, msum )

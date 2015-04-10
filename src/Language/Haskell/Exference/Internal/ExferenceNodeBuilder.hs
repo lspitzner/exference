@@ -27,10 +27,9 @@ where
 
 
 
-import Language.Haskell.Exference.Type
+import Language.Haskell.Exference.Types
 import Language.Haskell.Exference.Expression
 import Language.Haskell.Exference.Internal.ExferenceNode
-import Language.Haskell.Exference.TypeClasses
 import Language.Haskell.Exference.FunctionBinding
 
 import Control.Monad.State.Lazy ( State
