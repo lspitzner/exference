@@ -492,6 +492,7 @@ ctConstantifyVars (HsConstrainedType a b) =
 
 tConstantifyVars :: HsType -> HsType
 tConstantifyVars (TypeVar i)        = TypeCons $ "EXF" ++ showVar i
+tConstantifyVars c@(TypeConstant _) = c
 tConstantifyVars c@(TypeCons _)     = c
 tConstantifyVars (TypeArrow t1 t2)  = TypeArrow
                                        (tConstantifyVars t1)
@@ -512,6 +513,7 @@ rateGoals h = sum . map rateGoal
     -- TODO: actually measure performance with different values,
     --       use derived values instead of (arbitrarily) chosen ones.
     tComplexity (TypeVar _)       = heuristics_goalVar h
+    tComplexity (TypeConstant _)  = heuristics_goalCons h -- TODO different heuristic?
     tComplexity (TypeCons _)      = heuristics_goalCons h
     tComplexity (TypeArrow t1 t2) = heuristics_goalArrow h + tComplexity t1 + tComplexity t2
     tComplexity (TypeApp   t1 t2) = heuristics_goalApp h   + tComplexity t1 + tComplexity t2

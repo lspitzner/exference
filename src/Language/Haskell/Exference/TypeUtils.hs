@@ -56,10 +56,11 @@ badReadVar [c] = ord c - ord 'a'
 badReadVar _ = error "badReadVar: that's why it is called badReadVar"
 
 arrowDepth :: HsType -> Int
-arrowDepth (TypeVar _) = 1
-arrowDepth (TypeCons _) = 1
-arrowDepth (TypeArrow _ t) = 1 + arrowDepth t
-arrowDepth (TypeApp _ _) = 1
+arrowDepth (TypeVar _)      = 1
+arrowDepth (TypeConstant _) = 1
+arrowDepth (TypeCons _)     = 1
+arrowDepth (TypeArrow _ t)  = 1 + arrowDepth t
+arrowDepth (TypeApp _ _)    = 1
 arrowDepth (TypeForall _ t) = arrowDepth t
 
 -- binds everything in Foralls, so there are no free variables anymore.
@@ -72,10 +73,11 @@ reduceIds :: HsType -> HsType
 reduceIds t = evalState (f t) (M.empty, 0)
   where
     f :: HsType -> State (M.Map TVarId TVarId, TVarId) HsType
-    f (TypeVar i) = TypeVar <$> g i
-    f c@(TypeCons _) = return c
-    f (TypeArrow t1 t2) = TypeArrow  <$> f t1 <*> f t2
-    f (TypeApp   t1 t2) = TypeApp    <$> f t1 <*> f t2
+    f (TypeVar i)        = TypeVar <$> g i
+    f c@(TypeConstant _) = return c
+    f c@(TypeCons _)     = return c
+    f (TypeArrow t1 t2)  = TypeArrow  <$> f t1 <*> f t2
+    f (TypeApp   t1 t2)  = TypeApp    <$> f t1 <*> f t2
     f (TypeForall is t1) = TypeForall <$> mapM g is  <*> f t1
     g :: TVarId -> State (M.Map TVarId TVarId, TVarId) TVarId
     g i = do
@@ -95,6 +97,7 @@ incVarIds _ t = t
 
 largestId :: HsType -> TVarId
 largestId (TypeVar i)       = i
+largestId (TypeConstant _)  = -1
 largestId (TypeCons _)      = -1
 largestId (TypeArrow t1 t2) = largestId t1 `max` largestId t2
 largestId (TypeApp t1 t2)   = largestId t1 `max` largestId t2

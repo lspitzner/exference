@@ -50,11 +50,13 @@ type TVarId = Int
 type Subst  = (TVarId, HsType)
 type Substs = M.Map TVarId HsType
 
-data HsType = TypeVar TVarId
-            | TypeCons String
-            | TypeArrow HsType HsType
-            | TypeApp   HsType HsType
-            | TypeForall [TVarId] HsType
+data HsType = TypeVar      TVarId
+            | TypeConstant TVarId  -- like TypeCons, for exference-internal
+                                   -- purposes.
+            | TypeCons     String
+            | TypeArrow    HsType HsType
+            | TypeApp      HsType HsType
+            | TypeForall   [TVarId] HsType
   deriving (Ord, Eq, Generic)
 
 data HsTypeClass = HsTypeClass
@@ -100,6 +102,7 @@ instance NFData QueryClassEnv  where rnf = genericRnf
 
 instance Show HsType where
   showsPrec _ (TypeVar i) = showString $ showVar i
+  showsPrec _ (TypeConstant i) = showString $ "C" ++ showVar i
   showsPrec _ (TypeCons s) = showString s
   showsPrec d (TypeArrow t1 t2) =
     showParen (d> -2) $ showsPrec (-1) t1 . showString " -> " . showsPrec (-1) t2
@@ -208,21 +211,24 @@ typeParser = parseAll
 
 applySubst :: Subst -> HsType -> HsType
 applySubst (i, t) v@(TypeVar j) = if i==j then t else v
-applySubst _ c@(TypeCons _) = c
-applySubst s (TypeArrow t1 t2) = TypeArrow (applySubst s t1) (applySubst s t2)
-applySubst s (TypeApp t1 t2) = TypeApp (applySubst s t1) (applySubst s t2)
+applySubst _ c@(TypeConstant _) = c
+applySubst _ c@(TypeCons _)     = c
+applySubst s (TypeArrow t1 t2)  = TypeArrow (applySubst s t1) (applySubst s t2)
+applySubst s (TypeApp t1 t2)    = TypeApp (applySubst s t1) (applySubst s t2)
 applySubst s@(i,_) f@(TypeForall js t) = if elem i js then f else TypeForall js (applySubst s t)
 
 applySubsts :: Substs -> HsType -> HsType
-applySubsts s v@(TypeVar i) = fromMaybe v $ M.lookup i s
-applySubsts _ c@(TypeCons _) = c
-applySubsts s (TypeArrow t1 t2) = TypeArrow (applySubsts s t1) (applySubsts s t2)
-applySubsts s (TypeApp t1 t2) = TypeApp (applySubsts s t1) (applySubsts s t2)
-applySubsts s (TypeForall js t) = TypeForall js $ applySubsts (foldr M.delete s js) t
+applySubsts s v@(TypeVar i)      = fromMaybe v $ M.lookup i s
+applySubsts _ c@(TypeConstant _) = c
+applySubsts _ c@(TypeCons _)     = c
+applySubsts s (TypeArrow t1 t2)  = TypeArrow (applySubsts s t1) (applySubsts s t2)
+applySubsts s (TypeApp t1 t2)    = TypeApp (applySubsts s t1) (applySubsts s t2)
+applySubsts s (TypeForall js t)  = TypeForall js $ applySubsts (foldr M.delete s js) t
 
 freeVars :: HsType -> S.Set TVarId
-freeVars (TypeVar i) = S.singleton i
-freeVars (TypeCons _) = S.empty
+freeVars (TypeVar i)       = S.singleton i
+freeVars (TypeConstant _)  = S.empty
+freeVars (TypeCons _)      = S.empty
 freeVars (TypeArrow t1 t2) = S.union (freeVars t1) (freeVars t2)
-freeVars (TypeApp t1 t2) = S.union (freeVars t1) (freeVars t2)
+freeVars (TypeApp t1 t2)   = S.union (freeVars t1) (freeVars t2)
 freeVars (TypeForall is t) = foldr S.delete (freeVars t) is
