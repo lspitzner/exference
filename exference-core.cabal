@@ -32,7 +32,6 @@ Library
 
   exposed-modules: Language.Haskell.ExferenceCore
                    Language.Haskell.Exference.Types
-                   Language.Haskell.Exference.ConstrainedType
                    Language.Haskell.Exference.TypeUtils
                    Language.Haskell.Exference.ExferenceStats
                    Language.Haskell.Exference.Expression

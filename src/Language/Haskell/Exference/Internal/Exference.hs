@@ -20,7 +20,6 @@ where
 import Language.Haskell.Exference.Types
 import Language.Haskell.Exference.TypeUtils
 import Language.Haskell.Exference.Expression
-import Language.Haskell.Exference.ConstrainedType
 import Language.Haskell.Exference.ExferenceStats
 import Language.Haskell.Exference.FunctionBinding
 import Language.Haskell.Exference.SearchTree
@@ -97,7 +96,7 @@ data ExferenceHeuristicsConfig = ExferenceHeuristicsConfig
   }
 
 data ExferenceInput = ExferenceInput
-  { input_goalType    :: HsConstrainedType      -- ^ try to find a expression
+  { input_goalType    :: HsType                 -- ^ try to find a expression
                                                 -- of this type
   , input_envFuncs    :: [FunctionBinding]      -- ^ the list of functions
                                                 -- that may be used
@@ -141,7 +140,7 @@ type FindExpressionsState = ( Int    -- number of steps already performed
 
 findExpressions :: ExferenceInput
                 -> [ExferenceChunkElement]
-findExpressions (ExferenceInput rawCType
+findExpressions (ExferenceInput rawType
                                 funcs
                                 deconss
                                 sClassEnv
@@ -164,7 +163,7 @@ findExpressions (ExferenceInput rawCType
   -- fmap (\(steps, compl, e) -> (e, ExferenceStats steps compl))
   --   <$> resultTuples
   where
-    (HsConstrainedType cs t) = ctConstantifyVars rawCType
+    t = forallify rawType
     rootSearchNode = SearchNode
         [((0, t), 0)]
         []
@@ -172,7 +171,7 @@ findExpressions (ExferenceInput rawCType
         M.empty
         funcs
         deconss
-        (mkQueryClassEnv sClassEnv cs)
+        (mkQueryClassEnv sClassEnv [])
         (ExpHole 0)
         1 -- TODO: change to 0?
         (largestId t)
@@ -269,7 +268,7 @@ findExpressionsPar :: ExferenceInput
                    -> (   ListT.ListT IO ExferenceChunkElement
                        -> IO a)
                    -> IO a
-findExpressionsPar (ExferenceInput rawCType
+findExpressionsPar (ExferenceInput rawType
                                    funcs
                                    deconss
                                    sClassEnv
@@ -448,7 +447,7 @@ findExpressionsPar (ExferenceInput rawCType
                   , newNodes )
             ListT.cons (bindingUsages, newSearchTreeBuilder, out) rest
     let 
-      (HsConstrainedType cs t) = ctConstantifyVars rawCType
+      t = forallify rawType
       rootSearchNode = SearchNode
           [((0, t), 0)]
           []
@@ -456,7 +455,7 @@ findExpressionsPar (ExferenceInput rawCType
           M.empty
           funcs
           deconss
-          (mkQueryClassEnv sClassEnv cs)
+          (mkQueryClassEnv sClassEnv [])
           (ExpHole 0)
           1
           (largestId t)
@@ -483,24 +482,6 @@ findExpressionsPar (ExferenceInput rawCType
                         )
   replicateM_ destParallelCount (writeChan taskChan Nothing)
   return result
-
-ctConstantifyVars :: HsConstrainedType -> HsConstrainedType
-ctConstantifyVars (HsConstrainedType a b) =
-  HsConstrainedType
-    (map (\(HsConstraint c d) -> HsConstraint c $ map tConstantifyVars d) a)
-    (tConstantifyVars b)
-
-tConstantifyVars :: HsType -> HsType
-tConstantifyVars (TypeVar i)        = TypeCons $ "EXF" ++ showVar i
-tConstantifyVars c@(TypeConstant _) = c
-tConstantifyVars c@(TypeCons _)     = c
-tConstantifyVars (TypeArrow t1 t2)  = TypeArrow
-                                       (tConstantifyVars t1)
-                                       (tConstantifyVars t2)
-tConstantifyVars (TypeApp t1 t2)    = TypeApp
-                                       (tConstantifyVars t1)
-                                       (tConstantifyVars t2)
-tConstantifyVars f@(TypeForall _ _ _) = f
 
 rateNode :: ExferenceHeuristicsConfig -> SearchNode -> Float
 rateNode h s = 0.0 - rateGoals h (node_goals s) - node_depth s + rateUsage h s
