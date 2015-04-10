@@ -20,12 +20,12 @@ type TypeEq = (HsType, HsType)
 data UniState = UniState [TypeEq] Substs
 
 occursIn :: TVarId -> HsType -> Bool
-occursIn i (TypeVar j)       = i==j
-occursIn _ (TypeConstant _)  = False
-occursIn _ (TypeCons _)      = False
-occursIn i (TypeArrow t1 t2) = occursIn i t1 || occursIn i t2
-occursIn i (TypeApp t1 t2)   = occursIn i t1 || occursIn i t2
-occursIn i (TypeForall js t) = not (i `elem` js) && occursIn i t
+occursIn i (TypeVar j)         = i==j
+occursIn _ (TypeConstant _)    = False
+occursIn _ (TypeCons _)        = False
+occursIn i (TypeArrow t1 t2)   = occursIn i t1 || occursIn i t2
+occursIn i (TypeApp t1 t2)     = occursIn i t1 || occursIn i t2
+occursIn i (TypeForall js _ t) = not (i `elem` js) && occursIn i t
 
 unify :: HsType -> HsType -> Maybe Substs
 unify ut1 ut2 = unify' $ UniState [(ut1, ut2)] M.empty
@@ -51,8 +51,8 @@ unify ut1 ut2 = unify' $ UniState [(ut1, ut2)] M.empty
     uniStep (TypeApp t1 t2, TypeApp t3 t4) = Just (Right [(t1, t3), (t2, t4)])
     -- TODO TypeForall unification
     -- THIS IS WRONG; WE IGNORE FORALLS FOR THE MOMENT
-    uniStep (TypeForall _ t1, t2) = uniStep (t1, t2)
-    uniStep (t1, TypeForall _ t2) = uniStep (t1, t2)
+    uniStep (TypeForall _ _ t1, t2) = uniStep (t1, t2)
+    uniStep (t1, TypeForall _ _ t2) = uniStep (t1, t2)
     uniStep _ = Nothing
 
 -- treats the variables in the first parameter as constants, and returns
@@ -81,8 +81,8 @@ unifyRight ut1 ut2 = unify' $ UniState [(ut1, ut2)] M.empty
     uniStep (TypeApp t1 t2, TypeApp t3 t4) = Just (Right [(t1, t3), (t2, t4)])
     -- TODO TypeForall unification
     -- THIS IS WRONG; WE IGNORE FORALLS FOR THE MOMENT
-    uniStep (TypeForall _ t1, t2) = uniStep (t1, t2)
-    uniStep (t1, TypeForall _ t2) = uniStep (t1, t2)
+    uniStep (TypeForall _ _ t1, t2) = uniStep (t1, t2)
+    uniStep (t1, TypeForall _ _ t2) = uniStep (t1, t2)
     uniStep _ = Nothing
 
 --unifyDist :: HsType -> HsType -> Maybe Substs

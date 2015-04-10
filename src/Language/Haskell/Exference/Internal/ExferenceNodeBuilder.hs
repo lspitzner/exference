@@ -20,6 +20,7 @@ module Language.Haskell.Exference.Internal.ExferenceNodeBuilder
   , builderSetLastStepBinding
   , builderAddScope
   , builderAddConstraintGoals
+  , builderAddGivenConstraints
   , builderSetConstraints
   , builderApplySubst
   )
@@ -61,6 +62,9 @@ builderAddConstraintGoals :: [HsConstraint] -> SearchNodeBuilder ()
 builderAddConstraintGoals gs = SearchNodeBuilder $ modify $ \s ->
   s { node_constraintGoals = node_constraintGoals s ++ gs }
 
+builderAddGivenConstraints :: [HsConstraint] -> SearchNodeBuilder ()
+builderAddGivenConstraints cs = SearchNodeBuilder $ modify $ \s ->
+  s { node_queryClassEnv = addQueryClassEnv cs $ node_queryClassEnv s }
 {-
 builderAddVars :: [TVarId] -> SearchNodeBuilder ()
 builderAddVars vids = SearchNodeBuilder

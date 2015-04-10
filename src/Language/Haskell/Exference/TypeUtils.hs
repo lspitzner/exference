@@ -61,24 +61,25 @@ arrowDepth (TypeConstant _) = 1
 arrowDepth (TypeCons _)     = 1
 arrowDepth (TypeArrow _ t)  = 1 + arrowDepth t
 arrowDepth (TypeApp _ _)    = 1
-arrowDepth (TypeForall _ t) = arrowDepth t
+arrowDepth (TypeForall _ _ t) = arrowDepth t
 
 -- binds everything in Foralls, so there are no free variables anymore.
 forallify :: HsType -> HsType
-forallify t =
-  let frees = freeVars t
-  in TypeForall (S.toList frees) t
+forallify t = case t of
+  TypeForall is cs t' -> TypeForall (S.toList frees++is) cs t'
+  _                   -> TypeForall (S.toList frees) [] t
+ where frees = freeVars t
 
 reduceIds :: HsType -> HsType
 reduceIds t = evalState (f t) (M.empty, 0)
   where
     f :: HsType -> State (M.Map TVarId TVarId, TVarId) HsType
-    f (TypeVar i)        = TypeVar <$> g i
-    f c@(TypeConstant _) = return c
-    f c@(TypeCons _)     = return c
-    f (TypeArrow t1 t2)  = TypeArrow  <$> f t1 <*> f t2
-    f (TypeApp   t1 t2)  = TypeApp    <$> f t1 <*> f t2
-    f (TypeForall is t1) = TypeForall <$> mapM g is  <*> f t1
+    f (TypeVar i)           = TypeVar <$> g i
+    f c@(TypeConstant _)    = return c
+    f c@(TypeCons _)        = return c
+    f (TypeArrow t1 t2)     = TypeArrow  <$> f t1 <*> f t2
+    f (TypeApp   t1 t2)     = TypeApp    <$> f t1 <*> f t2
+    f (TypeForall is cs t1) = TypeForall <$> mapM g is <*> mapM h cs <*> f t1
     g :: TVarId -> State (M.Map TVarId TVarId, TVarId) TVarId
     g i = do
       (mapping, next) <- get
@@ -87,12 +88,18 @@ reduceIds t = evalState (f t) (M.empty, 0)
           put (M.insert i next mapping, next+1)
           return next
         Just x -> return x
+    h (HsConstraint cls params) = HsConstraint cls <$> mapM f params
 
 incVarIds :: (TVarId -> TVarId) -> HsType -> HsType
 incVarIds f (TypeVar i) = TypeVar (f i)
 incVarIds f (TypeArrow t1 t2) = TypeArrow (incVarIds f t1) (incVarIds f t2)
 incVarIds f (TypeApp t1 t2) = TypeApp (incVarIds f t1) (incVarIds f t2)
-incVarIds f (TypeForall is t) = TypeForall (f <$> is) (incVarIds f t)
+incVarIds f (TypeForall is cs t) = TypeForall
+                                     (f <$> is)
+                                     (g <$> cs) 
+                                     (incVarIds f t)
+  where
+    g (HsConstraint cls params) = HsConstraint cls (incVarIds f <$> params)
 incVarIds _ t = t
 
 largestId :: HsType -> TVarId
@@ -101,7 +108,7 @@ largestId (TypeConstant _)  = -1
 largestId (TypeCons _)      = -1
 largestId (TypeArrow t1 t2) = largestId t1 `max` largestId t2
 largestId (TypeApp t1 t2)   = largestId t1 `max` largestId t2
-largestId (TypeForall _ t)  = largestId t
+largestId (TypeForall _ _ t)  = largestId t
 
 distinctify :: HsType -> HsType -> HsType
 distinctify a b = let x = largestId a in incVarIds (+(x+1)) b

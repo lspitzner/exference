@@ -221,7 +221,7 @@ instance Show SearchNode where
       tVarType (i, t) = text $ showVar i ++ " :: " ++ show t
       tVarPType :: (TVarId, HsType, [HsType], [TVarId]) -> Doc
       tVarPType (i, t, ps, []) = tVarType (i, foldr TypeArrow t ps)
-      tVarPType (i, t, ps, fs) = tVarType (i, TypeForall fs (foldr TypeArrow t ps))
+      tVarPType (i, t, ps, fs) = tVarType (i, TypeForall fs [] (foldr TypeArrow t ps))
 
 showNodeDevelopment :: SearchNode -> String
 #if LINK_NODES
@@ -244,7 +244,7 @@ splitArrowResultParams t
   | TypeArrow t1 t2 <- t
   , (c',d',e') <- splitArrowResultParams t2
   = (c', t1:d', e')
-  | TypeForall vs t1 <- t
+  | TypeForall vs _ t1 <- t -- TODO
   , (c', d', e') <- splitArrowResultParams t1
   = (c', d', vs++e')
   | otherwise

@@ -21,6 +21,7 @@ module Language.Haskell.Exference.Types
   , containsVar
   , showVar
   , mkQueryClassEnv
+  , addQueryClassEnv
   , freeVars
   )
 where
@@ -28,7 +29,7 @@ where
 
 
 import Data.Char ( ord, chr, isLower, isUpper )
-import Data.List ( intercalate )
+import Data.List ( intercalate, intersperse )
 import Data.Foldable ( fold, foldMap )
 import Control.Applicative ( (<$>), (<*>), (*>), (<*) )
 import Data.Maybe ( maybeToList, fromMaybe )
@@ -56,7 +57,7 @@ data HsType = TypeVar      TVarId
             | TypeCons     String
             | TypeArrow    HsType HsType
             | TypeApp      HsType HsType
-            | TypeForall   [TVarId] HsType
+            | TypeForall   [TVarId] [HsConstraint] HsType
   deriving (Ord, Eq, Generic)
 
 data HsTypeClass = HsTypeClass
@@ -108,9 +109,13 @@ instance Show HsType where
     showParen (d> -2) $ showsPrec (-1) t1 . showString " -> " . showsPrec (-1) t2
   showsPrec d (TypeApp t1 t2) =
     showParen (d> -1) $ showsPrec 0 t1 . showString " " . showsPrec 0 t2
-  showsPrec d (TypeForall is t) = showParen (d>0) $
-    showString ("forall "
-               ++ intercalate ", " (showVar <$> is) ++ " . ") . showsPrec 0 t
+  showsPrec d (TypeForall [] [] t) = showsPrec d t
+  showsPrec d (TypeForall is cs t) =
+    showParen (d>0)
+    $ showString ("forall " ++ intercalate ", " (showVar <$> is) ++ " . ")
+    . showParen True (\x -> foldr (++) x $ intersperse ", " $ map show cs)
+    . showString " => "
+    . showsPrec (-2) t
 
 instance Observable HsType where
   observer x = observeOpaque (show x) x
@@ -142,14 +147,21 @@ containsVar :: TVarId -> HsType -> Bool
 containsVar i = S.member i . freeVars
 
 mkQueryClassEnv :: StaticClassEnv -> [HsConstraint] -> QueryClassEnv
-mkQueryClassEnv sClassEnv constrs = QueryClassEnv {
+mkQueryClassEnv sClassEnv constrs = addQueryClassEnv constrs $ QueryClassEnv {
   qClassEnv_env = sClassEnv,
+  qClassEnv_constraints = S.empty,
+  qClassEnv_inflatedConstraints = S.empty,
+  qClassEnv_varConstraints = M.empty
+}
+
+addQueryClassEnv :: [HsConstraint] -> QueryClassEnv -> QueryClassEnv
+addQueryClassEnv constrs env = env {
   qClassEnv_constraints = csSet,
   qClassEnv_inflatedConstraints = inflateHsConstraints csSet,
   qClassEnv_varConstraints = helper constrs
 }
   where
-    csSet = S.fromList constrs
+    csSet = S.fromList constrs `S.union` qClassEnv_constraints env
     helper :: [HsConstraint] -> M.Map TVarId (S.Set HsConstraint)
     helper cs =
       let ids :: S.Set TVarId
@@ -173,6 +185,10 @@ inflate f = fold . S.fromList . iterateWhileNonempty (foldMap f)
     iterateWhileNonempty g x = if S.null x
       then []
       else x : iterateWhileNonempty g (g x)
+
+constraintApplySubst :: Subst -> HsConstraint -> HsConstraint
+constraintApplySubst s (HsConstraint c ps) =
+  HsConstraint c $ map (applySubst s) ps
 
 constraintApplySubsts :: Substs -> HsConstraint -> HsConstraint
 constraintApplySubsts ss (HsConstraint c ps) =
@@ -215,7 +231,9 @@ applySubst _ c@(TypeConstant _) = c
 applySubst _ c@(TypeCons _)     = c
 applySubst s (TypeArrow t1 t2)  = TypeArrow (applySubst s t1) (applySubst s t2)
 applySubst s (TypeApp t1 t2)    = TypeApp (applySubst s t1) (applySubst s t2)
-applySubst s@(i,_) f@(TypeForall js t) = if elem i js then f else TypeForall js (applySubst s t)
+applySubst s@(i,_) f@(TypeForall js cs t) = if elem i js
+  then f
+  else TypeForall js (constraintApplySubst s <$> cs) (applySubst s t)
 
 applySubsts :: Substs -> HsType -> HsType
 applySubsts s v@(TypeVar i)      = fromMaybe v $ M.lookup i s
@@ -223,12 +241,15 @@ applySubsts _ c@(TypeConstant _) = c
 applySubsts _ c@(TypeCons _)     = c
 applySubsts s (TypeArrow t1 t2)  = TypeArrow (applySubsts s t1) (applySubsts s t2)
 applySubsts s (TypeApp t1 t2)    = TypeApp (applySubsts s t1) (applySubsts s t2)
-applySubsts s (TypeForall js t)  = TypeForall js $ applySubsts (foldr M.delete s js) t
+applySubsts s (TypeForall js cs t) = TypeForall
+                                       js
+                                       (constraintApplySubsts s <$> cs)
+                                       (applySubsts (foldr M.delete s js) t)
 
 freeVars :: HsType -> S.Set TVarId
-freeVars (TypeVar i)       = S.singleton i
-freeVars (TypeConstant _)  = S.empty
-freeVars (TypeCons _)      = S.empty
-freeVars (TypeArrow t1 t2) = S.union (freeVars t1) (freeVars t2)
-freeVars (TypeApp t1 t2)   = S.union (freeVars t1) (freeVars t2)
-freeVars (TypeForall is t) = foldr S.delete (freeVars t) is
+freeVars (TypeVar i)         = S.singleton i
+freeVars (TypeConstant _)    = S.empty
+freeVars (TypeCons _)        = S.empty
+freeVars (TypeArrow t1 t2)   = S.union (freeVars t1) (freeVars t2)
+freeVars (TypeApp t1 t2)     = S.union (freeVars t1) (freeVars t2)
+freeVars (TypeForall is _ t) = foldr S.delete (freeVars t) is

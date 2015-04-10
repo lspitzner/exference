@@ -500,7 +500,7 @@ tConstantifyVars (TypeArrow t1 t2)  = TypeArrow
 tConstantifyVars (TypeApp t1 t2)    = TypeApp
                                        (tConstantifyVars t1)
                                        (tConstantifyVars t2)
-tConstantifyVars f@(TypeForall _ _) = f
+tConstantifyVars f@(TypeForall _ _ _) = f
 
 rateNode :: ExferenceHeuristicsConfig -> SearchNode -> Float
 rateNode h s = 0.0 - rateGoals h (node_goals s) - node_depth s + rateUsage h s
@@ -512,12 +512,12 @@ rateGoals h = sum . map rateGoal
     rateGoal ((_,t),_) = tComplexity t
     -- TODO: actually measure performance with different values,
     --       use derived values instead of (arbitrarily) chosen ones.
-    tComplexity (TypeVar _)       = heuristics_goalVar h
-    tComplexity (TypeConstant _)  = heuristics_goalCons h -- TODO different heuristic?
-    tComplexity (TypeCons _)      = heuristics_goalCons h
-    tComplexity (TypeArrow t1 t2) = heuristics_goalArrow h + tComplexity t1 + tComplexity t2
-    tComplexity (TypeApp   t1 t2) = heuristics_goalApp h   + tComplexity t1 + tComplexity t2
-    tComplexity (TypeForall _ t1) = tComplexity t1
+    tComplexity (TypeVar _)         = heuristics_goalVar h
+    tComplexity (TypeConstant _)    = heuristics_goalCons h -- TODO different heuristic?
+    tComplexity (TypeCons _)        = heuristics_goalCons h
+    tComplexity (TypeArrow t1 t2)   = heuristics_goalArrow h + tComplexity t1 + tComplexity t2
+    tComplexity (TypeApp   t1 t2)   = heuristics_goalApp h   + tComplexity t1 + tComplexity t2
+    tComplexity (TypeForall _ _ t1) = tComplexity t1
 
 -- using this rating had bad effect on ordering; not used anymore
 {-
@@ -551,7 +551,7 @@ stateStep2 :: Bool -> ExferenceHeuristicsConfig -> SearchNode -> [SearchNode]
 stateStep2 multiPM h s
   | node_depth s > 200.0 = []
   | (TypeArrow _ _) <- goalType = [ modifyNodeBy s' $ arrowStep goalType [] ]
-  | (TypeForall is t) <- goalType = [ modifyNodeBy s' $ forallStep is t ]
+  | (TypeForall is cs t) <- goalType = [ modifyNodeBy s' $ forallStep is cs t ]
   | otherwise = byProvided ++ byFunctionSimple
   where
     (((var, goalType), scopeId):gr) = node_goals s
@@ -574,14 +574,15 @@ stateStep2 multiPM h s
                                       $ reverse
                                       $ ts
                                       )
-    forallStep :: [TVarId] -> HsType -> SearchNodeBuilder ()
-    forallStep vs t = do
+    forallStep :: [TVarId] -> [HsConstraint] -> HsType -> SearchNodeBuilder ()
+    forallStep vs cs t = do
       dataIds <- mapM (const builderAllocNVar) vs
       builderAddDepth (heuristics_functionGoalTransform h) -- TODO: different heuristic?
       builderSetReason "forall-type goal transformation"
       builderSetLastStepBinding Nothing
-      let substs = M.fromList $ zip vs $ TypeCons  . ("EXFN"++) . show <$> dataIds
+      let substs = M.fromList $ zip vs $ TypeConstant <$> dataIds
       builderPrependGoal ((var, applySubsts substs t), scopeId)
+      builderAddGivenConstraints $ constraintApplySubsts substs <$> cs
       return ()
     byProvided = do
       (provId, provT, provPs, forallTypes) <- scopeGetAllBindings (node_providedScopes s) scopeId
@@ -693,9 +694,9 @@ addScopePatternMatch multiPM goalType vid sid bindings = case bindings of
     builderAddPBinding sid b
     let defaultHandleRest = addScopePatternMatch multiPM goalType vid sid bindingRest
     case vtResult of
-      TypeVar _     -> defaultHandleRest -- dont pattern-match on variables, even if it unifies
-      TypeArrow _ _ -> error $ "addScopePatternMatch: TypeArrow: " ++ show vtResult  -- should never happen, given a pbinding..
-      TypeForall _ _ -> error
+      TypeVar {}    -> defaultHandleRest -- dont pattern-match on variables, even if it unifies
+      TypeArrow {}  -> error $ "addScopePatternMatch: TypeArrow: " ++ show vtResult  -- should never happen, given a pbinding..
+      TypeForall {} -> error
                        $ "addScopePatternMatch: TypeForall (RankNTypes not yet implemented)" -- todo when we do RankNTypes
                        ++ show vtResult
       _ | not $ null vtParams -> defaultHandleRest
