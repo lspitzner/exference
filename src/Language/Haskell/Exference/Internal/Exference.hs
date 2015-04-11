@@ -522,7 +522,7 @@ getUnusedVarCount m = length $ filter (==0) $ M.elems m
 
 stateStep :: Bool -> ExferenceHeuristicsConfig -> SearchNode -> [SearchNode]
 stateStep multiPM h s = stateStep2 multiPM h
-              -- $ (\s -> trace (show s ++ " " ++ show (rateNode h s)) s)
+              -- $ (\_ -> trace (show s ++ " " ++ show (rateNode h s)) s)
               $ s
               -- trace (show (node_depth s) ++ " " ++ show (rateGoals $ node_goals s)
               --                      ++ " " ++ show (rateScopes $ node_providedScopes s)
