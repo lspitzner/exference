@@ -18,10 +18,10 @@ where
 
 
 import Language.Haskell.ExferenceCore ( ExferenceHeuristicsConfig(..) )
-import Language.Haskell.Exference.Type
-import Language.Haskell.Exference.ConstrainedType
-import Language.Haskell.Exference.TypeClasses
+import Language.Haskell.Exference.Types
+import Language.Haskell.Exference.TypeUtils
 import Language.Haskell.Exference.FunctionDecl
+import Language.Haskell.Exference.TypeFromHaskellSrc ( unsafeReadType0 )
 
 import qualified Data.Set as S
 import qualified Data.Map.Strict as M
@@ -39,9 +39,8 @@ typeUnsafe = read "a -> b"
 typeBind   = read "m a -> (a -> m b) -> m b"
 typeJoin   = read "m (m a) -> m a"
 
-toBindings :: [(String, Float, String)] -> [(String, Float, HsConstrainedType)]
-toBindings = map (\(a,b,c) ->
-                   (a,b,readConstrainedType defaultClassEnv c))
+toBindings :: [(String, Float, String)] -> [(String, Float, HsType)]
+toBindings = map (\(a,b,c) -> (a, b, unsafeReadType0 c))
 
 -- function, penalty for using that function, type
 -- value ignored for pattern-matches

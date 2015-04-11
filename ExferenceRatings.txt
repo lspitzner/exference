@@ -74,3 +74,5 @@ foldr        = 0.0
 foldl        = 0.0
 
 sequenceA    = 8.0
+
+Left         = 10.0

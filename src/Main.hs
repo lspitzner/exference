@@ -21,7 +21,7 @@ import Language.Haskell.Exference.FunctionBinding
 import Language.Haskell.Exference.EnvironmentParser
 
 import Language.Haskell.Exference.SimpleDict
-import Language.Haskell.Exference.TypeClasses
+import Language.Haskell.Exference.Types
 import Language.Haskell.Exference.Expression
 import Language.Haskell.Exference.ExferenceStats
 import Language.Haskell.Exference.SearchTree
@@ -71,7 +71,7 @@ import Debug.Hood.Observe
 
 
 
-data Flag = Verbose
+data Flag = Verbose Int
           | Version
           | Help
           | Tests
@@ -97,7 +97,7 @@ options =
   , Option ['t'] ["tests"]       (NoArg Tests)         "run the standard validity/performance tests"
   , Option ['x'] ["examples"]    (NoArg Examples)      "prints the first few results for the examples; useful for debugging"
   , Option ['e'] ["environment"] (NoArg Env)           "print the environment to be used for queries"
-  , Option ['v'] ["verbose"]     (NoArg Verbose)       ""
+  , Option ['v'] ["verbose"]     (OptArg (Verbose . maybe 1 read) "verbosity") ""
   , Option ['i'] ["input"]       (ReqArg Input "type") "the type for which to generate an expression"
   , Option ['a'] ["all"]         (NoArg PrintAll)      "print all solutions (up to search step limit)"
   , Option []    ["envUsage"]    (NoArg EnvUsage)      "print a list of functions that got inserted at some point (regardless if successful or not), and how often"
@@ -130,7 +130,7 @@ main :: IO ()
 main = runO $ do
   argv <- getArgs
   (flags, inputs) <- mainOpts argv
-  let verbose = Verbose `elem` flags
+  let verbosity = sum $ [x | Verbose x <- flags ]
   let
     printVersion = do
       putStrLn $ "exference version " ++ showVersion version
@@ -144,38 +144,41 @@ main = runO $ do
           (False,True ) -> return False
           (True, True ) -> do
             error "--serial and --parallel are in conflict! aborting" 
-        when (Version `elem` flags || verbose) printVersion
+        when (Version `elem` flags || verbosity>0) printVersion
         --((eSignatures, StaticClassEnv clss insts), messages) <- runWriter <$> parseExternal testBaseInput'
-        when verbose $ do
+        when (verbosity>0) $ do
           putStrLn "[Environment]"
           putStrLn "reading environment from ExferenceDict.hs and ExferenceRatings.txt"
         (env@(eSignatures, eDeconss, sEnv@(StaticClassEnv clss insts)), messages)
           <- runWriter
           <$> environmentFromModuleAndRatings "ExferenceDict.hs" "ExferenceRatings.txt"
-        when (verbose && not (null messages)) $ do
+        when (verbosity>0 && not (null messages)) $ do
           forM_ messages $ \m -> putStrLn $ "environment warning: " ++ m
         when (Env `elem` flags) $ do
-          when verbose $ putStrLn "[Environment]"
+          when (verbosity>0) $ putStrLn "[Environment]"
           mapM_ print $ clss
           mapM_ print $ [(i,x)| (i,xs) <- M.toList insts, x <- xs]
           mapM_ print $ eSignatures
         when (Examples `elem` flags) $ do
-          when verbose $ putStrLn "[Examples]"
+          when (verbosity>0) $ putStrLn "[Examples]"
           printAndStuff testHeuristicsConfig env
         when (Tests `elem` flags) $ do
-          when verbose $ putStrLn "[Tests]"
+          when (verbosity>0) $ putStrLn "[Tests]"
           printCheckExpectedResults par
                                     testHeuristicsConfig { heuristics_solutionLength = 0.0 }
                                     env
         case inputs of
           []    -> return () -- probably impossible..
           (x:_) -> do
-            when verbose $ putStrLn "[Custom Input]"
-            let mParsedType = parseConstrainedType sEnv (haskellSrcExtsParseMode "inputtype") x
+            when (verbosity>0) $ putStrLn "[Custom Input]"
+            let mParsedType = parseType (sClassEnv_tclasses sEnv)
+                                        (haskellSrcExtsParseMode "inputtype")
+                                        x
             case mParsedType of
               Left err -> do
                 putStrLn $ "could not parse input type: " ++ err
               Right parsedType -> do
+                when (verbosity>0) $ putStrLn $ "input type parsed as: " ++ show parsedType
                 let input = ExferenceInput
                       parsedType
                       eSignatures
@@ -191,7 +194,7 @@ main = runO $ do
                          testHeuristicsConfig { heuristics_solutionLength = 0.0 })
                 if
                   | PrintAll `elem` flags -> do
-                      when verbose $ putStrLn "[running findExpressions ..]"
+                      when (verbosity>0) $ putStrLn "[running findExpressions ..]"
                       let rs = findExpressions input
                       if null rs
                         then putStrLn "[no results]"
@@ -204,7 +207,7 @@ main = runO $ do
                       if not Flags_exference_core.buildSearchTree
                         then putStrLn "exference-core was not compiled with flag \"buildSearchTree\""
                         else do
-                          when verbose $ putStrLn "[running findExpressionsWithStats ..]"
+                          when (verbosity>0) $ putStrLn "[running findExpressionsWithStats ..]"
                           let (_, tree, _) = last $ findExpressionsWithStats input
                           let showf (total,processed,expression,_)
                                 = printf "%d (+%d): %s" processed
@@ -215,7 +218,7 @@ main = runO $ do
                                    -- $ filterSearchTreeProcessedN 2
                                    $ tree
                   | EnvUsage `elem` flags -> do
-                      when verbose $ putStrLn "[running findExpressionsWithStats ..]"
+                      when (verbosity>0) $ putStrLn "[running findExpressionsWithStats ..]"
                       let (stats, _, _) = last $ findExpressionsWithStats input
                           highest = take 8 $ sortBy (flip $ comparing snd) $ M.toList stats
                       putStrLn $ show highest
@@ -223,26 +226,26 @@ main = runO $ do
                       r <- if
                         | FirstSol `elem` flags -> if par
                           then do
-                            when verbose $ putStrLn "[running findOneExpressionPar ..]"
+                            when (verbosity>0) $ putStrLn "[running findOneExpressionPar ..]"
                             maybeToList <$> findOneExpressionPar input
                           else do 
-                            when verbose $ putStrLn "[running findOneExpression ..]"
+                            when (verbosity>0) $ putStrLn "[running findOneExpression ..]"
                             return $ maybeToList $ findOneExpression input
                         | Best `elem` flags -> if par
                           then do
                             putStrLn $ "WARNING: parallel version not implemented for given flags, falling back to serial!"
-                            when verbose $ putStrLn "[running findBestNExpressions ..]"
+                            when (verbosity>0) $ putStrLn "[running findBestNExpressions ..]"
                             return $ findBestNExpressions 999 input
                           else do
-                            when verbose $ putStrLn "[running findBestNExpressions ..]"
+                            when (verbosity>0) $ putStrLn "[running findBestNExpressions ..]"
                             return $ findBestNExpressions 999 input
                         | otherwise -> if par
                           then do
                             putStrLn $ "WARNING: parallel version not implemented for given flags, falling back to serial!"
-                            when verbose $ putStrLn "[running findFirstBestExpressionsLookahead ..]"
+                            when (verbosity>0) $ putStrLn "[running findFirstBestExpressionsLookahead ..]"
                             return $ findFirstBestExpressionsLookahead 250 input
                           else do
-                            when verbose $ putStrLn "[running findFirstBestExpressionsLookahead ..]"
+                            when (verbosity>0) $ putStrLn "[running findFirstBestExpressionsLookahead ..]"
                             return $ findFirstBestExpressionsLookahead 250 input
                       case r :: [ExferenceOutputElement] of
                         [] -> putStrLn "[no results]"

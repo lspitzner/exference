@@ -14,9 +14,8 @@ import Language.Haskell.Exts.Syntax
 import Language.Haskell.Exts.Pretty
 import Language.Haskell.Exference.FunctionBinding
 import Language.Haskell.Exference.TypeFromHaskellSrc
-import Language.Haskell.Exference.ConstrainedType
-import Language.Haskell.Exference.Type
-import Language.Haskell.Exference.TypeClasses
+import Language.Haskell.Exference.Types
+import Language.Haskell.Exference.TypeUtils
 import Language.Haskell.Exference.FunctionDecl
 
 import Control.Applicative ( (<$>), (<*>) )
@@ -31,38 +30,39 @@ import Data.List ( find )
 
 
 
-getDecls :: StaticClassEnv -> Module -> [Either String HsFunctionDecl]
-getDecls env (Module _loc _m _pragma _warning _mexp _imp decls)
-  = concatMap (either (return.Left) (map Right) . transformDecl env) decls
+getDecls :: [HsTypeClass] -> Module -> [Either String HsFunctionDecl]
+getDecls tcs (Module _loc _m _pragma _warning _mexp _imp decls)
+  = concatMap (either (return.Left) (map Right) . transformDecl tcs) decls
 
-transformDecl :: StaticClassEnv -> Decl -> Either String [HsFunctionDecl]
-transformDecl env (TypeSig _loc names qtype)
+transformDecl :: [HsTypeClass] -> Decl -> Either String [HsFunctionDecl]
+transformDecl tcs (TypeSig _loc names qtype)
   = insName qtype
-  $ ((<$> names) . helper) <$> convertCType env qtype
+  $ ((<$> names) . helper) <$> convertType tcs qtype
 transformDecl _ _ = return []
 
-transformDecl' :: StaticClassEnv
+transformDecl' :: [HsTypeClass]
               -> Decl
               -> ConversionMonad [HsFunctionDecl]
-transformDecl' env (TypeSig _loc names qtype)
+transformDecl' tcs (TypeSig _loc names qtype)
   = mapEitherT (insName qtype <$>)
-  $ (<$> names) . helper <$> convertCTypeInternal env qtype
+  $ (<$> names) . helper <$> convertTypeInternal tcs qtype
 transformDecl' _ _ = return []
 
 insName :: Type -> Either String a -> Either String a
 insName qtype = either (\x -> Left $ x ++ " in " ++ prettyPrint qtype) Right
 
-helper :: HsConstrainedType -> Name -> HsFunctionDecl
-helper ct x = (hsNameToString x, ct)
+helper :: HsType -> Name -> HsFunctionDecl
+helper t x = (hsNameToString x, forallify t)
 
 -- type ConversionMonad = EitherT String (State (Int, ConvMap))
-getDataConss :: Module -> [Either String ( [HsFunctionDecl]
+getDataConss :: [HsTypeClass] -> Module -> [Either String ( [HsFunctionDecl]
                                          , DeconstructorBinding )]
-getDataConss (Module _loc _m _pragma _warning _mexp _imp decls) = do
+getDataConss tcs (Module _loc _m _pragma _warning _mexp _imp decls) = do
   DataDecl _loc _newtflag cntxt name params conss _derives <- decls
   let
     rTypeM :: ConversionMonad HsType
-    rTypeM = fmap (foldl TypeApp (TypeCons $ hsNameToString name))
+    rTypeM = fmap ( forallify
+                  . foldl TypeApp (TypeCons $ hsNameToString name))
            $ mapM pTransform params
     pTransform :: TyVarBind -> ConversionMonad HsType
     pTransform (KindedVar _ _) = left $ "KindedVar"
@@ -82,7 +82,7 @@ getDataConss (Module _loc _m _pragma _warning _mexp _imp decls) = do
       (cname,tys) <- case conDecl of
         ConDecl c t -> right (c, t)
         x           -> left $ "unknown ConDecl: " ++ show x
-      convTs <- mapM convertTypeInternal tys
+      convTs <- convertTypeInternal tcs `mapM` tys
       let nameStr = hsNameToString cname
       return $ (nameStr, convTs)
   let
@@ -92,7 +92,7 @@ getDataConss (Module _loc _m _pragma _warning _mexp _imp decls) = do
     convAction = do
       rtype  <- rTypeM
       consDatas <- mapM typeM conss
-      return $ ( [ (n, HsConstrainedType [] $ foldr TypeArrow rtype ts)
+      return $ ( [ (n, foldr TypeArrow rtype ts)
                  | (n, ts) <- consDatas
                  ]
                , (rtype, consDatas, False)
@@ -102,14 +102,13 @@ getDataConss (Module _loc _m _pragma _warning _mexp _imp decls) = do
          $ evalState (runEitherT $ convAction) (0, M.empty)
     -- TODO: replace this by bimap..
 
-getClassMethods :: StaticClassEnv -> Module -> [Either String HsFunctionDecl]
-getClassMethods env (Module _loc _m _pragma _warning _mexp _imp decls) =
+getClassMethods :: [HsTypeClass] -> Module -> [Either String HsFunctionDecl]
+getClassMethods tcs (Module _loc _m _pragma _warning _mexp _imp decls) =
   do
     ClassDecl _ _ name vars _ cdecls <- decls
     let nameStr = hsNameToString name
     let errorMod = (++) ("class method for "++nameStr++": ")
-    let instClass = find ((nameStr==).tclass_name)
-                  $ sClassEnv_tclasses env
+    let instClass = find ((nameStr==).tclass_name) tcs
     case instClass of
       Nothing -> return $ Left $ "unknown type class: "++nameStr
       Just cls -> let
@@ -122,7 +121,7 @@ getClassMethods env (Module _loc _m _pragma _warning _mexp _imp decls) =
             Right cnstr ->
               mapM ( runEitherT
                    . fmap (map (addConstraint cnstr))
-                   . transformDecl' env)
+                   . transformDecl' tcs)
                 $ [ d | ClsDecl d <- cdecls ]
         in concatMap (either (return . Left . errorMod)
                              (map Right))
@@ -130,5 +129,6 @@ getClassMethods env (Module _loc _m _pragma _warning _mexp _imp decls) =
                    $ evalStateT action (0, M.empty)
   where
     addConstraint :: HsConstraint -> HsFunctionDecl -> HsFunctionDecl
-    addConstraint c (n, HsConstrainedType constrs t) =
-                    (n, HsConstrainedType (c:constrs) t)
+    addConstraint c (n, TypeForall vs cs t) = (n, TypeForall vs (c:cs) t)
+    addConstraint _ _                       = error "addConstraint for non-forall type = bad"
+      --(n, ForallType [] [c] t)

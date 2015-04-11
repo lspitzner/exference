@@ -11,9 +11,8 @@ import Language.Haskell.Exts.Syntax
 import Language.Haskell.Exts.Pretty
 import Language.Haskell.Exference.FunctionBinding
 import Language.Haskell.Exference.TypeFromHaskellSrc
-import Language.Haskell.Exference.ConstrainedType
-import Language.Haskell.Exference.Type
-import Language.Haskell.Exference.TypeClasses
+import Language.Haskell.Exference.Types
+import Language.Haskell.Exference.TypeUtils
 
 import Language.Haskell.Exference.TypeFromHaskellSrc
 
@@ -96,7 +95,7 @@ getInstances tcs ms = do
           \str -> maybe (Left $ "unknown type class: "++str) Right
                 $ find ((str==).tclass_name) tcs)
         cntxt
-      rtps <- mapM convertTypeInternal tps
+      rtps <- convertTypeInternal tcs `mapM` tps
       ic <- hoistEither instClass
       return $ HsInstance constrs ic rtps
       -- either (Left . (("instance for "++name++": ")++)) Right
@@ -106,7 +105,7 @@ constrTransform :: (String -> Either String HsTypeClass)
                 -> Asst
                 -> ConversionMonad HsConstraint
 constrTransform tcLookupF (ClassA qname types)
-  | ctypes <- mapM convertTypeInternal types
+  | ctypes <- convertTypeInternal [] `mapM` types
   , constrClass <- tcLookupF $ hsQNameToString qname
   = HsConstraint <$> hoistEither constrClass <*> ctypes
 constrTransform tcLookupF (ParenA c) = constrTransform tcLookupF c

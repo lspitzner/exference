@@ -18,8 +18,7 @@ import Language.Haskell.Exference.ClassEnvFromHaskellSrc
 import Language.Haskell.Exference.TypeFromHaskellSrc
 import Language.Haskell.Exference.FunctionBinding
 
-import Language.Haskell.Exference.ConstrainedType
-import Language.Haskell.Exference.TypeClasses
+import Language.Haskell.Exference.Types
 import Language.Haskell.Exference.Expression
 import Language.Haskell.Exference.ExferenceStats
 import Language.Haskell.Exference.SearchTree
@@ -51,6 +50,7 @@ import Language.Haskell.Exts.Extension ( Language (..)
 -- import Data.PPrint
 
 import Debug.Hood.Observe
+import Debug.Trace
 
 
 
@@ -91,7 +91,7 @@ checkData =
                                     ["fmap (\\f -> ((,) f) f)"
                                     ,"\\b -> ((liftM2 (\\g -> (\\h -> ((,) h) g))) b) b"
                                     ,"\\b -> ((>>=) b) (\\f -> pure (((,) f) f))"]
-  , (,,,,) "tupleShow"  False False "Show a, Show b => Tuple2 a b -> String"
+  , (,,,,) "tupleShow"  False False "(Show a, Show b) => Tuple2 a b -> String"
                                     ["show"
                                     ,"\\b -> let ((,) d e) = b in show (((,) d) e)"]
   , (,,,,) "FloatToInt" False False "Float -> Int"
@@ -107,7 +107,7 @@ checkData =
                                     ]
   , (,,,,) "longApp"    False False "a -> b -> c -> (a -> b -> d) -> (a -> c -> e) -> (b -> c -> f) -> (d -> e -> f -> g) -> g"
                                     ["\\b -> (\\c -> (\\d -> (\\e -> (\\f -> (\\g -> (\\h -> ((h ((e b) c)) ((f b) d)) ((g c) d)))))))"]
-  , (,,,,) "liftSBlub"  False False "Monad m, Monad n => (List a -> b -> c) -> m (List (n a)) -> m (n b) -> m (n c)"
+  , (,,,,) "liftSBlub"  False False "(Monad m, Monad n) => (List a -> b -> c) -> m (List (n a)) -> m (n b) -> m (n c)"
                                     ["\\b -> (\\c -> (\\d -> ((>>=) d) (\\h -> (fmap (\\l -> ((>>=) h) (\\p -> (fmap (\\t -> (b t) p)) ((mapM (\\z -> z)) l)))) c)))"
                                     ,"\\b -> (\\c -> (\\d -> ((>>=) d) (\\h -> ((>>=) c) (\\l -> pure (((>>=) h) (\\q -> (fmap (\\u -> (b u) q)) ((mapM (\\t0 -> t0)) l)))))))"
                                     ,"\\b -> (\\c -> (\\d -> ((>>=) c) (\\h -> ((>>=) d) (\\l -> pure (((>>=) l) (\\q -> (fmap (\\u -> (b u) q)) ((mapM (\\t0 -> t0)) h)))))))"
@@ -202,7 +202,7 @@ checkInput :: ExferenceHeuristicsConfig
            -> ExferenceInput
 checkInput heuristics (bindings, deconss, sEnv) typeStr allowUnused patternM =
   ExferenceInput
-    (readConstrainedType sEnv typeStr)
+    (unsafeReadType (sClassEnv_tclasses sEnv) typeStr)
     (filter (\(_,x,_,_,_) -> x/="join" && x/="liftA2") bindings)
     deconss
     sEnv
@@ -372,7 +372,7 @@ exampleOutput :: ExferenceHeuristicsConfig
 exampleOutput heuristics (bindings, deconss, sEnv) = map f exampleInput
   where
     f (_, allowUnused, patternM, s) = takeFindSortNExpressions 10 10 $ ExferenceInput
-                (readConstrainedType sEnv s)
+                (unsafeReadType (sClassEnv_tclasses sEnv) s)
                 (filter (\(_,x,_,_,_) -> x/="join" && x/="liftA2") bindings)
                 deconss
                 sEnv
@@ -470,7 +470,7 @@ printMaxUsage h (bindings, deconss, sEnv) = mapM_ f checkData
   where
     f (name, allowUnused, patternM, typeStr, _expected) = do
       let input = ExferenceInput
-                    (readConstrainedType sEnv typeStr)
+                    (unsafeReadType (sClassEnv_tclasses sEnv) typeStr)
                     (filter (\(_,x,_,_,_) -> x/="join") bindings)
                     deconss
                     sEnv
@@ -488,7 +488,7 @@ printSearchTree h (bindings, deconss, sEnv) = mapM_ f checkData
   where
     f (name, allowUnused, patternM, typeStr, _expected) = do
       let input = ExferenceInput
-                    (readConstrainedType sEnv typeStr)
+                    (unsafeReadType (sClassEnv_tclasses sEnv) typeStr)
                     (filter (\(_,x,_,_,_) -> x/="join") bindings)
                     deconss
                     sEnv

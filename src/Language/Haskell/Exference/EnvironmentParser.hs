@@ -18,10 +18,8 @@ import Language.Haskell.Exference.TypeFromHaskellSrc
 import Language.Haskell.Exference.FunctionBinding
 import Language.Haskell.Exference.FunctionDecl
 
-import Language.Haskell.Exference.ConstrainedType
-import Language.Haskell.Exference.Type
+import Language.Haskell.Exference.Types
 import Language.Haskell.Exference.SimpleDict
-import Language.Haskell.Exference.TypeClasses
 import Language.Haskell.Exference.Expression
 import Language.Haskell.Exference.ExferenceStats
 
@@ -58,13 +56,13 @@ import qualified Data.Map as M
 
 builtInDecls :: [HsFunctionDecl]
 builtInDecls = 
-  ("(:)", HsConstrainedType [] (TypeArrow
-                                 (TypeVar 0)
-                                 (TypeArrow (TypeApp (TypeCons "List")
-                                                     (TypeVar 0))
-                                            (TypeApp (TypeCons "List")
-                                                     (TypeVar 0)))))
-  : map (second $ readConstrainedType emptyClassEnv)
+  ("(:)", (TypeArrow
+            (TypeVar 0)
+            (TypeArrow (TypeApp (TypeCons "List")
+                                (TypeVar 0))
+                       (TypeApp (TypeCons "List")
+                                (TypeVar 0)))))
+  : map (second $ unsafeReadType0)
     [ (,) "()" "Unit"
     , (,) "(,)" "a -> b -> Tuple2 a b"
     , (,) "(,,)" "a -> b -> c -> Tuple3 a b c"
@@ -158,9 +156,9 @@ parseModules l = do
                   -> Writer [String] ([HsFunctionDecl], [DeconstructorBinding])
     hExtractBinds cntxt modul@(Module _ (ModuleName _mname) _ _ _ _ _) = do
       -- tell $ return $ mname
-      let eFromData = getDataConss modul
-          eDecls = getDecls cntxt modul
-                 ++ getClassMethods cntxt modul
+      let eFromData = getDataConss (sClassEnv_tclasses cntxt) modul
+          eDecls = getDecls (sClassEnv_tclasses cntxt) modul
+                 ++ getClassMethods (sClassEnv_tclasses cntxt) modul
       mapM_ (tell.return) $ lefts eFromData ++ lefts eDecls
       -- tell $ map show $ rights ebinds
       let (binds1s, deconss) = unzip $ rights eFromData
@@ -182,23 +180,6 @@ parseModulesSimple s = (helper <$>)
  where
   addRating (a,b) = (a,0.0,b)
   helper (decls, deconss, cntxt) = (addRating <$> decls, deconss, cntxt)
-
-haskellSrcExtsParseMode :: String -> ParseMode
-haskellSrcExtsParseMode s = ParseMode (s++".hs")
-                                      Haskell2010
-                                      exts2
-                                      False
-                                      False
-                                      Nothing
-  where
-    exts1 = [ TypeOperators
-            , ExplicitForAll
-            , ExistentialQuantification
-            , TypeFamilies
-            , FunctionalDependencies
-            , FlexibleContexts
-            , MultiParamTypeClasses ]
-    exts2 = map EnableExtension exts1
 
 ratingsFromFile :: String -> IO (Either String [(String, Float)])
 ratingsFromFile s = do

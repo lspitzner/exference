@@ -1,3 +1,5 @@
+{-# LANGUAGE PatternGuards #-}
+
 module Language.Haskell.Exference.FunctionDecl
   ( HsFunctionDecl
   , RatedHsFunctionDecl
@@ -8,20 +10,17 @@ where
 
 
 import Language.Haskell.Exference.FunctionBinding
-import Language.Haskell.Exference.ConstrainedType
-import Language.Haskell.Exference.Type
+import Language.Haskell.Exference.Types
+import Language.Haskell.Exference.TypeUtils
 
 
 
-type HsFunctionDecl = (String, HsConstrainedType)
-type RatedHsFunctionDecl = (String, Float, HsConstrainedType)
+type HsFunctionDecl = (String, HsType)
+type RatedHsFunctionDecl = (String, Float, HsType)
                             -- name, rating, type
 
 declToBinding :: RatedHsFunctionDecl -> FunctionBinding
-declToBinding (a,r,HsConstrainedType constrs b) =
+declToBinding (a,r,t) =
   (result, a, r, constrs, params)
  where
-  (result, params) = f b
-  f :: HsType -> (HsType, [HsType])
-  f (TypeArrow t1 t2) = let (c,d) = f t2 in (c, t1:d)
-  f t = (t, [])
+  (result, params, _, constrs) = splitArrowResultParams t
