@@ -20,7 +20,6 @@ module Language.Haskell.Exference.Internal.ExferenceNode
   , scopeGetAllBindings
   , scopesAddPBinding
   , splitBinding
-  , splitArrowResultParams
   , addNewScopeGoal
   , initialScopes
   , addGoalProvided -- unused atm
@@ -30,6 +29,7 @@ where
 
 
 import Language.Haskell.Exference.Types
+import Language.Haskell.Exference.TypeUtils
 import Language.Haskell.Exference.Expression
 import Language.Haskell.Exference.ExferenceStats
 import Language.Haskell.Exference.FunctionBinding
@@ -239,14 +239,3 @@ instance Observable SearchNode where
 
 splitBinding :: (TVarId, HsType) -> VarPBinding
 splitBinding (v,t) = let (rt,pts,fvs,cs) = splitArrowResultParams t in (v,rt,pts,fvs,cs)
-
-splitArrowResultParams :: HsType -> (HsType, [HsType], [TVarId], [HsConstraint])
-splitArrowResultParams t
-  | TypeArrow t1 t2 <- t
-  , (rt,pts,fvs,cs) <- splitArrowResultParams t2
-  = (rt, t1:pts, fvs, cs)
-  | TypeForall vs cs t1 <- t
-  , (rt, pts, fvs, cs') <- splitArrowResultParams t1
-  = (rt, pts, vs++fvs, cs++cs')
-  | otherwise
-  = (t, [], [], [])

@@ -15,6 +15,7 @@ module Language.Haskell.Exference.TypeUtils
   , constraintContainsVariables
   , unknownTypeClass
   , inflateInstances
+  , splitArrowResultParams
   )
 where
 
@@ -147,3 +148,14 @@ inflateInstances is = S.toList $ S.unions $ map (S.fromList . f) is
           g (HsConstraint ctclass cparams) =
             HsInstance iconstrs ctclass $ map (applySubsts substs) cparams
         in i : concatMap (f.g) tconstrs
+
+splitArrowResultParams :: HsType -> (HsType, [HsType], [TVarId], [HsConstraint])
+splitArrowResultParams t
+  | TypeArrow t1 t2 <- t
+  , (rt,pts,fvs,cs) <- splitArrowResultParams t2
+  = (rt, t1:pts, fvs, cs)
+  | TypeForall vs cs t1 <- t
+  , (rt, pts, fvs, cs') <- splitArrowResultParams t1
+  = (rt, pts, vs++fvs, cs++cs')
+  | otherwise
+  = (t, [], [], [])
