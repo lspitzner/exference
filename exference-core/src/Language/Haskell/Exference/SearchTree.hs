@@ -16,7 +16,7 @@ where
 
 
 
-import Language.Haskell.Exference.Type
+import Language.Haskell.Exference.Types
 import Language.Haskell.Exference.Expression
 
 import Data.Tree

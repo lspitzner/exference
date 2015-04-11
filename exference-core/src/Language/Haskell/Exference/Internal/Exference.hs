@@ -17,10 +17,9 @@ where
 
 
 
-import Language.Haskell.Exference.Type
+import Language.Haskell.Exference.Types
+import Language.Haskell.Exference.TypeUtils
 import Language.Haskell.Exference.Expression
-import Language.Haskell.Exference.TypeClasses
-import Language.Haskell.Exference.ConstrainedType
 import Language.Haskell.Exference.ExferenceStats
 import Language.Haskell.Exference.FunctionBinding
 import Language.Haskell.Exference.SearchTree
@@ -97,7 +96,7 @@ data ExferenceHeuristicsConfig = ExferenceHeuristicsConfig
   }
 
 data ExferenceInput = ExferenceInput
-  { input_goalType    :: HsConstrainedType      -- ^ try to find a expression
+  { input_goalType    :: HsType                 -- ^ try to find a expression
                                                 -- of this type
   , input_envFuncs    :: [FunctionBinding]      -- ^ the list of functions
                                                 -- that may be used
@@ -141,7 +140,7 @@ type FindExpressionsState = ( Int    -- number of steps already performed
 
 findExpressions :: ExferenceInput
                 -> [ExferenceChunkElement]
-findExpressions (ExferenceInput rawCType
+findExpressions (ExferenceInput rawType
                                 funcs
                                 deconss
                                 sClassEnv
@@ -164,7 +163,7 @@ findExpressions (ExferenceInput rawCType
   -- fmap (\(steps, compl, e) -> (e, ExferenceStats steps compl))
   --   <$> resultTuples
   where
-    (HsConstrainedType cs t) = ctConstantifyVars rawCType
+    t = forallify rawType
     rootSearchNode = SearchNode
         [((0, t), 0)]
         []
@@ -172,7 +171,7 @@ findExpressions (ExferenceInput rawCType
         M.empty
         funcs
         deconss
-        (mkQueryClassEnv sClassEnv cs)
+        (mkQueryClassEnv sClassEnv [])
         (ExpHole 0)
         1 -- TODO: change to 0?
         (largestId t)
@@ -269,7 +268,7 @@ findExpressionsPar :: ExferenceInput
                    -> (   ListT.ListT IO ExferenceChunkElement
                        -> IO a)
                    -> IO a
-findExpressionsPar (ExferenceInput rawCType
+findExpressionsPar (ExferenceInput rawType
                                    funcs
                                    deconss
                                    sClassEnv
@@ -448,7 +447,7 @@ findExpressionsPar (ExferenceInput rawCType
                   , newNodes )
             ListT.cons (bindingUsages, newSearchTreeBuilder, out) rest
     let 
-      (HsConstrainedType cs t) = ctConstantifyVars rawCType
+      t = forallify rawType
       rootSearchNode = SearchNode
           [((0, t), 0)]
           []
@@ -456,7 +455,7 @@ findExpressionsPar (ExferenceInput rawCType
           M.empty
           funcs
           deconss
-          (mkQueryClassEnv sClassEnv cs)
+          (mkQueryClassEnv sClassEnv [])
           (ExpHole 0)
           1
           (largestId t)
@@ -484,23 +483,6 @@ findExpressionsPar (ExferenceInput rawCType
   replicateM_ destParallelCount (writeChan taskChan Nothing)
   return result
 
-ctConstantifyVars :: HsConstrainedType -> HsConstrainedType
-ctConstantifyVars (HsConstrainedType a b) =
-  HsConstrainedType
-    (map (\(HsConstraint c d) -> HsConstraint c $ map tConstantifyVars d) a)
-    (tConstantifyVars b)
-
-tConstantifyVars :: HsType -> HsType
-tConstantifyVars (TypeVar i)        = TypeCons $ "EXF" ++ showVar i
-tConstantifyVars c@(TypeCons _)     = c
-tConstantifyVars (TypeArrow t1 t2)  = TypeArrow
-                                       (tConstantifyVars t1)
-                                       (tConstantifyVars t2)
-tConstantifyVars (TypeApp t1 t2)    = TypeApp
-                                       (tConstantifyVars t1)
-                                       (tConstantifyVars t2)
-tConstantifyVars f@(TypeForall _ _) = f
-
 rateNode :: ExferenceHeuristicsConfig -> SearchNode -> Float
 rateNode h s = 0.0 - rateGoals h (node_goals s) - node_depth s + rateUsage h s
  -- + 0.6 * rateScopes (node_providedScopes s)
@@ -511,11 +493,12 @@ rateGoals h = sum . map rateGoal
     rateGoal ((_,t),_) = tComplexity t
     -- TODO: actually measure performance with different values,
     --       use derived values instead of (arbitrarily) chosen ones.
-    tComplexity (TypeVar _)       = heuristics_goalVar h
-    tComplexity (TypeCons _)      = heuristics_goalCons h
-    tComplexity (TypeArrow t1 t2) = heuristics_goalArrow h + tComplexity t1 + tComplexity t2
-    tComplexity (TypeApp   t1 t2) = heuristics_goalApp h   + tComplexity t1 + tComplexity t2
-    tComplexity (TypeForall _ t1) = tComplexity t1
+    tComplexity (TypeVar _)         = heuristics_goalVar h
+    tComplexity (TypeConstant _)    = heuristics_goalCons h -- TODO different heuristic?
+    tComplexity (TypeCons _)        = heuristics_goalCons h
+    tComplexity (TypeArrow t1 t2)   = heuristics_goalArrow h + tComplexity t1 + tComplexity t2
+    tComplexity (TypeApp   t1 t2)   = heuristics_goalApp h   + tComplexity t1 + tComplexity t2
+    tComplexity (TypeForall _ _ t1) = tComplexity t1
 
 -- using this rating had bad effect on ordering; not used anymore
 {-
@@ -539,7 +522,7 @@ getUnusedVarCount m = length $ filter (==0) $ M.elems m
 
 stateStep :: Bool -> ExferenceHeuristicsConfig -> SearchNode -> [SearchNode]
 stateStep multiPM h s = stateStep2 multiPM h
-              -- $ (\s -> trace (show s ++ " " ++ show (rateNode h s)) s)
+              -- $ (\_ -> trace (show s ++ " " ++ show (rateNode h s)) s)
               $ s
               -- trace (show (node_depth s) ++ " " ++ show (rateGoals $ node_goals s)
               --                      ++ " " ++ show (rateScopes $ node_providedScopes s)
@@ -549,7 +532,7 @@ stateStep2 :: Bool -> ExferenceHeuristicsConfig -> SearchNode -> [SearchNode]
 stateStep2 multiPM h s
   | node_depth s > 200.0 = []
   | (TypeArrow _ _) <- goalType = [ modifyNodeBy s' $ arrowStep goalType [] ]
-  | (TypeForall is t) <- goalType = [ modifyNodeBy s' $ forallStep is t ]
+  | (TypeForall is cs t) <- goalType = [ modifyNodeBy s' $ forallStep is cs t ]
   | otherwise = byProvided ++ byFunctionSimple
   where
     (((var, goalType), scopeId):gr) = node_goals s
@@ -572,23 +555,25 @@ stateStep2 multiPM h s
                                       $ reverse
                                       $ ts
                                       )
-    forallStep :: [TVarId] -> HsType -> SearchNodeBuilder ()
-    forallStep vs t = do
+    forallStep :: [TVarId] -> [HsConstraint] -> HsType -> SearchNodeBuilder ()
+    forallStep vs cs t = do
       dataIds <- mapM (const builderAllocNVar) vs
       builderAddDepth (heuristics_functionGoalTransform h) -- TODO: different heuristic?
       builderSetReason "forall-type goal transformation"
       builderSetLastStepBinding Nothing
-      let substs = M.fromList $ zip vs $ TypeCons  . ("EXFN"++) . show <$> dataIds
+      let substs = M.fromList $ zip vs $ TypeConstant <$> dataIds
       builderPrependGoal ((var, applySubsts substs t), scopeId)
+      builderAddGivenConstraints $ constraintApplySubsts substs <$> cs
       return ()
     byProvided = do
-      (provId, provT, provPs, forallTypes) <- scopeGetAllBindings (node_providedScopes s) scopeId
+      (provId, provT, provPs, forallTypes, constraints) <- scopeGetAllBindings (node_providedScopes s) scopeId
       let incF = incVarIds (+(1+node_maxTVarId s))
       let ss = M.fromList $ zip forallTypes (incF . TypeVar <$> forallTypes)
       byGenericUnify
         (Right provId)
         (applySubsts ss provT)
-        (S.toList $ qClassEnv_constraints $ node_queryClassEnv s)
+        (S.toList $           qClassEnv_constraints (node_queryClassEnv s)
+                    `S.union` S.fromList (constraintApplySubsts ss <$> constraints))
         (applySubsts ss <$> provPs)
         (heuristics_stepProvidedGood h)
         (heuristics_stepProvidedBad h)
@@ -643,15 +628,16 @@ stateStep2 multiPM h s
               goalType
               var
               newScopeId
-              (let (r,ps,fs) = splitArrowResultParams provided
-                in [(vResult, r, ds++ps, fs)])
+              (let (r,ps,fs,cs) = splitArrowResultParams provided
+                in [(vResult, r, ds++ps, fs, cs)])
         Just substs -> do
           let contxt = node_queryClassEnv s
               constrs1 = map (constraintApplySubsts substs)
                        $ node_constraintGoals s
               constrs2 = map (constraintApplySubsts substs)
                        $ provConstrs
-          newConstraints <- maybeToList $ isPossible contxt (constrs1++constrs2)
+          newConstraints <- maybeToList
+                          $ isPossible contxt (constrs1++constrs2)
           return $ modifyNodeBy s' $ do
             let paramN = length dependencies
             vars <- replicateM paramN builderAllocHole
@@ -686,14 +672,14 @@ addScopePatternMatch :: Bool -- should p-m on anything but newtypes?
                      -> SearchNodeBuilder [TGoal]
 addScopePatternMatch multiPM goalType vid sid bindings = case bindings of
   []                                    -> return [((vid, goalType), sid)]
-  (b@(v,vtResult,vtParams,_):bindingRest) -> do
+  (b@(v,vtResult,vtParams,_,_):bindingRest) -> do
     incF <- incVarIds . (+) <$> builderGetTVarOffset
     builderAddPBinding sid b
     let defaultHandleRest = addScopePatternMatch multiPM goalType vid sid bindingRest
     case vtResult of
-      TypeVar _     -> defaultHandleRest -- dont pattern-match on variables, even if it unifies
-      TypeArrow _ _ -> error $ "addScopePatternMatch: TypeArrow: " ++ show vtResult  -- should never happen, given a pbinding..
-      TypeForall _ _ -> error
+      TypeVar {}    -> defaultHandleRest -- dont pattern-match on variables, even if it unifies
+      TypeArrow {}  -> error $ "addScopePatternMatch: TypeArrow: " ++ show vtResult  -- should never happen, given a pbinding..
+      TypeForall {} -> error
                        $ "addScopePatternMatch: TypeForall (RankNTypes not yet implemented)" -- todo when we do RankNTypes
                        ++ show vtResult
       _ | not $ null vtParams -> defaultHandleRest

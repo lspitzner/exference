@@ -1,5 +1,5 @@
 Name:          exference-core
-Version:       0.15.1.0
+Version:       1.0.0.0
 Cabal-Version: >= 1.8
 Build-Type:    Simple
 
@@ -31,9 +31,8 @@ Library
     cpp-options: -DBUILD_SEARCH_TREE
 
   exposed-modules: Language.Haskell.ExferenceCore
-                   Language.Haskell.Exference.Type
-                   Language.Haskell.Exference.ConstrainedType
-                   Language.Haskell.Exference.TypeClasses
+                   Language.Haskell.Exference.Types
+                   Language.Haskell.Exference.TypeUtils
                    Language.Haskell.Exference.ExferenceStats
                    Language.Haskell.Exference.Expression
                    Language.Haskell.Exference.FunctionBinding

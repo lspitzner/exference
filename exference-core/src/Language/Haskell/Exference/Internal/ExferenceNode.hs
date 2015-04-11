@@ -20,7 +20,6 @@ module Language.Haskell.Exference.Internal.ExferenceNode
   , scopeGetAllBindings
   , scopesAddPBinding
   , splitBinding
-  , splitArrowResultParams
   , addNewScopeGoal
   , initialScopes
   , addGoalProvided -- unused atm
@@ -29,8 +28,8 @@ where
 
 
 
-import Language.Haskell.Exference.Type
-import Language.Haskell.Exference.TypeClasses
+import Language.Haskell.Exference.Types
+import Language.Haskell.Exference.TypeUtils
 import Language.Haskell.Exference.Expression
 import Language.Haskell.Exference.ExferenceStats
 import Language.Haskell.Exference.FunctionBinding
@@ -50,24 +49,25 @@ import Debug.Hood.Observe
 
 
 type VarBinding = (TVarId, HsType)
-type VarPBinding = (TVarId, HsType, [HsType], [TVarId])
-                -- var, result, params, forallTypes
+type VarPBinding = (TVarId, HsType, [HsType], [TVarId], [HsConstraint])
+                -- var, result, params, forallTypes, constraints
 
 
 varBindingApplySubsts :: Substs -> VarBinding -> VarBinding
 varBindingApplySubsts = second . applySubsts
 
 varPBindingApplySubsts :: Substs -> VarPBinding -> VarPBinding
-varPBindingApplySubsts ss (a,b,c,d) =
+varPBindingApplySubsts ss (v,rt,pt,fvs,cs) =
   let
-    relevantSS = foldr M.delete ss d
-    (newResult, params, newForalls) = splitArrowResultParams
-                                    $ applySubsts relevantSS b
+    relevantSS = foldr M.delete ss fvs
+    (newResult, params, newForalls, newCs) = splitArrowResultParams
+                                           $ applySubsts relevantSS rt
   in
-  ( a
+  ( v
   , newResult
-  , map (applySubsts relevantSS) c ++ params
-  , newForalls ++ d
+  , map (applySubsts relevantSS) pt ++ params
+  , newForalls ++ fvs
+  , cs ++ newCs
   )
 
 type ScopeId = Int
@@ -220,9 +220,9 @@ instance Show SearchNode where
                             )
       tVarType :: (TVarId, HsType) -> Doc
       tVarType (i, t) = text $ showVar i ++ " :: " ++ show t
-      tVarPType :: (TVarId, HsType, [HsType], [TVarId]) -> Doc
-      tVarPType (i, t, ps, []) = tVarType (i, foldr TypeArrow t ps)
-      tVarPType (i, t, ps, fs) = tVarType (i, TypeForall fs (foldr TypeArrow t ps))
+      tVarPType :: (TVarId, HsType, [HsType], [TVarId], [HsConstraint]) -> Doc
+      tVarPType (i, t, ps, [], []) = tVarType (i, foldr TypeArrow t ps)
+      tVarPType (i, t, ps, fs, cs) = tVarType (i, TypeForall fs cs (foldr TypeArrow t ps))
 
 showNodeDevelopment :: SearchNode -> String
 #if LINK_NODES
@@ -238,15 +238,4 @@ instance Observable SearchNode where
   observer state = observeOpaque (show state) state
 
 splitBinding :: (TVarId, HsType) -> VarPBinding
-splitBinding (a,b) = let (c,d,e) = splitArrowResultParams b in (a,c,d,e)
-
-splitArrowResultParams :: HsType -> (HsType, [HsType], [TVarId])
-splitArrowResultParams t
-  | TypeArrow t1 t2 <- t
-  , (c',d',e') <- splitArrowResultParams t2
-  = (c', t1:d', e')
-  | TypeForall vs t1 <- t
-  , (c', d', e') <- splitArrowResultParams t1
-  = (c', d', vs++e')
-  | otherwise
-  = (t, [], [])
+splitBinding (v,t) = let (rt,pts,fvs,cs) = splitArrowResultParams t in (v,rt,pts,fvs,cs)
