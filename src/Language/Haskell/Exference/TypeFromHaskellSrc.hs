@@ -117,8 +117,8 @@ hsQNameToString (Special UnitCon) = "Unit"
 hsQNameToString (Special ListCon) = "List"
 hsQNameToString (Special FunCon)  = "Function" -- TODO: this is wrong (probably)
 hsQNameToString (Special (TupleCon _ i)) = "Tuple" ++ show i
-hsQNameToString (Special Cons)    = undefined
-hsQNameToString (Special UnboxedSingleCon) = undefined
+hsQNameToString (Special Cons)    = "Cons"
+hsQNameToString (Special UnboxedSingleCon) = "!Cons"
 hsQNameToString (Qual _ s) = hsNameToString s -- yeah, ignore that full qualification
 hsQNameToString (UnQual s) = hsNameToString s
 
