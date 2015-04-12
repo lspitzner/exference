@@ -589,7 +589,7 @@ stateStep2 multiPM h s
         (heuristics_stepEnvGood h + funcRating)
         (heuristics_stepEnvBad h + funcRating)
         ("applying function " ++ show funcId)
-    byGenericUnify :: Either String TVarId
+    byGenericUnify :: Either QualifiedName TVarId
                    -> HsType
                    -> [HsConstraint]
                    -> [HsType]
@@ -599,9 +599,9 @@ stateStep2 multiPM h s
                    -> [SearchNode]
     byGenericUnify applier provided provConstrs
                    dependencies depthModMatch depthModNoMatch reasonPart
-      | coreExp <- either ExpLit ExpVar applier
+      | coreExp <- either ExpName ExpVar applier
       , bTrace <- case applier of
-          Left  x -> Just x
+          Left  x -> Just (show x)
           Right _ -> Nothing
       = case unify goalType provided of
         Nothing -> case dependencies of

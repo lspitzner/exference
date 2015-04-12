@@ -22,15 +22,17 @@ import Debug.Hood.Observe
 
 
 data Expression = ExpVar TVarId -- a
-                | ExpLit String -- "foo"
+                | ExpName QualifiedName -- Prelude.zip
                 | ExpLambda TVarId Expression -- \x -> exp
                 | ExpApply Expression Expression -- f x
                 | ExpHole TVarId                 -- h
-                | ExpLetMatch String [TVarId] Expression Expression
+                | ExpLetMatch QualifiedName [TVarId] Expression Expression
                             -- let (Foo a b c) = bExp in inExp
                 | ExpLet TVarId Expression Expression
                             -- let x = bExp in inExp
-                | ExpCaseMatch Expression [(String, [TVarId], Expression)]
+                | ExpCaseMatch
+                    Expression
+                    [(QualifiedName, [TVarId], Expression)]
                      -- case mExp of Foo a b -> e1; Bar c d -> e2
   deriving (Eq, Generic)
 
@@ -38,7 +40,7 @@ instance NFData Expression where rnf = genericRnf
 
 instance Show Expression where
   showsPrec _ (ExpVar i) = showString $ showVar i
-  showsPrec _ (ExpLit s) = showString s
+  showsPrec d (ExpName s) = showsPrec d s
   showsPrec d (ExpLambda i e) =
     showParen (d>0) $ showString ("\\" ++ showVar i ++ " -> ") . showsPrec 1 e
   showsPrec d (ExpApply e1 e2) =
@@ -46,7 +48,7 @@ instance Show Expression where
   showsPrec _ (ExpHole i) = showString $ "_" ++ showVar i
   showsPrec d (ExpLetMatch n vars bindExp inExp) =
       showParen (d>2)
-    $ showString ("let ("++n++" "++intercalate " " (map showVar vars) ++ ") = ")
+    $ showString ("let ("++show n++" "++intercalate " " (map showVar vars) ++ ") = ")
     . shows bindExp . showString " in " . showsPrec 0 inExp
   showsPrec d (ExpLet i bindExp inExp) =
       showParen (d>2)
@@ -61,7 +63,7 @@ instance Show Expression where
     . showString " of { "
     . ( \s -> intercalate "; "
            (map (\(cons, vars, expr) ->
-              cons++" "++intercalate " " (map showVar vars)++" -> "
+              show cons++" "++intercalate " " (map showVar vars)++" -> "
               ++showsPrec 3 expr "")
             alts)
          ++ s
@@ -85,8 +87,8 @@ fillExprHole vid t (ExpCaseMatch bindExp alts) =
   ExpCaseMatch (fillExprHole vid t bindExp) [ (c, vars, fillExprHole vid t expr)
                                             | (c, vars, expr) <- alts
                                             ]
-fillExprHole _ _ t@(ExpLit _) = t
-fillExprHole _ _ t@(ExpVar _) = t
+fillExprHole _ _ t@(ExpName _) = t
+fillExprHole _ _ t@(ExpVar _)  = t
 
 replaceVar :: TVarId -> Expression -> Expression -> Expression
 replaceVar vid t orig@(ExpVar j) | vid==j = t
@@ -102,15 +104,15 @@ replaceVar vid t (ExpCaseMatch bindExp alts) =
   ExpCaseMatch (replaceVar vid t bindExp) [ (c, vars, replaceVar vid t expr)
                                           | (c, vars, expr) <- alts
                                           ]
-replaceVar _ _ t@(ExpLit _) = t
+replaceVar _ _ t@(ExpName _) = t
 replaceVar _ _ t@(ExpHole _) = t
 
 simplifyLets :: Expression -> Expression
-simplifyLets e@(ExpVar _) = e
-simplifyLets e@(ExpLit _) = e
-simplifyLets (ExpLambda i e) = ExpLambda i $ simplifyLets e
+simplifyLets e@(ExpVar _)     = e
+simplifyLets e@(ExpName _)    = e
+simplifyLets (ExpLambda i e)  = ExpLambda i $ simplifyLets e
 simplifyLets (ExpApply e1 e2) = ExpApply (simplifyLets e1) (simplifyLets e2)
-simplifyLets e@(ExpHole _) = e
+simplifyLets e@(ExpHole _)    = e
 simplifyLets (ExpLetMatch name vids bindExp inExp) =
   ExpLetMatch name vids (simplifyLets bindExp) (simplifyLets inExp)
 simplifyLets (ExpLet i bindExp inExp) = case countUses i inExp of
@@ -125,7 +127,7 @@ simplifyLets (ExpCaseMatch bindExp alts) =
 countUses :: TVarId -> Expression -> Int
 countUses i (ExpVar j) | i==j = 1
                        | otherwise = 0
-countUses _ (ExpLit _) = 0
+countUses _ (ExpName _) = 0
 countUses i (ExpLambda j e) | i==j = 0
                             | otherwise = countUses i e
 countUses i (ExpApply e1 e2) = ((+) `on` countUses i) e1 e2
@@ -139,7 +141,7 @@ countUses i (ExpCaseMatch bindExp alts) = sum $ countUses i bindExp
 
 simplifyEta :: Expression -> Expression
 simplifyEta e@(ExpVar _) = e
-simplifyEta e@(ExpLit _) = e
+simplifyEta e@(ExpName _) = e
 simplifyEta (ExpLambda i e) = simplifyEta' $ ExpLambda i $ simplifyEta e
 simplifyEta (ExpApply e1 e2) = ExpApply (simplifyEta e1) (simplifyEta e2)
 simplifyEta e@(ExpHole _) = e

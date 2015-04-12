@@ -124,7 +124,7 @@ constraintMapTypes f (HsConstraint a ts) = HsConstraint a (map f ts)
 mkStaticClassEnv :: [HsTypeClass] -> [HsInstance] -> StaticClassEnv
 mkStaticClassEnv tclasses insts = StaticClassEnv tclasses (helper insts)
   where
-    helper :: [HsInstance] -> M.Map String [HsInstance]
+    helper :: [HsInstance] -> M.Map QualifiedName [HsInstance]
     helper is = M.fromListWith (++)
               $ [ (tclass_name $ instance_tclass i, [i]) | i <- is ]
 
@@ -134,7 +134,7 @@ constraintContainsVariables = any ((-1/=).largestId) . constraint_params
 -- TODO: it probably is a bad idea to have any unknown type class mapped to
 --       this, as they might unify at some point.. even if they distinct.
 unknownTypeClass :: HsTypeClass
-unknownTypeClass = HsTypeClass "EXFUnknownTC" [] []
+unknownTypeClass = HsTypeClass (QualifiedName [] "EXFUnknownTC") [] []
 
 inflateInstances :: [HsInstance] -> [HsInstance]
 inflateInstances is = S.toList $ S.unions $ map (S.fromList . f) is

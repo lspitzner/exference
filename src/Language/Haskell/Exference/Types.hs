@@ -2,6 +2,7 @@
 
 module Language.Haskell.Exference.Types
   ( TVarId
+  , QualifiedName(..)
   , HsType (..)
   , Subst
   , Substs
@@ -51,17 +52,24 @@ type TVarId = Int
 type Subst  = (TVarId, HsType)
 type Substs = M.Map TVarId HsType
 
+data QualifiedName
+  = QualifiedName [String] String
+  | ListCon
+  | TupleCon Int
+  | Cons
+  deriving (Eq, Ord, Generic)
+
 data HsType = TypeVar      TVarId
             | TypeConstant TVarId  -- like TypeCons, for exference-internal
                                    -- purposes.
-            | TypeCons     String
+            | TypeCons     QualifiedName
             | TypeArrow    HsType HsType
             | TypeApp      HsType HsType
             | TypeForall   [TVarId] [HsConstraint] HsType
   deriving (Ord, Eq, Generic)
 
 data HsTypeClass = HsTypeClass
-  { tclass_name :: String
+  { tclass_name :: QualifiedName
   , tclass_params :: [TVarId]
   , tclass_constraints :: [HsConstraint]
   }
@@ -82,7 +90,7 @@ data HsConstraint = HsConstraint
 
 data StaticClassEnv = StaticClassEnv
   { sClassEnv_tclasses :: [HsTypeClass]
-  , sClassEnv_instances :: M.Map String [HsInstance]
+  , sClassEnv_instances :: M.Map QualifiedName [HsInstance]
   }
   deriving (Show, Generic)
 
@@ -94,6 +102,7 @@ data QueryClassEnv = QueryClassEnv
   }
   deriving (Generic)
 
+instance NFData QualifiedName  where rnf = genericRnf
 instance NFData HsType         where rnf = genericRnf
 instance NFData HsTypeClass    where rnf = genericRnf
 instance NFData HsInstance     where rnf = genericRnf
@@ -101,10 +110,17 @@ instance NFData HsConstraint   where rnf = genericRnf
 instance NFData StaticClassEnv where rnf = genericRnf
 instance NFData QueryClassEnv  where rnf = genericRnf
 
+instance Show QualifiedName where
+  show (QualifiedName ns n) = intercalate "." $ ns ++ [n]
+  show ListCon              = "[]"
+  show (TupleCon 0)         = "()"
+  show (TupleCon i)         = "(" ++ replicate (i-1) ',' ++ ")"
+  show Cons                 = "(:)"
+
 instance Show HsType where
   showsPrec _ (TypeVar i) = showString $ showVar i
   showsPrec _ (TypeConstant i) = showString $ "C" ++ showVar i
-  showsPrec _ (TypeCons s) = showString s
+  showsPrec d (TypeCons s) = showsPrec d s
   showsPrec d (TypeArrow t1 t2) =
     showParen (d> -2) $ showsPrec (-1) t1 . showString " -> " . showsPrec (-1) t2
   showsPrec d (TypeApp t1 t2) =
@@ -124,7 +140,7 @@ instance Read HsType where
   readsPrec _ = maybeToList . parseType
 
 instance Show HsConstraint where
-  show (HsConstraint c ps) = unwords $ tclass_name c : map show ps
+  show (HsConstraint c ps) = unwords $ show (tclass_name c) : map show ps
 
 instance Show QueryClassEnv where
   show (QueryClassEnv _ cs _ _) = "(QueryClassEnv _ " ++ show cs ++ " _)"
@@ -213,7 +229,7 @@ typeParser = parseAll
     parseAll = parseUn >>= parseBin
     parseUn :: Parser HsType -- TODO: forall
     parseUn = spaces *> (
-            try (TypeCons <$> ((:) <$> satisfy isUpper <*> many alphaNum))
+            try (TypeCons . QualifiedName [] <$> ((:) <$> satisfy isUpper <*> many alphaNum))
         <|> try ((TypeVar . (\x -> x - ord 'a') . ord) <$> satisfy isLower)
         <|>     (char '(' *> parseAll <* char ')')
       )
