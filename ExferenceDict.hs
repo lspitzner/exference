@@ -34,8 +34,9 @@ class Monad m => MonadState s m | m -> s where
   put :: s -> m ()
   state :: (s -> (a,s)) -> m a
 
-class Eq a where -- don't list methods, because (==) and (/=) are baaaaad
-                 -- (inference-wise..)
+class Eq a where
+  (==) :: a -> a -> Bool
+  (/=) :: a -> a -> Bool
 
 class (Show a, Eq a) => Num a where
   fromInteger :: Integer -> a
