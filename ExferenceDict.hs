@@ -218,7 +218,7 @@ instance Functor ZipList
 instance Functor ArgDescr
 instance Functor OptDescr
 instance Functor ArgOrder
-instance Functor ((->) r)
+-- instance Functor ((->) r)
 instance Functor (Either a)
 instance Functor ((,) a)
 instance Functor (ST s)
@@ -236,7 +236,7 @@ instance Applicative ReadP
 instance Applicative ReadPrec
 instance Applicative STM
 instance Applicative ZipList
-instance Applicative ((->) a)
+-- instance Applicative ((->) a)
 instance Applicative (Either e)
 instance Monoid a => Applicative ((,) a)
 instance Applicative (ST s)
@@ -284,7 +284,7 @@ instance Monad Maybe
 instance Monad ReadP
 instance Monad ReadPrec
 instance Monad STM
-instance Monad ((->) r)
+-- instance Monad ((->) r)
 instance Monad (Either e)
 instance Monad (ST s)
 -- instance Monad (Proxy *)
