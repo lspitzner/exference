@@ -33,15 +33,24 @@ import Language.Haskell.Exference.Expression
 import Language.Haskell.Exference.Internal.ExferenceNode
 import Language.Haskell.Exference.FunctionBinding
 
-import Control.Monad.State.Lazy ( State
+import Control.Monad.State.CPS ( State
+                                , StateT( StateT )
                                 , execState
-                                , modify
-                                , get
-                                , put
+                               -- , modify
+                               -- , get
+                               -- , put
                                 )
 import Control.Applicative
 import qualified Data.Map as M
 
+modify :: (s -> s) -> StateT s m ()
+modify f = StateT $ \s c -> c () (f s)
+
+get :: StateT s m s
+get = StateT $ \s c -> c s s
+
+put :: s -> StateT s m ()
+put x = StateT $ \_ c -> c () x
 
 
 newtype SearchNodeBuilder a = SearchNodeBuilder (State SearchNode a)

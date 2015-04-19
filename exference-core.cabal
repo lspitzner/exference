@@ -1,5 +1,5 @@
 Name:          exference-core
-Version:       1.1.0.0
+Version:       1.1.1.0
 Cabal-Version: >= 1.8
 Build-Type:    Simple
 
@@ -60,4 +60,5 @@ Library
     parsec,
     pqueue,
     list-t >= 0.2.3 && < 0.3,
-    mmorph >= 1.0.4 && < 1.1
+    mmorph >= 1.0.4 && < 1.1,
+    mtl-c
