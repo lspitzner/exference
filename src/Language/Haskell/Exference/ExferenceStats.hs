@@ -26,4 +26,4 @@ data ExferenceStats = ExferenceStats
   { exference_steps :: Int
   , exference_complexityRating :: Float
   }
-  deriving Show
+  deriving (Show, Eq)
