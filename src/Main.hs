@@ -53,7 +53,7 @@ import Language.Haskell.Exts.Extension ( Language (..)
 import Language.Haskell.Exts.Pretty
 
 -- import Data.PPrint
-import Data.Tree ( drawTree )
+import Data.Tree ( Tree(..) )
 
 
 import MainConfig
@@ -76,7 +76,8 @@ data Flag = Verbose Int
           | Help
           | Tests
           | Examples
-          | Env
+          | PrintEnv
+          | EnvDir String
           | Input String
           | PrintAll
           | PrintTree -- TODO: more options to control core
@@ -96,9 +97,10 @@ options =
   , Option []    ["help"]        (NoArg Help)          "prints basic program info"
   , Option ['t'] ["tests"]       (NoArg Tests)         "run the standard validity/performance tests"
   , Option ['x'] ["examples"]    (NoArg Examples)      "prints the first few results for the examples; useful for debugging"
-  , Option ['e'] ["environment"] (NoArg Env)           "print the environment to be used for queries"
-  , Option ['v'] ["verbose"]     (OptArg (Verbose . maybe 1 read) "verbosity") ""
-  , Option ['i'] ["input"]       (ReqArg Input "type") "the type for which to generate an expression"
+  , Option ['p'] ["printenv"]    (NoArg PrintEnv)      "print the environment to be used for queries"
+  , Option ['e'] ["envdir"]      (ReqArg EnvDir "PATH") "path to environment directory"
+  , Option ['v'] ["verbose"]     (OptArg (Verbose . maybe 1 read) "INT") "verbosity"
+  , Option ['i'] ["input"]       (ReqArg Input "HSTYPE") "the type for which to generate an expression"
   , Option ['a'] ["all"]         (NoArg PrintAll)      "print all solutions (up to search step limit)"
   , Option []    ["envUsage"]    (NoArg EnvUsage)      "print a list of functions that got inserted at some point (regardless if successful or not), and how often"
   , Option []    ["tree"]        (NoArg PrintTree)     "print tree of search space"
@@ -115,7 +117,7 @@ mainOpts :: [String] -> IO ([Flag], [String])
 mainOpts argv =
   case getOpt Permute options argv of
     (o, n, []  )  | inputs <- [x|(Input x) <- o] ++ n
-                  -> if null (intersect o [Version, Help, Tests, Examples, Env])
+                  -> if null (intersect o [Version, Help, Tests, Examples, PrintEnv])
                      && null inputs
                     then return (Tests:o, inputs)
                     else return (o      , inputs)
@@ -149,16 +151,26 @@ main = runO $ do
         when (verbosity>0) $ do
           putStrLn "[Environment]"
           putStrLn "reading environment from ExferenceDict.hs and ExferenceRatings.txt"
-        (env@(eSignatures, eDeconss, sEnv@(StaticClassEnv clss insts)), messages)
-          <- runWriter
-          <$> environmentFromModuleAndRatings "ExferenceDict.hs" "ExferenceRatings.txt"
+        let
+          envRaw = environmentFromPath
+                 $ case [envDir | EnvDir envDir <- flags] of
+                     []    -> "environment"
+                     (d:_) -> d
+        ( (eSignatures
+          , eDeconss
+          , sEnv@(StaticClassEnv clss insts)
+          , dataTypes)
+         ,messages ) <- runWriter <$> envRaw
+        let
+          env = (eSignatures, eDeconss, sEnv)
         when (verbosity>0 && not (null messages)) $ do
           forM_ messages $ \m -> putStrLn $ "environment warning: " ++ m
-        when (Env `elem` flags) $ do
+        when (PrintEnv `elem` flags) $ do
           when (verbosity>0) $ putStrLn "[Environment]"
           mapM_ print $ clss
           mapM_ print $ [(i,x)| (i,xs) <- M.toList insts, x <- xs]
           mapM_ print $ eSignatures
+          mapM_ print $ eDeconss
         when (Examples `elem` flags) $ do
           when (verbosity>0) $ putStrLn "[Examples]"
           printAndStuff testHeuristicsConfig env
@@ -172,6 +184,8 @@ main = runO $ do
           (x:_) -> do
             when (verbosity>0) $ putStrLn "[Custom Input]"
             let mParsedType = parseType (sClassEnv_tclasses sEnv)
+                                        Nothing
+                                        dataTypes
                                         (haskellSrcExtsParseMode "inputtype")
                                         x
             case mParsedType of
@@ -200,7 +214,7 @@ main = runO $ do
                         then putStrLn "[no results]"
                         else forM_ rs
                           $ \(e, ExferenceStats n d) ->
-                            putStrLn $ prettyPrint (convert e)
+                            putStrLn $ prettyPrint (convert 0 e)
                                         ++ " (depth " ++ show d
                                         ++ ", " ++ show n ++ " steps)"
                   | PrintTree `elem` flags ->
@@ -210,13 +224,18 @@ main = runO $ do
                           when (verbosity>0) $ putStrLn "[running findExpressionsWithStats ..]"
                           let (_, tree, _) = last $ findExpressionsWithStats input
                           let showf (total,processed,expression,_)
-                                = printf "%d (+%d): %s" processed
-                                                        (total-processed)
-                                                        (show expression)
-                          putStrLn $ drawTree
-                                   $ fmap showf
-                                   -- $ filterSearchTreeProcessedN 2
-                                   $ tree
+                                = ( printf "%d (+%d):" processed (total-processed)
+                                  , show expression
+                                  )
+                          let
+                            helper :: String -> Tree (String, String) -> [String]
+                            helper indent (Node (n,m) ts) =
+                              (printf "%-50s %s" (indent ++ n) m)
+                              : concatMap (helper ("  "++indent)) ts
+                          putStrLn `mapM_` helper "" (showf <$> filterSearchTreeProcessedN 2 tree)
+                          -- putStrLn . showf `mapM_` draw
+                          --   -- $ filterSearchTreeProcessedN 2
+                          --   tree
                   | EnvUsage `elem` flags -> do
                       when (verbosity>0) $ putStrLn "[running findExpressionsWithStats ..]"
                       let (stats, _, _) = last $ findExpressionsWithStats input
@@ -243,14 +262,14 @@ main = runO $ do
                           then do
                             putStrLn $ "WARNING: parallel version not implemented for given flags, falling back to serial!"
                             when (verbosity>0) $ putStrLn "[running findFirstBestExpressionsLookahead ..]"
-                            return $ findFirstBestExpressionsLookahead 250 input
+                            return $ findFirstBestExpressionsLookahead 256 input
                           else do
                             when (verbosity>0) $ putStrLn "[running findFirstBestExpressionsLookahead ..]"
-                            return $ findFirstBestExpressionsLookahead 250 input
+                            return $ findFirstBestExpressionsLookahead 256 input
                       case r :: [ExferenceOutputElement] of
                         [] -> putStrLn "[no results]"
                         rs -> rs `forM_` \(e, ExferenceStats n d) ->
-                            putStrLn $ prettyPrint (convert e)
+                            putStrLn $ prettyPrint (convert 0 e)
                                         ++ " (depth " ++ show d
                                         ++ ", " ++ show n ++ " steps)"
 

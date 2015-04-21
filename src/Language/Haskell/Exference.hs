@@ -34,6 +34,8 @@ import Data.Function ( on )
 
 import qualified ListT ( ListT, take, head, uncons, toList )
 
+import Debug.Trace
+
 
 
 -- returns the first found solution (not necessarily the best overall)

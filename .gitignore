@@ -3,6 +3,7 @@
 *.eventlog
 *.hp
 *.ps
+/*.pdf
 dist
 .cabal-sandbox/
 cabal.sandbox.config

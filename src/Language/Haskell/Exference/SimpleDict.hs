@@ -39,8 +39,8 @@ typeUnsafe = read "a -> b"
 typeBind   = read "m a -> (a -> m b) -> m b"
 typeJoin   = read "m (m a) -> m a"
 
-toBindings :: [(String, Float, String)] -> [(String, Float, HsType)]
-toBindings = map (\(a,b,c) -> (a, b, unsafeReadType0 c))
+toBindings :: [(String, Float, String)] -> [(QualifiedName, Float, HsType)]
+toBindings = map (\(a,b,c) -> (QualifiedName [] a, b, unsafeReadType0 c))
 
 -- function, penalty for using that function, type
 -- value ignored for pattern-matches
@@ -109,58 +109,58 @@ defaultClassEnv = mkStaticClassEnv classes instances
               ++ integral_instances
               ++ realfloat_instances
 
-c_show            = HsTypeClass "Show" [badReadVar "a"] []
-c_functor         = HsTypeClass "Functor" [badReadVar "f"] []
-c_applicative     = HsTypeClass "Applicative" [badReadVar "f"]
+c_show            = HsTypeClass (QualifiedName [] "Show") [badReadVar "a"] []
+c_functor         = HsTypeClass (QualifiedName [] "Functor") [badReadVar "f"] []
+c_applicative     = HsTypeClass (QualifiedName [] "Applicative") [badReadVar "f"]
                                               [HsConstraint c_functor [read "f"]]
-c_monad           = HsTypeClass "Monad" [badReadVar "m"]
+c_monad           = HsTypeClass (QualifiedName [] "Monad") [badReadVar "m"]
                                         [HsConstraint c_applicative [read "m"]]
 c_monadState      = HsTypeClass
-                      "MonadState"
+                      (QualifiedName [] "MonadState")
                       [badReadVar "s", badReadVar "m"]
                       [HsConstraint c_monad [read "m"]]
 c_eq              = HsTypeClass
-                      "Eq"
+                      (QualifiedName [] "Eq")
                       [badReadVar "a"]
                       []
 c_num             = HsTypeClass
-                      "Num"
+                      (QualifiedName [] "Num")
                       [badReadVar "a"]
                       [ HsConstraint c_show [read "a"]
                       , HsConstraint c_eq [read "a"]]
 c_ord             = HsTypeClass
-                      "Ord"
+                      (QualifiedName [] "Ord")
                       [badReadVar "a"]
                       [HsConstraint c_eq [read "a"]]
 c_real            = HsTypeClass
-                      "Real"
+                      (QualifiedName [] "Real")
                       [badReadVar "a"]
                       [ HsConstraint c_ord [read "a"]
                       , HsConstraint c_num [read "a"]]
 c_fractional      = HsTypeClass
-                      "Fractional"
+                      (QualifiedName [] "Fractional")
                       [badReadVar "a"]
                       [HsConstraint c_num [read "a"]]
 c_enum            = HsTypeClass
-                      "Enum"
+                      (QualifiedName [] "Enum")
                       [badReadVar "a"]
                       []
 c_integral        = HsTypeClass
-                      "Integral"
+                      (QualifiedName [] "Integral")
                       [badReadVar "a"]
                       [ HsConstraint c_real [read "a"]
                       , HsConstraint c_enum [read "a"]]
 c_realfrac        = HsTypeClass
-                      "RealFrac"
+                      (QualifiedName [] "RealFrac")
                       [badReadVar "a"]
                       [ HsConstraint c_real [read "a"]
                       , HsConstraint c_fractional [read "a"]]
 c_floating        = HsTypeClass
-                      "Floating"
+                      (QualifiedName [] "Floating")
                       [badReadVar "a"]
                       [HsConstraint c_fractional [read "a"]]
 c_realfloat       = HsTypeClass
-                      "RealFloat"
+                      (QualifiedName [] "RealFloat")
                       [badReadVar "a"]
                       [ HsConstraint c_realfrac [read "a"]
                       , HsConstraint c_floating [read "a"]]

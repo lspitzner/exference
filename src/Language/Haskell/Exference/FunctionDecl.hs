@@ -12,11 +12,12 @@ where
 import Language.Haskell.Exference.FunctionBinding
 import Language.Haskell.Exference.Types
 import Language.Haskell.Exference.TypeUtils
+import Language.Haskell.Exference.Expression
 
 
 
-type HsFunctionDecl = (String, HsType)
-type RatedHsFunctionDecl = (String, Float, HsType)
+type HsFunctionDecl = (QualifiedName, HsType)
+type RatedHsFunctionDecl = (QualifiedName, Float, HsType)
                             -- name, rating, type
 
 declToBinding :: RatedHsFunctionDecl -> FunctionBinding

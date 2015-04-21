@@ -17,82 +17,100 @@ import Language.Haskell.Exts.Syntax
 -- TODO:
 -- 1) merge nested lambdas
 
-convert :: E.Expression -> Exp
-convert e = h e []
+-- qualification level -> internal-expression -> haskell-src-expression
+-- level 0 = no qualication
+-- level 1 = qualification for anything but infix operators
+-- level 2 = full qualification (prevents infix operators)
+convert :: Int -> E.Expression -> Exp
+convert q e = h e []
   where
     h (E.ExpLambda i e1) is = h e1 (i:is)
-    h rhsExp [] = convertExp rhsExp
+    h rhsExp [] = convertExp q rhsExp
     h rhsExp is =
-        Lambda noLoc params (convertExp rhsExp)
+        Lambda noLoc params (convertExp q rhsExp)
       where
         params = map (PVar . Ident . T.showVar) $ reverse is
 
-convertToFunc :: String -> E.Expression -> Decl
-convertToFunc ident e = h e []
+convertToFunc :: Int -> String -> E.Expression -> Decl
+convertToFunc q ident e = h e []
   where
     h (E.ExpLambda i e1) is = h e1 (i:is)
     h rhsExp is =
         FunBind [Match noLoc (Ident ident) params Nothing rhs (BDecls[])]
       where
         params = map (PVar . Ident . T.showVar) $ reverse is
-        rhs = UnGuardedRhs $ convertExp rhsExp
+        rhs = UnGuardedRhs $ convertExp q rhsExp
 
-convertExp :: E.Expression -> Exp
-convertExp e = convertInternal 0 e
+-- qualification level -> internal-expression -> haskell-src-expression
+-- level 0 = no qualication
+-- level 1 = qualification for anything but infix operators
+-- level 2 = full qualification (prevents infix operators)
+convertExp :: Int -> E.Expression -> Exp
+convertExp q e = convertInternal q 0 e
 
 parens :: Bool -> Exp -> Exp
 parens True e = Paren e
 parens False e = e
 
-convertInternal :: Int -> E.Expression -> Exp
-convertInternal _ (E.ExpVar i) = Var $ UnQual $ Ident $ T.showVar i
-convertInternal _ (E.ExpLit c) = Con $ UnQual $ Ident $ c
-convertInternal p (E.ExpLambda i e) = parens (p>=1) $
-    Lambda noLoc [PVar $ Ident $ T.showVar i] (convertInternal 0 e)
-convertInternal p (E.ExpApply e1 pe) = recurseApply e1 [pe]
+-- qualification level -> precedence -> expression
+-- level 0 = no qualication
+-- level 1 = qualification for anything but infix operators
+-- level 2 = full qualification (prevents infix operators)
+convertInternal :: Int -> Int -> E.Expression -> Exp
+convertInternal _ _ (E.ExpVar i) = Var $ UnQual $ Ident $ T.showVar i
+convertInternal q _ (E.ExpName qn) = Con $ UnQual $ Ident $ convertName q qn
+convertInternal q p (E.ExpLambda i e) = parens (p>=1) $
+    Lambda noLoc [PVar $ Ident $ T.showVar i] (convertInternal q 0 e)
+convertInternal q p (E.ExpApply e1 pe) = recurseApply e1 [pe]
   where
     recurseApply e pes
-      |   (E.ExpApply e1' pe')     <- e
-        = recurseApply e1' (pe':pes)
-      |   (E.ExpLit ('(':',':opR)) <- e
-      ,   length opR+1==length pes
-        = Tuple Boxed $ map (convertInternal 0) pes
-      |   (E.ExpLit ('(':opR))     <- e
-      ,   [p1,p2] <- pes
-        = parens (p>=2)
-        $ InfixApp (convertInternal 1 p1)
-                   (QVarOp $ UnQual $ Symbol $ takeWhile (/=')') opR)
-                   (convertInternal 2 p2)
-      |   otherwise
-        = parens (p>=3)
-        $ foldl App
-                (convertInternal 2 e)
-                (map (convertInternal 3) pes)
-convertInternal _ (E.ExpHole i) = Var $ UnQual $ Ident $ "_"++T.showVar i
-convertInternal p (E.ExpLet i bindE inE) =
+      | (E.ExpApply e1' pe')     <- e
+          = recurseApply e1' (pe':pes)
+      | q<2
+      , (E.ExpName (T.TupleCon i)) <- e
+      , i==length pes
+          = Tuple Boxed $ map (convertInternal q 0) pes
+      | q<2
+      , (E.ExpName (T.QualifiedName _ ('(':opR))) <- e
+      , [p1,p2] <- pes
+          = parens (p>=2)
+          $ InfixApp (convertInternal q 1 p1)
+                     (QVarOp $ UnQual $ Symbol $ takeWhile (/=')') opR)
+                     (convertInternal q 2 p2)
+      | otherwise
+          = parens (p>=3)
+          $ foldl App
+                  (convertInternal q 2 e)
+                  (map (convertInternal q 3) pes)
+convertInternal _ _ (E.ExpHole i) = Var $ UnQual $ Ident $ "_"++T.showVar i
+convertInternal q p (E.ExpLet i bindE inE) =
   let convBind = PatBind noLoc
                    (PVar $ Ident $ T.showVar i)
-                   (UnGuardedRhs $ convertInternal 0 bindE)
+                   (UnGuardedRhs $ convertInternal q 0 bindE)
                    (BDecls [])
-  in parens (p>=2) $ mergeLet convBind (convertInternal 0 inE)
-convertInternal p (E.ExpLetMatch n ids bindE inE) =
+  in parens (p>=2) $ mergeLet convBind (convertInternal q 0 inE)
+convertInternal q p (E.ExpLetMatch n ids bindE inE) =
   let convBind = PatBind noLoc
-                   (PParen $ PApp (UnQual $ Ident $ n)
+                   (PParen $ PApp (UnQual $ Ident $ convertName q n)
                                       (map (PVar . Ident . T.showVar)
                                            ids))
-                   (UnGuardedRhs $ convertInternal 0 bindE)
+                   (UnGuardedRhs $ convertInternal q 0 bindE)
                    (BDecls [])
-  in parens (p>=2) $ mergeLet convBind (convertInternal 0 inE)
-convertInternal p (E.ExpCaseMatch bindE alts) =
-  let e = convertInternal 0 bindE
+  in parens (p>=2) $ mergeLet convBind (convertInternal q 0 inE)
+convertInternal q p (E.ExpCaseMatch bindE alts) =
+  let e = convertInternal q 0 bindE
       as = [ Alt noLoc
-                 (PApp (UnQual $ Ident $ c)
+                 (PApp (UnQual $ Ident $ convertName q c)
                        (map (PVar . Ident . T.showVar) vars))
-                 (UnGuardedRhs $ convertInternal 0 expr)
+                 (UnGuardedRhs $ convertInternal q 0 expr)
                  (BDecls [])
            | (c, vars, expr) <- alts
            ]
   in parens (p>=2) $ Case e as
+
+convertName :: Int -> T.QualifiedName -> String
+convertName 0 (T.QualifiedName _ n) = n
+convertName _ qn = show qn
 
 mergeLet :: Decl -> Exp -> Exp
 mergeLet convBind (Let (BDecls otherBinds) finalIn)

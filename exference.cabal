@@ -1,5 +1,5 @@
 Name:          exference
-Version:       0.10.0.0
+Version:       0.11.0.0
 Cabal-Version: >= 1.8
 Build-Type:    Simple
 
@@ -30,7 +30,7 @@ Library
   extensions: NoMonomorphismRestriction
   hs-source-dirs: src
   Build-Depends:
-    exference-core ==1.0.0.0,
+    exference-core ==1.1.1.0,
     base >=3 && <5,
     containers,
     transformers,
@@ -41,7 +41,8 @@ Library
     hood,
     process,
     parsec,
-    list-t
+    list-t,
+    directory
 
 
 Executable test-main
@@ -59,7 +60,8 @@ Executable test-main
       hood,
       process,
       parsec,
-      list-t
+      list-t,
+      directory
       -- data-pprint >= 0.2.4
   } else {
     buildable: False
