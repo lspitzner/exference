@@ -48,8 +48,10 @@ isPossible qClassEnv (c:constraints) =
                                      ( sClassEnv_instances
                                      $ qClassEnv_env qClassEnv )
         f (HsInstance instConstrs _iclass instParams) = do
-          let tempTuplePs     = foldl TypeApp (TypeCons "NTUPLE") cparams
-          let tempTupleInstPs = foldl TypeApp (TypeCons "NTUPLE") instParams
+          -- behold the undocumented special -14. TODO document, or add
+          -- special constructor..
+          let tempTuplePs     = foldl TypeApp (TypeConstant (-14)) cparams
+          let tempTupleInstPs = foldl TypeApp (TypeConstant (-14)) instParams
           substs <- unifyRight tempTuplePs tempTupleInstPs
           isPossible
             qClassEnv
