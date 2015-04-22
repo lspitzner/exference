@@ -15,31 +15,26 @@ class Applicative f => Alternative f where
 liftA2 :: Applicative f => (a1 -> a2 -> r) -> f a1 -> f a2 -> f r
 liftA3 :: Applicative f => (a1 -> a2 -> a3 -> r) -> f a1 -> f a2 -> f a3 -> f r 
 
-instance Applicative []
-instance Applicative IO
-instance Applicative Data.Maybe.Maybe
-instance Applicative ReadP
-instance Applicative ReadPrec
-instance Applicative STM
-instance Applicative ZipList
--- instance Applicative ((->) a)
-instance Applicative (Data.Either.Either e)
-instance Monoid a => Applicative ((,) a)
-instance Applicative (ST s)
--- instance Applicative (Proxy *)
+instance Data.Monoid.Monoid a => Applicative ((,) a)
 instance Arrow a => Applicative (ArrowMonad a)
-instance Applicative (ST s)
-instance Control.Monad.Monad m => Applicative (WrappedMonad m)
-instance Monoid m => Applicative (Const m)
+instance Control.Monad.Monad m => Applicative (Control.Monad.WrappedMonad m)
+instance Data.Monoid.Monoid m => Applicative (Const m)
 instance Arrow a => Applicative (WrappedArrow a b)
 -- instance Typeable ((* -> *) -> Constraint) Applicative
 
 instance Alternative []
-instance Alternative Data.Maybe.Maybe
-instance Alternative ReadP
-instance Alternative ReadPrec
-instance Alternative STM
 instance ArrowPlus a => Alternative (ArrowMonad a)
 instance Control.Monad.MonadPlus m => Alternative (WrappedMonad m)
 -- instance Alternative f => Alternative (Alt * f)
 instance (ArrowZero a, ArrowPlus a) => Alternative (WrappedArrow a b)
+
+data ZipList a
+
+instance Data.Functor.Functor ZipList
+instance Control.Applicative.Applicative ZipList
+instance GHC.Generics.Generic1 ZipList
+instance Data.Eq.Eq a => Data.Eq.Eq (ZipList a)
+instance Data.Ord.Ord a => Data.Ord.Ord (ZipList a)
+instance Text.Read.Read a => Text.Read.Read (ZipList a)
+instance Text.Show.Show a => Text.Show.Show (ZipList a)
+instance GHC.Generics.Generic (ZipList a)

@@ -29,3 +29,13 @@ instance Monoid a => Monoid (Const a b)
 instance (Monoid a, Monoid b, Monoid c) => Monoid (a, b, c)   
 instance (Monoid a, Monoid b, Monoid c, Monoid d) => Monoid (a, b, c, d)  
 instance (Monoid a, Monoid b, Monoid c, Monoid d, Monoid e) => Monoid (a, b, c, d, e)
+
+data Dual a
+data Endo a
+data All
+data Any
+data Sum a
+data Product a
+data First a
+data Last a
+data Alt f a

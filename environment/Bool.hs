@@ -9,8 +9,8 @@ data Bool
 
 bool :: a -> a -> Bool -> a 
 
-instance Bounded Bool
-instance Enum Bool
+instance Prelude.Bounded Bool
+instance Prelude.Enum Bool
 instance Data.Eq.Eq Bool
 instance Data.Data.Data Bool
 instance Data.Ord.Ord Bool

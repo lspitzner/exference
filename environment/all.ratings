@@ -45,8 +45,8 @@ Control.Monad.mfilter     = 3.0
 Prelude.realToFrac        = 20.0
 Prelude.fromIntegral      = 20.0
 
-Data.Maybe.maybe          = 10.0
-Data.Maybe.fromMaybe      = 10.0
+Data.Maybe.maybe          =  6.0
+Data.Maybe.fromMaybe      =  6.0
 Data.Map.lookup           = -2.0
 
 Control.Monad.(>>=)       = -4.0
@@ -73,4 +73,9 @@ Control.Monad.State.State = 3.0
 Control.Monad.State.get          = 10.0
 Control.Monad.State.put          = 10.0
 Control.Monad.State.state        = 10.0
-Control.Monad.join = 0.0
+Control.Monad.join               = 0.0
+
+Data.Void.vacuous = 50.0
+Data.Void.absurd  = 10.0
+
+Data.Bool.bool = 5.0

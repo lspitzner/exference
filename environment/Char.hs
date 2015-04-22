@@ -1,12 +1,12 @@
-module Data.Char.Char where
+module Data.Char where
 
 
 
 data Char
 
 
-instance Bounded Char
-instance Enum Char
+instance Prelude.Bounded Char
+instance Prelude.Enum Char
 instance Data.Eq.Eq Char
 instance Data.Data.Data Char
 instance Data.Ord.Ord Char

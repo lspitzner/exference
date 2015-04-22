@@ -14,13 +14,13 @@ instance Control.Monad.MonadFix Maybe
 instance Control.Applicative.Applicative Maybe
 instance Data.Foldable.Foldable Maybe
 instance Data.Traversable.Travesable Maybe
-instance Generic1 Maybe
+instance GHC.Generics.Generic1 Maybe
 instance Control.Monad.MonadPlus Maybe
 instance Control.Applicative.Alternative Maybe
-instance Eq a => Eq (Maybe a)
-instance Data a => Data (Maybe a)
-instance Ord a => Ord (Maybe a)
-instance Read a => Read (Maybe a)
+instance Data.Eq.Eq a => Data.Eq.Eq (Maybe a)
+instance Data.Data.Data a => Data.Data.Data (Maybe a)
+instance Data.Ord.Ord a => Data.Ord.Ord (Maybe a)
+instance Text.Read.Read a => Text.Read.Read (Maybe a)
 instance Text.Show.Show a => Text.Show.Show (Maybe a)
-instance Generic (Maybe a)
-instance Monoid a => Monoid (Maybe a)
+instance GHC.Generics.Generic (Maybe a)
+instance Data.Monoid.Monoid a => Data.Monoid.Monoid (Maybe a)

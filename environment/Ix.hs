@@ -2,11 +2,11 @@ module Data.Ix where
 
 
 
-class Ord a => Ix a where
+class Data.Ord.Ord a => Ix a where
   range :: (a, a) -> [a]
-  index :: (a, a) -> a -> Int
-  inRange :: (a, a) -> a -> Bool
-  rangeSize :: (a, a) -> Int
+  index :: (a, a) -> a -> Data.Int.Int
+  inRange :: (a, a) -> a -> Data.Bool.Bool
+  rangeSize :: (a, a) -> Data.Int.Int
   -- same restriction as for Bounded: better don't define instances for now.
 
 -- instance Ix Bool
