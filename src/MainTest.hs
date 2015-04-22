@@ -117,7 +117,7 @@ checkData =
                                      , "Prelude.ceiling"
                                      ]
                                      []
-  , (,,,,,) "FloatToIntL" False False "[Prelude.Float] -> [Prelude.Int]"
+  , (,,,,,) "FloatToIntL" False False "[Float] -> [Int]"
                                      ["Data.Functor.fmap Prelude.round"
                                      ,"Data.Functor.fmap Prelude.floor"
                                      ,"Data.Functor.fmap Prelude.ceiling"
@@ -129,7 +129,8 @@ checkData =
                                      ["\\b -> (\\c -> (\\d -> (\\e -> (\\f -> (\\g -> (\\h -> ((h ((e b) c)) ((f b) d)) ((g c) d)))))))"]
                                      []
   , (,,,,,) "liftSBlub"  False False "(Monad m, Monad n) => ([a] -> b -> c) -> m [n a] -> m (n b) -> m (n c)"
-                                     ["\\b -> (\\c -> (\\d -> ((Control.Applicative.liftA2 (\\i -> (\\j -> (Control.Monad.(>>=) (Data.Traversable.sequenceA j)) (\\o -> (Control.Monad.(>>=) i) (\\s -> Control.Applicative.pure ((b o) s)))))) d) c))"
+                                     ["\\b -> Control.Applicative.liftA2 (\\i -> (\\j -> (Control.Monad.(>>=) (Data.Traversable.sequenceA i)) (\\o -> (Control.Monad.(>>=) j) (\\s -> Control.Applicative.pure ((b o) s)))))"
+                                     ,"\\b -> (\\c -> (\\d -> ((Control.Applicative.liftA2 (\\i -> (\\j -> (Control.Monad.(>>=) (Data.Traversable.sequenceA j)) (\\o -> (Control.Monad.(>>=) i) (\\s -> Control.Applicative.pure ((b o) s)))))) d) c))"
                                      ,"\\b -> (\\c -> (\\d -> (Control.Monad.(>>=) c) (\\h -> (Data.Functor.fmap (\\l -> (Control.Monad.(>>=) (Data.Traversable.sequenceA h)) (\\q -> (Data.Functor.fmap (b q)) l))) d)))"
                                      ,"\\b -> (\\c -> (\\d -> (Control.Monad.(>>=) d) (\\h -> (Data.Functor.fmap (\\l -> (Control.Monad.(>>=) (Data.Traversable.sequenceA l)) (\\q -> (Data.Functor.fmap (b q)) h))) c)))"
                                      ,"\\b -> (\\c -> (\\d -> (Control.Monad.(>>=) d) (\\h -> (Data.Functor.fmap (\\l -> (Control.Monad.(>>=) h) (\\p -> (Data.Functor.fmap (\\t -> (b t) p)) ((Data.Traversable.mapM (\\z -> z)) l)))) c)))"
@@ -140,7 +141,8 @@ checkData =
                                      ,"\\b -> (\\c -> (\\d -> (Control.Monad.(>>=) d) (\\h -> (Data.Functor.fmap (\\l -> (Control.Monad.(>>=) ((Data.Traversable.mapM (\\t -> t)) l)) (\\r -> (Data.Functor.fmap (b r)) h))) c)))"]
                                      []
   , (,,,,,) "liftSBlubS" False False "Monad m => ([a] -> b -> c) -> m [Data.Maybe.Maybe a] -> m (Data.Maybe.Maybe b) -> m (Data.Maybe.Maybe c)"
-                                     ["\\b -> (\\c -> (\\d -> ((Control.Applicative.liftA2 (\\i -> (\\j -> (Control.Monad.(>>=) i) (\\n -> (Data.Functor.fmap (\\r -> (b r) n)) (Data.Traversable.sequenceA j))))) d) c))"
+                                     ["\\b -> Control.Applicative.liftA2 (\\i -> (\\j -> (Control.Monad.(>>=) j) (\\n -> (Data.Functor.fmap (\\r -> (b r) n)) (Data.Traversable.sequenceA i))))"
+                                     ,"\\b -> (\\c -> (\\d -> ((Control.Applicative.liftA2 (\\i -> (\\j -> (Control.Monad.(>>=) i) (\\n -> (Data.Functor.fmap (\\r -> (b r) n)) (Data.Traversable.sequenceA j))))) d) c))"
                                      ,"\\b -> (\\c -> (\\d -> (Control.Monad.(>>=) c) (\\h -> (Data.Functor.fmap (\\l -> (Control.Monad.(>>=) (Data.Traversable.sequenceA h)) (\\q -> (Data.Functor.fmap (b q)) l))) d)))"
                                      ,"\\b -> (\\c -> (\\d -> (Control.Monad.(>>=) d) (\\h -> (Data.Functor.fmap (\\l -> (Control.Monad.(>>=) (Data.Traversable.sequenceA l)) (\\q -> (Data.Functor.fmap (b q)) h))) c)))"
                                      ,"\\b -> (\\c -> (\\d -> (Control.Monad.(>>=) c) (\\h -> (Data.Functor.fmap (\\l -> (Control.Monad.(>>=) (Prelude.sequence h)) (\\q -> (Data.Functor.fmap (b q)) l))) d)))"
@@ -262,7 +264,7 @@ checkInput heuristics (bindings, deconss, sEnv) typeStr allowUnused patternM hid
     sEnv
     allowUnused
     patternM
-    16384
+    20000
     (Just 131072)
     heuristics
 
@@ -270,8 +272,8 @@ exampleDataTypes :: [QualifiedName]
 exampleDataTypes
   = parseQualifiedName <$> [ "Data.String.String"
                            , "Prelude.Float"
-                           , "Prelude.Int"
-                           , "Prelude.Bool"
+                           , "Data.Int.Int"
+                           , "Data.Bool.Bool"
                            ]
 
 checkExpectedResults :: ExferenceHeuristicsConfig
