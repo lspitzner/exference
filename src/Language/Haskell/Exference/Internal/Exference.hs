@@ -702,7 +702,7 @@ addScopePatternMatch multiPM goalType vid sid bindings = case bindings of
               when (not $ null matchRs)
                    (builderFixMaxTVarId $ maximum $ map largestId newProvTypes)
               addScopePatternMatch multiPM goalType vid sid $ reverse newBinds ++ bindingRest
-          (matchParam, matchers, False) | multiPM -> let
+          (matchParam, matchers@(_:_), False) | multiPM -> let
             inputType = incF matchParam
             in unifyRight vtResult inputType <&> \substs -> do -- SearchNodeBuilder
               mData <- matchers `forM` \(matchId, matchRs) -> do -- SearchNodeBuilder
