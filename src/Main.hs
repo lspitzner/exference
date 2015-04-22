@@ -33,7 +33,7 @@ import System.Process hiding ( env )
 import Control.Applicative ( (<$>), (<*>) )
 import Control.Arrow ( first, second, (***) )
 import Control.Monad ( when, forM_, guard, forM, mplus, mzero )
-import Data.List ( sortBy, find, intersect )
+import Data.List ( sortBy, find, intersect, intersperse, intercalate, nub )
 import Data.Ord ( comparing )
 import Text.Printf
 import Data.Maybe ( listToMaybe, fromMaybe, maybeToList )
@@ -159,7 +159,7 @@ main = runO $ do
         ( (eSignatures
           , eDeconss
           , sEnv@(StaticClassEnv clss insts)
-          , dataTypes)
+          , validNames)
          ,messages ) <- runWriter <$> envRaw
         let
           env = (eSignatures, eDeconss, sEnv)
@@ -185,7 +185,7 @@ main = runO $ do
             when (verbosity>0) $ putStrLn "[Custom Input]"
             let mParsedType = parseType (sClassEnv_tclasses sEnv)
                                         Nothing
-                                        dataTypes
+                                        validNames
                                         (haskellSrcExtsParseMode "inputtype")
                                         x
             case mParsedType of
@@ -193,6 +193,11 @@ main = runO $ do
                 putStrLn $ "could not parse input type: " ++ err
               Right parsedType -> do
                 when (verbosity>0) $ putStrLn $ "input type parsed as: " ++ show parsedType
+                let unresolvedIdents = findInvalidNames validNames parsedType
+                when (not $ null unresolvedIdents) $ do
+                  putStrLn $ "warning: unresolved idents in input: "
+                           ++ intercalate ", " (nub $ show <$> unresolvedIdents)
+                  putStrLn $ "(this may be harmless, but no instances will be connected to these.)"
                 let input = ExferenceInput
                       parsedType
                       eSignatures
