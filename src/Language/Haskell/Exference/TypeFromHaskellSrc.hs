@@ -16,6 +16,7 @@ module Language.Haskell.Exference.TypeFromHaskellSrc
   , unsafeReadType0
   , tyVarTransform
   , haskellSrcExtsParseMode
+  , findInvalidNames
   )
 where
 
@@ -222,3 +223,18 @@ tyVarTransform :: TyVarBind
                -> ConversionMonad T.TVarId
 tyVarTransform (KindedVar _ _) = left $ "KindedVar"
 tyVarTransform (UnkindedVar n) = getVar n
+
+findInvalidNames :: [T.QualifiedName] -> T.HsType -> [T.QualifiedName]
+findInvalidNames _ T.TypeVar {}          = []
+findInvalidNames _ T.TypeConstant {}     = []
+findInvalidNames valids (T.TypeCons n)
+                 | (T.QualifiedName _ _) <- n
+                 = [ n | n `notElem` valids ]                   
+                 | otherwise = []
+findInvalidNames valids (T.TypeArrow t1 t2)   =
+  findInvalidNames valids t1 ++ findInvalidNames valids t2
+findInvalidNames valids (T.TypeApp t1 t2)     =
+  findInvalidNames valids t1 ++ findInvalidNames valids t2
+findInvalidNames valids (T.TypeForall _ _ t1) =
+  findInvalidNames valids t1
+

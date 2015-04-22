@@ -1,3 +1,5 @@
+{-# LANGUAGE PatternGuards #-}
+
 module Language.Haskell.Exference.EnvironmentParser
   ( parseModules
   , parseModulesSimple
@@ -139,6 +141,21 @@ parseModules l = do
     (decls, deconss) <- do
       stuff <- mapM (hExtractBinds cntxt ds) mods
       return $ concat *** concat $ unzip stuff
+    let allValidNames = ds ++ (tclass_name <$> clss)
+    let
+      dataToBeChecked :: [(String, HsType)]
+      dataToBeChecked =
+           [ ("the instance data for " ++ show i, t)
+           | insts' <- M.elems insts
+           , i@(HsInstance _ _ ts) <- insts'
+           , t <- ts]
+        ++ [ ("the binding " ++ show n, t)
+           | (n, t) <- decls]
+    let
+      check :: String -> HsType -> Writer [String] ()
+      check s t = findInvalidNames allValidNames t `forM_` \n ->
+        tell ["unknown binding '"++show n++"' used in " ++ s]
+    dataToBeChecked `forM_` uncurry check
     tell ["got " ++ show (length clss) ++ " classes"]
     tell ["and " ++ show (n_insts) ++ " instances"]
     tell ["(-> " ++ show (length $ concat $ M.elems $ insts) ++ " instances after inflation)"]
@@ -146,7 +163,7 @@ parseModules l = do
     return $ ( builtInDecls++decls
              , builtInDeconstructors++deconss
              , cntxt
-             , ds
+             , allValidNames
              )
   where
     hRead :: (ParseMode, String) -> IO (ParseMode, String)
