@@ -89,6 +89,7 @@ data Flag = Verbose Int
           | Best
           | Unused
           | PatternMatchMC
+          | Qualification Int
   deriving (Show, Eq)
 
 options :: [OptDescr Flag]
@@ -111,6 +112,8 @@ options =
   , Option ['b'] ["best"]        (NoArg Best)          "calculate all solutions, and print the best one"
   , Option ['u'] ["allowUnused"] (NoArg Unused)        "allow unused input variables"
   , Option ['c'] ["patternMatchMC"] (NoArg PatternMatchMC) "pattern match on multi-constructor data types (might lead to hang-ups at the moment)"
+  , Option ['q'] ["fullqualification"] (NoArg $ Qualification 2) "fully qualify the identifiers in the output"
+  , Option []    ["somequalification"] (NoArg $ Qualification 1) "fully qualify non-operator-identifiers in the output"
   ]
 
 mainOpts :: [String] -> IO ([Flag], [String])
@@ -133,6 +136,7 @@ main = runO $ do
   argv <- getArgs
   (flags, inputs) <- mainOpts argv
   let verbosity = sum $ [x | Verbose x <- flags ]
+  let qualification = head $ [x | Qualification x <- flags] ++ [0]
   let
     printVersion = do
       putStrLn $ "exference version " ++ showVersion version
@@ -218,9 +222,9 @@ main = runO $ do
                       if null rs
                         then putStrLn "[no results]"
                         else forM_ rs
-                          $ \(e, ExferenceStats n d) ->
-                            putStrLn $ prettyPrint (convert 0 e)
-                                        ++ " (depth " ++ show d
+                          $ \(e, ExferenceStats n d) -> do
+                            putStrLn $ prettyPrint (convert qualification e)
+                            putStrLn $ "(depth " ++ show d
                                         ++ ", " ++ show n ++ " steps)"
                   | PrintTree `elem` flags ->
                       if not Flags_exference_core.buildSearchTree
@@ -273,10 +277,10 @@ main = runO $ do
                             return $ findFirstBestExpressionsLookahead 256 input
                       case r :: [ExferenceOutputElement] of
                         [] -> putStrLn "[no results]"
-                        rs -> rs `forM_` \(e, ExferenceStats n d) ->
-                            putStrLn $ prettyPrint (convert 0 e)
-                                        ++ " (depth " ++ show d
-                                        ++ ", " ++ show n ++ " steps)"
+                        rs -> rs `forM_` \(e, ExferenceStats n d) -> do
+                            putStrLn $ prettyPrint (convert qualification e)
+                            putStrLn $ "(depth " ++ show d
+                                       ++ ", " ++ show n ++ " steps)"
 
         -- printChecks     testHeuristicsConfig env
         -- printStatistics testHeuristicsConfig env
