@@ -1,5 +1,5 @@
 Name:          exference
-Version:       0.11.1.0
+Version:       0.11.1.1
 Cabal-Version: >= 1.8
 Build-Type:    Simple
 
@@ -30,7 +30,7 @@ Library
   extensions: NoMonomorphismRestriction
   hs-source-dirs: src
   Build-Depends:
-    exference-core ==1.1.1.0,
+    exference-core ==1.1.2.0,
     base >=3 && <5,
     containers,
     transformers,
