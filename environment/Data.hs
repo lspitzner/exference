@@ -39,7 +39,7 @@ class Typeable a => Data a where
 
   gmapQ :: (forall d. Data d => d -> u) -> a -> [u]
 
-  gmapQi :: forall u. Int -> (forall d. Data d => d -> u) -> a -> u
+  gmapQi :: forall u. Data.Int.Int -> (forall d. Data d => d -> u) -> a -> u
 
   gmapM :: forall m. Control.Monad.Monad m => (forall d. Data d => d -> m d) -> a -> m a
 
@@ -87,3 +87,6 @@ instance (Data a, Data b, Data c, Data d) => Data (a, b, c, d)
 instance (Data a, Data b, Data c, Data d, Data e) => Data (a, b, c, d, e)
 instance (Data a, Data b, Data c, Data d, Data e, Data f) => Data (a, b, c, d, e, f)
 instance (Data a, Data b, Data c, Data d, Data e, Data f, Data g) => Data (a, b, c, d, e, f, g)
+
+
+dataTypeConstrs :: DataType -> [Constr] 

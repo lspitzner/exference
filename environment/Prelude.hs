@@ -17,12 +17,12 @@ class (Num a, Data.Ord.Ord a) => Real a where
   toRational :: a -> Rational
 
 class Num a => Fractional a where
-  fromRational :: Rational -> a
+  fromRational :: Data.Ratio.Rational -> a
   -- omit (/) and recip
 
 class Enum a where
-  toEnum :: Int -> a
-  fromEnum :: a -> Int
+  toEnum :: Data.Int.Int -> a
+  fromEnum :: a -> Data.Int.Int
   enumFrom :: a -> [a]
   enumFromThen :: a -> a -> [a]
   enumFromTo :: a -> a -> [a]

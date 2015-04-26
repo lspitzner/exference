@@ -5,7 +5,7 @@ module Text.Show where
 data ShowS
 
 class Show a where
-  showsPrec :: Int -> a -> ShowS
+  showsPrec :: Data.Int.Int -> a -> ShowS
   show :: a -> Data.String.String
   showList :: [a] -> ShowS
 

@@ -76,6 +76,21 @@ Control.Monad.State.state        = 10.0
 Control.Monad.join               = 0.0
 
 Data.Void.vacuous = 50.0
-Data.Void.absurd  = 10.0
+Data.Void.absurd  = 12.0
 
 Data.Bool.bool = 5.0
+
+Text.Read.readMaybe        = 10.0
+Text.Read.readEither       = 10.0
+Data.Typeable.cast         = 20.0
+Data.Complex.imagPart      = 10.0
+Data.Complex.realPart      = 10.0
+Data.Typeable.typeOf       = 4.0
+Control.Arrow.zeroArrow    = 20.0
+Control.Category.id        = 20.0
+Data.Data.dataTypeOf       = 10.0
+Data.Data.toConstr         = 5.0
+Data.Data.dataTypeConstrs  = 5.0
+Data.Ord.compare           = 4.0
+Data.Char.ord              = 3.0
+Data.Char.chr              = 3.0

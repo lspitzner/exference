@@ -15,7 +15,7 @@ class (Control.Applicative.Alternative m, Monad m) => MonadPlus m where
 (>=>) :: Monad m => (a -> m b) -> (b -> m c) -> a -> m c
 join :: Monad m => m (m a) -> m a
 msum :: (Foldable t, MonadPlus m) => t (m a) -> m a
-mfilter :: MonadPlus m => (a -> Bool) -> m a -> m a 
+mfilter :: MonadPlus m => (a -> Data.Bool.Bool) -> m a -> m a 
 zipWithM :: Monad m => (a -> b -> m c) -> [a] -> [b] -> m [c] 
 foldM :: (Foldable t, Monad m) => (b -> a -> m b) -> b -> t a -> m b 
 
