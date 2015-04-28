@@ -3,6 +3,45 @@ Version:       0.11.2.0
 Cabal-Version: >= 1.8
 Build-Type:    Simple
 
+data-files:
+  environment/all.ratings
+  environment/Applicative.hs
+  environment/Arrow.hs
+  environment/Bits.hs
+  environment/Bool.hs
+  environment/Category.hs
+  environment/Char.hs
+  environment/Complex.hs
+  environment/Cont.hs
+  environment/Data.hs
+  environment/Either.hs
+  environment/EitherT.hs
+  environment/Eq.hs
+  environment/Foldable.hs
+  environment/Functor.hs
+  environment/Generics.hs
+  environment/Int.hs
+  environment/Ix.hs
+  environment/List.hs
+  environment/Map.hs
+  environment/Maybe.hs
+  environment/Monad.hs
+  environment/Monoid.hs
+  environment/Ord.hs
+  environment/Prelude.hs
+  environment/Printf.hs
+  environment/Proxy.hs
+  environment/Ratio.hs
+  environment/Read.hs
+  environment/Show.hs
+  environment/State.hs
+  environment/Storable.hs
+  environment/String.hs
+  environment/Traversable.hs
+  environment/Typeable.hs
+  environment/Void.hs
+  environment/Word.hs
+
 
 
 flag build-executables

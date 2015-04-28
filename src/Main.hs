@@ -134,6 +134,7 @@ fullUsageInfo = usageInfo header options
 main :: IO ()
 main = runO $ do
   argv <- getArgs
+  defaultEnvPath <- getDataFileName "environment"
   (flags, inputs) <- mainOpts argv
   let verbosity = sum $ [x | Verbose x <- flags ]
   let qualification = head $ [x | Qualification x <- flags] ++ [0]
@@ -158,7 +159,7 @@ main = runO $ do
         let
           envRaw = environmentFromPath
                  $ case [envDir | EnvDir envDir <- flags] of
-                     []    -> "environment"
+                     []    -> defaultEnvPath
                      (d:_) -> d
         ( (eSignatures
           , eDeconss
