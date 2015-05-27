@@ -153,14 +153,14 @@ main = runO $ do
             error "--serial and --parallel are in conflict! aborting" 
         when (Version `elem` flags || verbosity>0) printVersion
         --((eSignatures, StaticClassEnv clss insts), messages) <- runWriter <$> parseExternal testBaseInput'
+        let envDir = case [d | EnvDir d <- flags] of
+                       []    -> defaultEnvPath
+                       (d:_) -> d
         when (verbosity>0) $ do
-          putStrLn "[Environment]"
-          putStrLn "reading environment from ExferenceDict.hs and ExferenceRatings.txt"
+          putStrLn $ "[Environment]"
+          putStrLn $ "reading environment from " ++ envDir
         let
-          envRaw = environmentFromPath
-                 $ case [envDir | EnvDir envDir <- flags] of
-                     []    -> defaultEnvPath
-                     (d:_) -> d
+          envRaw = environmentFromPath envDir
         ( (eSignatures
           , eDeconss
           , sEnv@(StaticClassEnv clss insts)
