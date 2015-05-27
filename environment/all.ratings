@@ -94,3 +94,5 @@ Data.Data.dataTypeConstrs  = 5.0
 Data.Ord.compare           = 4.0
 Data.Char.ord              = 3.0
 Data.Char.chr              = 3.0
+
+Control.Comonad.extract    = 7.0

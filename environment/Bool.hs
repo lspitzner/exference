@@ -2,7 +2,8 @@ module Data.Bool where
 
 
 
-data Bool
+data Bool = True
+          | False
 
 (&&) :: Bool -> Bool -> Bool
 (||) :: Bool -> Bool -> Bool

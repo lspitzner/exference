@@ -11,8 +11,10 @@ data-files:
   environment/Bool.hs
   environment/Category.hs
   environment/Char.hs
+  environment/Comonad.hs
   environment/Complex.hs
   environment/Cont.hs
+  environment/ControlMonadTransClass.hs
   environment/Data.hs
   environment/Either.hs
   environment/EitherT.hs
