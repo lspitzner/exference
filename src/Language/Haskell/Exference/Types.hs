@@ -111,7 +111,11 @@ instance NFData StaticClassEnv where rnf = genericRnf
 instance NFData QueryClassEnv  where rnf = genericRnf
 
 instance Show QualifiedName where
-  show (QualifiedName ns n) = intercalate "." $ ns ++ [n]
+  show (QualifiedName ns n) = if    length n >= 2
+                                 && head n == '('
+                                 && last n == ')'
+                              then "(" ++ intercalate "." (ns ++ [tail n])
+                              else        intercalate "." (ns ++ [n])
   show ListCon              = "[]"
   show (TupleCon 0)         = "()"
   show (TupleCon i)         = "(" ++ replicate (i-1) ',' ++ ")"
