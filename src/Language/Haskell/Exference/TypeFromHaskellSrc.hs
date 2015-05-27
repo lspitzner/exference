@@ -151,15 +151,21 @@ convertModuleName :: ModuleName -> Name -> T.QualifiedName
 convertModuleName (ModuleName n) (Ident s)  = parseQualifiedName
                                             $ n ++ "." ++ s
 convertModuleName (ModuleName n) (Symbol s) = parseQualifiedName
-                                            $ n ++ ".(" ++ s ++ ")"
+                                            $ "(" ++ n ++ "." ++ s ++ ")"
 
 parseQualifiedName :: String -> T.QualifiedName
-parseQualifiedName s = helper s []
+parseQualifiedName s = case s of
+  ""                                 -> T.QualifiedName [] ""
+  [_]                                -> helper s                 [] False
+  _ | head s == '(' && last s == ')' -> helper (tail $ init $ s) [] True
+    | otherwise                      -> helper s                 [] False
  where
-  helper :: String -> [String] -> T.QualifiedName
-  helper n ns = case span (/='.') n of
-    (final, []) -> T.QualifiedName (reverse ns) final
-    (part, (_:rest)) -> helper rest (part:ns)
+  helper :: String -> [String] -> Bool -> T.QualifiedName
+  helper n ns isOperator = case span (/='.') n of
+    (final, []) -> T.QualifiedName (reverse ns) $ if isOperator
+                     then "(" ++ final ++ ")"
+                     else final
+    (part, (_:rest)) -> helper rest (part:ns) isOperator
 
 convertConstraint :: [T.HsTypeClass]
                   -> Maybe ModuleName
