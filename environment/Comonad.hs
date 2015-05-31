@@ -2,7 +2,7 @@ module Control.Comonad where
 
 
 
-class Functor w => Comonad w where
+class Data.Functor.Functor w => Comonad w where
   extract :: w a -> a
   duplicate :: w a -> w (w a)
   extend :: (w a -> b) -> w a -> w b

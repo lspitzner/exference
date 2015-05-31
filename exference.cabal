@@ -15,6 +15,7 @@ data-files:
   environment/Complex.hs
   environment/Cont.hs
   environment/ControlMonadTransClass.hs
+  environment/ControlMonadIOClass.hs
   environment/Data.hs
   environment/Either.hs
   environment/EitherT.hs
@@ -39,6 +40,7 @@ data-files:
   environment/State.hs
   environment/Storable.hs
   environment/String.hs
+  environment/SystemIO.hs
   environment/Traversable.hs
   environment/Typeable.hs
   environment/Void.hs
