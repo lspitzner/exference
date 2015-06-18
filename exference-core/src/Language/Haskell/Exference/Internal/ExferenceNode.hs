@@ -35,6 +35,8 @@ import Language.Haskell.Exference.ExferenceStats
 import Language.Haskell.Exference.FunctionBinding
 
 import qualified Data.Map.Strict as M
+import Data.Sequence
+import Data.Foldable ( toList )
 
 import Text.PrettyPrint
 import Data.StableMemo
@@ -146,7 +148,7 @@ mkGoals :: ScopeId
 mkGoals sid vbinds = [(b,sid)|b<-vbinds]
 
 data SearchNode = SearchNode
-  { node_goals           :: [TGoal]
+  { node_goals           :: Seq TGoal
   , node_constraintGoals :: [HsConstraint]
   , node_providedScopes  :: Scopes
   , node_varUses         :: VarUsageMap
@@ -192,7 +194,7 @@ instance Show SearchNode where
     = show
     $ text "SearchNode" <+> (
           (text   "goals      ="
-           <+> brackets (vcat $ punctuate (text ", ") $ map tgoal sgoals)
+           <+> brackets (vcat $ punctuate (text ", ") $ map tgoal $ toList sgoals)
           )
       $$  (text $ "constrGoals= " ++ show scgoals)
       $$  (text   "scopes     = "

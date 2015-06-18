@@ -31,6 +31,7 @@ import Language.Haskell.Exference.Internal.ExferenceNodeBuilder
 import qualified Data.PQueue.Prio.Max as Q
 import qualified Data.Map as M
 import qualified Data.Set as S
+import qualified Data.Sequence as Seq
 
 import Control.DeepSeq.Generics
 import System.Mem.StableName ( StableName, makeStableName )
@@ -45,7 +46,7 @@ import Data.List ( partition, sortBy, groupBy )
 import Data.Ord ( comparing )
 import Data.Function ( on )
 import Data.Monoid ( mempty, First(First), getFirst, mconcat )
-import Data.Foldable ( foldMap )
+import Data.Foldable ( foldMap, sum )
 import Control.Monad.Morph ( lift )
 
 import Control.Concurrent.Chan
@@ -57,6 +58,9 @@ import qualified ListT
 -- import Data.DeriveTH
 import Debug.Hood.Observe
 import Debug.Trace
+
+import Prelude hiding ( sum )
+
 
 
 {-
@@ -165,7 +169,7 @@ findExpressions (ExferenceInput rawType
   where
     t = forallify rawType
     rootSearchNode = SearchNode
-        [((0, t), 0)]
+        (Seq.singleton ((0, t), 0))
         []
         initialScopes
         M.empty
@@ -194,7 +198,7 @@ findExpressions (ExferenceInput rawType
       | Q.null states || n > maxSteps = []
       | ((_,s), restNodes) <- Q.deleteFindMax states =
         let rNodes = stateStep multiPM heuristics s
-            (potentialSolutions, futures) = partition (null.node_goals) rNodes                                                      
+            (potentialSolutions, futures) = partition (Seq.null . node_goals) rNodes                                                      
             newBindingUsages = case node_lastStepBinding s of
               Nothing -> bindingUsages
               Just b  -> incBindingUsage b bindingUsages
@@ -314,7 +318,7 @@ findExpressionsPar (ExferenceInput rawType
         | n < 768 && not (Q.null states) -> let
             ((_,s), restNodes) = Q.deleteFindMax states
             rNodes = stateStep multiPM heuristics s
-            (potentialSolutions, futures) = partition (null.node_goals) rNodes
+            (potentialSolutions, futures) = partition (Seq.null . node_goals) rNodes
             newBindingUsages = case node_lastStepBinding s of
               Nothing -> bindingUsages
               Just b  -> incBindingUsage b bindingUsages
@@ -394,7 +398,7 @@ findExpressionsPar (ExferenceInput rawType
         | otherwise -> do
             res <- lift $ readChan resultChan
             let (potentialSolutions, futures) =
-                  partition (\(_,x,_) -> null $ node_goals x) res
+                  partition (\(_,x,_) -> Seq.null $ node_goals x) res
                 out = [ (n, d, e)
                       | (_, solution, _) <- potentialSolutions
                       , null (node_constraintGoals solution)
@@ -449,7 +453,7 @@ findExpressionsPar (ExferenceInput rawType
     let 
       t = forallify rawType
       rootSearchNode = SearchNode
-          [((0, t), 0)]
+          (Seq.singleton ((0, t), 0))
           []
           initialScopes
           M.empty
@@ -487,8 +491,8 @@ rateNode :: ExferenceHeuristicsConfig -> SearchNode -> Float
 rateNode h s = 0.0 - rateGoals h (node_goals s) - node_depth s + rateUsage h s
  -- + 0.6 * rateScopes (node_providedScopes s)
 
-rateGoals :: ExferenceHeuristicsConfig -> [TGoal] -> Float
-rateGoals h = sum . map rateGoal
+rateGoals :: ExferenceHeuristicsConfig -> Seq.Seq TGoal -> Float
+rateGoals h = sum . fmap rateGoal
   where
     rateGoal ((_,t),_) = tComplexity t
     -- TODO: actually measure performance with different values,
@@ -535,7 +539,7 @@ stateStep2 multiPM h s
   | (TypeForall is cs t) <- goalType = [ modifyNodeBy s' $ forallStep is cs t ]
   | otherwise = byProvided ++ byFunctionSimple
   where
-    (((var, goalType), scopeId):gr) = node_goals s
+    (((var, goalType), scopeId) Seq.:< gr) = Seq.viewl $ node_goals s
     s' = s { node_goals = gr }
     arrowStep :: HsType -> [(TVarId, HsType)] -> SearchNodeBuilder ()
     arrowStep g ts
