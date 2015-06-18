@@ -42,6 +42,7 @@ import Control.Monad.State.CPS ( State
                                 )
 import Control.Applicative
 import qualified Data.Map as M
+import Data.Sequence
 
 modify :: (s -> s) -> StateT s m ()
 modify f = StateT $ \s c -> c () (f s)
@@ -61,11 +62,11 @@ modifyNodeBy n (SearchNodeBuilder b) = execState b n
 
 builderPrependGoal :: TGoal -> SearchNodeBuilder ()
 builderPrependGoal g = SearchNodeBuilder $ modify $ \s ->
-  s { node_goals = g : node_goals s }
+  s { node_goals = g <| node_goals s }
 
 builderAppendGoal :: TGoal -> SearchNodeBuilder ()
 builderAppendGoal g = SearchNodeBuilder $ modify $ \s ->
-  s { node_goals = node_goals s ++ [g] }
+  s { node_goals = node_goals s |> g }
 
 builderAddConstraintGoals :: [HsConstraint] -> SearchNodeBuilder ()
 builderAddConstraintGoals gs = SearchNodeBuilder $ modify $ \s ->
@@ -175,7 +176,7 @@ builderAddScope parentId = SearchNodeBuilder $ do
 -- not contraintGoals, because that's handled by caller
 builderApplySubst :: Substs -> SearchNodeBuilder ()
 builderApplySubst substs = SearchNodeBuilder $ modify $ \s ->
-  s { node_goals = map (goalApplySubst substs) $ node_goals s
+  s { node_goals = fmap (goalApplySubst substs) $ node_goals s
     , node_providedScopes = scopesApplySubsts substs $ node_providedScopes s
     }
 
