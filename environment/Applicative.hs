@@ -2,7 +2,7 @@ module Control.Applicative where
 
 
 
-class Functor f => Applicative f where
+class Data.Functor.Functor f => Applicative f where
   pure :: a -> f a
   (<*>) :: f (a->b) -> f a -> f b
 
