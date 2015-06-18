@@ -225,7 +225,7 @@ main = runO $ do
                         else forM_ rs
                           $ \(e, ExferenceStats n d) -> do
                             putStrLn $ prettyPrint (convert qualification e)
-                            putStrLn $ "(depth " ++ show d
+                            putStrLn $ replicate 40 ' ' ++ "(depth " ++ show d
                                         ++ ", " ++ show n ++ " steps)"
                   | PrintTree `elem` flags ->
                       if not Flags_exference_core.buildSearchTree
@@ -280,7 +280,7 @@ main = runO $ do
                         [] -> putStrLn "[no results]"
                         rs -> rs `forM_` \(e, ExferenceStats n d) -> do
                             putStrLn $ prettyPrint (convert qualification e)
-                            putStrLn $ "(depth " ++ show d
+                            putStrLn $ replicate 40 ' ' ++ "(depth " ++ show d
                                        ++ ", " ++ show n ++ " steps)"
 
         -- printChecks     testHeuristicsConfig env
