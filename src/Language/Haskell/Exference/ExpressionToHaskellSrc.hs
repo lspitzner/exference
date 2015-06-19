@@ -8,8 +8,8 @@ where
 
 
 
-import qualified Language.Haskell.Exference.Expression as E
-import qualified Language.Haskell.Exference.Types as T
+import qualified Language.Haskell.Exference.Core.Expression as E
+import qualified Language.Haskell.Exference.Core.Types as T
 import Language.Haskell.Exts.Syntax
 
 

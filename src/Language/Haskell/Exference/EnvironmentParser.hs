@@ -18,13 +18,13 @@ import Language.Haskell.Exference.ExpressionToHaskellSrc
 import Language.Haskell.Exference.BindingsFromHaskellSrc
 import Language.Haskell.Exference.ClassEnvFromHaskellSrc
 import Language.Haskell.Exference.TypeFromHaskellSrc
-import Language.Haskell.Exference.FunctionBinding
+import Language.Haskell.Exference.Core.FunctionBinding
 import Language.Haskell.Exference.FunctionDecl
 
-import Language.Haskell.Exference.Types
+import Language.Haskell.Exference.Core.Types
 import Language.Haskell.Exference.SimpleDict
-import Language.Haskell.Exference.Expression
-import Language.Haskell.Exference.ExferenceStats
+import Language.Haskell.Exference.Core.Expression
+import Language.Haskell.Exference.Core.ExferenceStats
 
 import Control.DeepSeq
 

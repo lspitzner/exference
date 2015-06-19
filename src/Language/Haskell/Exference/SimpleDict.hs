@@ -17,9 +17,9 @@ where
 
 
 
-import Language.Haskell.ExferenceCore ( ExferenceHeuristicsConfig(..) )
-import Language.Haskell.Exference.Types
-import Language.Haskell.Exference.TypeUtils
+import Language.Haskell.Exference.Core ( ExferenceHeuristicsConfig(..) )
+import Language.Haskell.Exference.Core.Types
+import Language.Haskell.Exference.Core.TypeUtils
 import Language.Haskell.Exference.FunctionDecl
 import Language.Haskell.Exference.TypeFromHaskellSrc ( unsafeReadType0 )
 

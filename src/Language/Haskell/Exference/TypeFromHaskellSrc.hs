@@ -25,8 +25,8 @@ where
 import Language.Haskell.Exts.Syntax
 import qualified Language.Haskell.Exts.Parser as P
 
-import qualified Language.Haskell.Exference.Types as T
-import qualified Language.Haskell.Exference.TypeUtils as TU
+import qualified Language.Haskell.Exference.Core.Types as T
+import qualified Language.Haskell.Exference.Core.TypeUtils as TU
 import qualified Data.Map as M
 
 import Control.Applicative ( (<$>), (<*>) )

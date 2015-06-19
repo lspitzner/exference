@@ -8,7 +8,7 @@ where
 
 
 
-import Language.Haskell.ExferenceCore ( ExferenceHeuristicsConfig(..) )
+import Language.Haskell.Exference.Core ( ExferenceHeuristicsConfig(..) )
 
 import Language.Haskell.Exts.Extension ( Language (..)
                                        , Extension (..)

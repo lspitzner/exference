@@ -9,19 +9,19 @@ where
 
 
 
-import Language.Haskell.ExferenceCore ( ExferenceHeuristicsConfig(..)
+import Language.Haskell.Exference.Core ( ExferenceHeuristicsConfig(..)
                                       , findExpressionsWithStats )
 import Language.Haskell.Exference
 import Language.Haskell.Exference.ExpressionToHaskellSrc
 import Language.Haskell.Exference.BindingsFromHaskellSrc
 import Language.Haskell.Exference.ClassEnvFromHaskellSrc
 import Language.Haskell.Exference.TypeFromHaskellSrc
-import Language.Haskell.Exference.FunctionBinding
+import Language.Haskell.Exference.Core.FunctionBinding
 
-import Language.Haskell.Exference.Types
-import Language.Haskell.Exference.Expression
-import Language.Haskell.Exference.ExferenceStats
-import Language.Haskell.Exference.SearchTree
+import Language.Haskell.Exference.Core.Types
+import Language.Haskell.Exference.Core.Expression
+import Language.Haskell.Exference.Core.ExferenceStats
+import Language.Haskell.Exference.Core.SearchTree
 
 import Control.DeepSeq
 

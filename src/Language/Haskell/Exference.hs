@@ -20,9 +20,9 @@ where
 
 
 
-import Language.Haskell.ExferenceCore
+import Language.Haskell.Exference.Core
 
-import Language.Haskell.Exference.ExferenceStats
+import Language.Haskell.Exference.Core.ExferenceStats
 
 import Data.Maybe ( maybeToList, listToMaybe, fromMaybe )
 import Control.Arrow ( first, second, (***) )

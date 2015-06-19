@@ -9,10 +9,10 @@ where
 
 
 
-import Language.Haskell.Exference.FunctionBinding
-import Language.Haskell.Exference.Types
-import Language.Haskell.Exference.TypeUtils
-import Language.Haskell.Exference.Expression
+import Language.Haskell.Exference.Core.FunctionBinding
+import Language.Haskell.Exference.Core.Types
+import Language.Haskell.Exference.Core.TypeUtils
+import Language.Haskell.Exference.Core.Expression
 
 
 

@@ -13,10 +13,10 @@ where
 
 import Language.Haskell.Exts.Syntax
 import Language.Haskell.Exts.Pretty
-import Language.Haskell.Exference.FunctionBinding
+import Language.Haskell.Exference.Core.FunctionBinding
 import Language.Haskell.Exference.TypeFromHaskellSrc
-import Language.Haskell.Exference.Types
-import Language.Haskell.Exference.TypeUtils
+import Language.Haskell.Exference.Core.Types
+import Language.Haskell.Exference.Core.TypeUtils
 import Language.Haskell.Exference.FunctionDecl
 
 import Control.Applicative ( (<$>), (<*>) )
