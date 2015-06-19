@@ -60,8 +60,7 @@ import MainConfig
 import MainTest
 
 import Paths_exference
-import qualified Paths_exference_core
-import qualified Flags_exference_core
+import qualified Flags_exference
 
 import System.Environment ( getArgs )
 import System.Console.GetOpt
@@ -141,7 +140,6 @@ main = runO $ do
   let
     printVersion = do
       putStrLn $ "exference version " ++ showVersion version
-      putStrLn $ "exference-core version " ++ showVersion Paths_exference_core.version
   if | [Version] == flags   -> printVersion
      | Help    `elem` flags -> putStrLn fullUsageInfo >> putStrLn "TODO"
      | otherwise -> do
@@ -228,7 +226,7 @@ main = runO $ do
                             putStrLn $ replicate 40 ' ' ++ "(depth " ++ show d
                                         ++ ", " ++ show n ++ " steps)"
                   | PrintTree `elem` flags ->
-                      if not Flags_exference_core.buildSearchTree
+                      if not Flags_exference.buildSearchTree
                         then putStrLn "exference-core was not compiled with flag \"buildSearchTree\""
                         else do
                           when (verbosity>0) $ putStrLn "[running findExpressionsWithStats ..]"
