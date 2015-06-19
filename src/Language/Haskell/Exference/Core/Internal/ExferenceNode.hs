@@ -39,7 +39,6 @@ import Data.Sequence
 import Data.Foldable ( toList )
 
 import Text.PrettyPrint
-import Data.StableMemo
 
 import Control.Arrow ( first, second, (***) )
 

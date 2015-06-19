@@ -105,7 +105,6 @@ Library
     containers,
     pretty >= 1.1,
     deepseq-generics,
-    stable-memo,
     unordered-containers >= 0.2.5 && < 0.3,
     hashable,
     pqueue,
@@ -131,26 +130,14 @@ Executable exference
       exference-lib,
       base >=3 && <5,
       containers,
-      deepseq-generics,
-      pqueue,
-      mmorph,
-      data-pprint,
-      pretty,
-      unordered-containers,
-      stable-memo,
       transformers,
       mtl,
-      mtl-c,
-      hashable,
-      either,
+      list-t,
       haskell-src-exts,
+      data-pprint >= 0.2.4,
       deepseq,
       hood,
-      process,
-      parsec,
-      list-t,
-      directory
-      -- data-pprint >= 0.2.4
+      process
   } else {
     buildable: False
   }
@@ -166,4 +153,4 @@ Executable exference
                -fno-warn-orphans
                -threaded
                -with-rtsopts "-H2G -M4G -N"
-  extensions: NoMonomorphismRestriction CPP
+  extensions: NoMonomorphismRestriction
