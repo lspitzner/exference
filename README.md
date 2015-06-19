@@ -22,6 +22,21 @@ sometimes stopping with "i could not find any solutions".
     - `/msg exferenceBot help`
     - uses the environment (i.e. known functions+typeclasses) at https://github.com/lspitzner/exference/tree/master/environment
 
+# Compiling from source
+
+~~~~
+git clone git@github.com:lspitzner/exference.git
+cd exference
+cabal sandbox init
+# note that ghc-7.10 does not work yet;
+# i recommend ghc-7.8.4 for now.
+cabal install --deps
+cabal configure
+cabal build
+# and, for example
+cabal run -- "(Show b) => (a->b) -> [a] -> [String]"
+~~~~
+
 # Usage notes
 
 There are certain types of queries where *Exference* will not be able to find
@@ -62,24 +77,6 @@ any / the right solution. Some common current limitations are:
   I postponed this as there is no automated way to do this. stupid tooling..)
 - The package does not contain the environment via data-files, so the sdist
   package might be incomplete.
-
-## Compiling from source
-
-Compiling the executable involves (after cloning the exference cabal package)
-something along the lines of
-
-~~~~
-git clone git@github.com:lspitzner/exference.git
-cd exference
-cabal sandbox init
-# note that ghc-7.10 does not work yet;
-# i recommend ghc-7.8.4 for now.
-cabal install --deps
-cabal configure
-cabal build
-# and, for example
-cabal run -- "(Show b) => (a->b) -> [a] -> [String]"
-~~~~
 
 ## Contributing
 
