@@ -1,7 +1,7 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE PatternGuards #-}
 
-module Language.Haskell.Exference.TypeUtils
+module Language.Haskell.Exference.Core.TypeUtils
   ( reduceIds
   , incVarIds
   , largestId
@@ -34,8 +34,8 @@ import GHC.Generics
 import Debug.Hood.Observe
 import Debug.Trace
 
-import Language.Haskell.Exference.Types
--- import Language.Haskell.Exference.Internal.Unify
+import Language.Haskell.Exference.Core.Types
+-- import Language.Haskell.Exference.Core.Internal.Unify
 import qualified Data.Set as S
 import qualified Data.Map.Strict as M
 import Data.List ( intercalate )
@@ -48,7 +48,7 @@ import Control.Monad.Identity ( Identity(runIdentity) )
 import Control.DeepSeq.Generics
 import GHC.Generics
 
-import Language.Haskell.Exference.Types
+import Language.Haskell.Exference.Core.Types
 
 
 

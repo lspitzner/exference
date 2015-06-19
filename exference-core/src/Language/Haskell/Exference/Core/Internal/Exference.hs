@@ -5,7 +5,7 @@
 {-# LANGUAGE BangPatterns #-}
 
 
-module Language.Haskell.Exference.Internal.Exference
+module Language.Haskell.Exference.Core.Internal.Exference
   ( findExpressions
   , findExpressionsPar
   , ExferenceHeuristicsConfig (..)
@@ -17,16 +17,16 @@ where
 
 
 
-import Language.Haskell.Exference.Types
-import Language.Haskell.Exference.TypeUtils
-import Language.Haskell.Exference.Expression
-import Language.Haskell.Exference.ExferenceStats
-import Language.Haskell.Exference.FunctionBinding
-import Language.Haskell.Exference.SearchTree
-import Language.Haskell.Exference.Internal.Unify
-import Language.Haskell.Exference.Internal.ConstraintSolver
-import Language.Haskell.Exference.Internal.ExferenceNode
-import Language.Haskell.Exference.Internal.ExferenceNodeBuilder
+import Language.Haskell.Exference.Core.Types
+import Language.Haskell.Exference.Core.TypeUtils
+import Language.Haskell.Exference.Core.Expression
+import Language.Haskell.Exference.Core.ExferenceStats
+import Language.Haskell.Exference.Core.FunctionBinding
+import Language.Haskell.Exference.Core.SearchTree
+import Language.Haskell.Exference.Core.Internal.Unify
+import Language.Haskell.Exference.Core.Internal.ConstraintSolver
+import Language.Haskell.Exference.Core.Internal.ExferenceNode
+import Language.Haskell.Exference.Core.Internal.ExferenceNodeBuilder
 
 import qualified Data.PQueue.Prio.Max as Q
 import qualified Data.Map as M
