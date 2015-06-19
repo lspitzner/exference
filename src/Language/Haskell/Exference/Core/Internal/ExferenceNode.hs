@@ -1,7 +1,7 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE PatternGuards #-}
 
-module Language.Haskell.Exference.Internal.ExferenceNode
+module Language.Haskell.Exference.Core.Internal.ExferenceNode
   ( SearchNode (..)
   , TGoal
   , Scopes (..)
@@ -28,11 +28,11 @@ where
 
 
 
-import Language.Haskell.Exference.Types
-import Language.Haskell.Exference.TypeUtils
-import Language.Haskell.Exference.Expression
-import Language.Haskell.Exference.ExferenceStats
-import Language.Haskell.Exference.FunctionBinding
+import Language.Haskell.Exference.Core.Types
+import Language.Haskell.Exference.Core.TypeUtils
+import Language.Haskell.Exference.Core.Expression
+import Language.Haskell.Exference.Core.ExferenceStats
+import Language.Haskell.Exference.Core.FunctionBinding
 
 import qualified Data.Map.Strict as M
 import Data.Sequence

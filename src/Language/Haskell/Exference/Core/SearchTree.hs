@@ -2,7 +2,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE PatternGuards #-}
 
-module Language.Haskell.Exference.SearchTree
+module Language.Haskell.Exference.Core.SearchTree
   ( SearchTree
   , SearchTreeValue
   , SearchTreeBuilder
@@ -16,8 +16,8 @@ where
 
 
 
-import Language.Haskell.Exference.Types
-import Language.Haskell.Exference.Expression
+import Language.Haskell.Exference.Core.Types
+import Language.Haskell.Exference.Core.Expression
 
 import Data.Tree
 import Data.Maybe ( fromMaybe )

@@ -1,4 +1,4 @@
-module Language.Haskell.Exference.FunctionBinding
+module Language.Haskell.Exference.Core.FunctionBinding
   ( FunctionBinding
   , DeconstructorBinding
   , EnvDictionary
@@ -7,8 +7,8 @@ where
 
 
 
-import Language.Haskell.Exference.Types
-import Language.Haskell.Exference.Expression
+import Language.Haskell.Exference.Core.Types
+import Language.Haskell.Exference.Core.Expression
 
 
 

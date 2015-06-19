@@ -1,6 +1,6 @@
 {-# LANGUAGE DeriveGeneric #-}
 
-module Language.Haskell.Exference.Expression
+module Language.Haskell.Exference.Core.Expression
   ( Expression (..)
   , fillExprHole
   , simplifyLets
@@ -10,7 +10,7 @@ where
 
 
 
-import Language.Haskell.Exference.Types
+import Language.Haskell.Exference.Core.Types
 import Data.List ( intercalate )
 import Data.Function ( on )
 

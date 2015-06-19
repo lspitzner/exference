@@ -1,6 +1,6 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
-module Language.Haskell.Exference.Internal.ExferenceNodeBuilder
+module Language.Haskell.Exference.Core.Internal.ExferenceNodeBuilder
   ( SearchNodeBuilder
   , modifyNodeBy
   , builderPrependGoal
@@ -28,10 +28,10 @@ where
 
 
 
-import Language.Haskell.Exference.Types
-import Language.Haskell.Exference.Expression
-import Language.Haskell.Exference.Internal.ExferenceNode
-import Language.Haskell.Exference.FunctionBinding
+import Language.Haskell.Exference.Core.Types
+import Language.Haskell.Exference.Core.Expression
+import Language.Haskell.Exference.Core.Internal.ExferenceNode
+import Language.Haskell.Exference.Core.FunctionBinding
 
 import Control.Monad.State.CPS ( State
                                 , StateT( StateT )

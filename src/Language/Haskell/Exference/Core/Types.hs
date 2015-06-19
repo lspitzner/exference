@@ -1,6 +1,6 @@
 {-# LANGUAGE DeriveGeneric #-}
 
-module Language.Haskell.Exference.Types
+module Language.Haskell.Exference.Core.Types
   ( TVarId
   , QualifiedName(..)
   , HsType (..)

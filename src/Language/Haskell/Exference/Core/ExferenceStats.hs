@@ -1,4 +1,4 @@
-module Language.Haskell.Exference.ExferenceStats
+module Language.Haskell.Exference.Core.ExferenceStats
   ( ExferenceStats (..)
   , BindingUsages
   , emptyBindingUsages
