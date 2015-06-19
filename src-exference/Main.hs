@@ -59,8 +59,8 @@ import Data.Tree ( Tree(..) )
 import MainConfig
 import MainTest
 
-import Paths_exference
-import qualified Flags_exference
+import Paths_exference_lib
+import qualified Flags_exference_lib
 
 import System.Environment ( getArgs )
 import System.Console.GetOpt
@@ -226,7 +226,7 @@ main = runO $ do
                             putStrLn $ replicate 40 ' ' ++ "(depth " ++ show d
                                         ++ ", " ++ show n ++ " steps)"
                   | PrintTree `elem` flags ->
-                      if not Flags_exference.buildSearchTree
+                      if not Flags_exference_lib.buildSearchTree
                         then putStrLn "exference-core was not compiled with flag \"buildSearchTree\""
                         else do
                           when (verbosity>0) $ putStrLn "[running findExpressionsWithStats ..]"

@@ -1,4 +1,4 @@
-Name:          exference
+Name:          exference-lib
 Version:       0.11.2.1
 Cabal-Version: >= 1.8
 Build-Type:    Simple
@@ -50,7 +50,7 @@ data-files:
 
 flag build-executables
   description: build the executables, not just the library
-  default: False
+  default: True
 
 Flag linkNodes
   description: nodes keep a reference to the precessor node, allowing returning
@@ -91,8 +91,8 @@ Library
                    Language.Haskell.Exference.ClassEnvFromHaskellSrc
                    Language.Haskell.Exference.EnvironmentParser
                    Language.Haskell.Exference.FunctionDecl
-                   Paths_exference
-                   Flags_exference
+                   Paths_exference_lib
+                   Flags_exference_lib
   other-modules:   Language.Haskell.Exference.Core.Internal.Unify,
                    Language.Haskell.Exference.Core.Internal.ConstraintSolver,
                    Language.Haskell.Exference.Core.Internal.ExferenceNode,
@@ -124,10 +124,11 @@ Library
     directory
 
 
-Executable test-main
+Executable exference
   if flag(build-executables) {
     buildable: True
     build-depends:
+      exference-lib,
       base >=3 && <5,
       containers,
       deepseq-generics,
@@ -154,7 +155,7 @@ Executable test-main
     buildable: False
   }
   main-is: Main.hs
-  hs-source-dirs: src
+  hs-source-dirs: src-exference
   ghc-options: -auto-all -caf-all -fno-spec-constr
                -rtsopts
                -O2

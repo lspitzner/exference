@@ -1,4 +1,4 @@
-module Flags_exference
+module Flags_exference_lib
   ( linkNodes
   , buildSearchTree
   )
