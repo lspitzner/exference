@@ -15,15 +15,12 @@ sometimes stopping with "i could not find any solutions".
 
 # Links
 
-- **Documentation: [exference.pdf](https://github.com/lspitzner/exference/raw/master/exference.pdf)** describes the implementation and properties;
-- Source repositories
-    - [exference-exference\-core](https://github.com/lspitzner/exference-exference-core): core functionality library
-    - [exference-exference](https://github.com/lspitzner/exference-exference): both library with advanced interface and executable
+- **Documentation: [exference.pdf](https://github.com/lspitzner/exference-paper/raw/master/exference.pdf)** describes the implementation and properties;
 - exferenceBot on freenode IRC #exference
     - play around without installing exference locally
     - reacts to `:exf` prefix, i.e. `:exf "Monad m => m (m a) -> m a"`
     - `/msg exferenceBot help`
-    - uses the environment (i.e. known functions+typeclasses) at https://github.com/lspitzner/exference-exference/tree/master/environment
+    - uses the environment (i.e. known functions+typeclasses) at https://github.com/lspitzner/exference/tree/master/environment
 
 # Usage notes
 
@@ -43,7 +40,7 @@ any / the right solution. Some common current limitations are:
 - The environment is composed by hand currently, and does only include parts
   of base plus a few other selected modules. Additions welcome!
 - Pattern-matching on multiple-constructor data-types is not supported;
-- See also the detailed feature description in the [exference.pdf](https://github.com/lspitzner/exference/raw/master/exference.pdf) report.
+- See also the detailed feature description in the [exference.pdf](https://github.com/lspitzner/exference-paper/raw/master/exference.pdf) report.
 
 ## Experimental features
 
@@ -72,24 +69,19 @@ Compiling the executable involves (after cloning the exference cabal package)
 something along the lines of
 
 ~~~~
+git clone git@github.com:lspitzner/exference.git
+cd exference
 cabal sandbox init
-cabal sandbox add-source exference-core
+# note that ghc-7.10 does not work yet;
+# i recommend ghc-7.8.4 for now.
 cabal install --deps
-cabal configure -fbuild-executable
+cabal configure
 cabal build
 # and, for example
 cabal run -- "(Show b) => (a->b) -> [a] -> [String]"
 ~~~~
 
 ## Contributing
-
-### source
-
-Note that i use a git subtree for integration of exference-core into exference.
-(Maybe a submodule would be better, or just using a single repository -
-i have no definite opinion yet). Changes made to the exference-core subtree
-should be separated from other changes. In contrast to submodules it is not
-necessary to `update` or `init`.
 
 ### environment
 
