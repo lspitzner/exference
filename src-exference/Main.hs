@@ -118,7 +118,7 @@ options =
 mainOpts :: [String] -> IO ([Flag], [String])
 mainOpts argv =
   case getOpt Permute options argv of
-    (o, n, []  )  | inputs <- [x|(Input x) <- o] ++ n
+    (o, n, []  )  | inputs <- [x | (Input x) <- o] ++ n
                   -> if null (intersect o [Version, Help, Tests, Examples, PrintEnv])
                      && null inputs
                     then return (Tests:o, inputs)
@@ -150,7 +150,7 @@ main = runO $ do
           (True, True ) -> do
             error "--serial and --parallel are in conflict! aborting" 
         when (Version `elem` flags || verbosity>0) printVersion
-        --((eSignatures, StaticClassEnv clss insts), messages) <- runWriter <$> parseExternal testBaseInput'
+        -- ((eSignatures, StaticClassEnv clss insts), messages) <- runWriter <$> parseExternal testBaseInput'
         let envDir = case [d | EnvDir d <- flags] of
                        []    -> defaultEnvPath
                        (d:_) -> d
