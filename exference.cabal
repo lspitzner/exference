@@ -1,4 +1,4 @@
-Name:          exference-lib
+Name:          exference
 Version:       1.0.0.0
 Cabal-Version: >= 1.8
 Build-Type:    Simple
@@ -64,8 +64,7 @@ Flag buildSearchTree
 
 Library
   --ghc-options: -fllvm
-  ghc-options: -threaded
-               -auto-all -caf-all -fno-spec-constr
+  ghc-options: -auto-all -caf-all -fno-spec-constr
                -rtsopts
                -O2
                -j
@@ -91,8 +90,8 @@ Library
                    Language.Haskell.Exference.ClassEnvFromHaskellSrc
                    Language.Haskell.Exference.EnvironmentParser
                    Language.Haskell.Exference.FunctionDecl
-                   Paths_exference_lib
-                   Flags_exference_lib
+                   Paths_exference
+                   Flags_exference
   other-modules:   Language.Haskell.Exference.Core.Internal.Unify,
                    Language.Haskell.Exference.Core.Internal.ConstraintSolver,
                    Language.Haskell.Exference.Core.Internal.ExferenceNode,
@@ -127,7 +126,7 @@ Executable exference
   if flag(build-executables) {
     buildable: True
     build-depends:
-      exference-lib,
+      exference,
       base >=3 && <5,
       containers,
       transformers,
