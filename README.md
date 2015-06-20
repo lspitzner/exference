@@ -68,15 +68,12 @@ any / the right solution. Some common current limitations are:
 ## Other known (technical) issues
 
 - **Memory consumption is large** (even more so when profiling);
-- The executable is badly named (`test-main`);
-  the tests should be put in a proper test-suite.
+- The tests should be put in a proper test-suite.
   (initially the executable was created for testing purposes
   , but now serves as command-line interface;
   this is why no parameters run tests.)
 - The dependency bounds of the cabal packages should be cleaned up/checked.
   I postponed this as there is no automated way to do this. stupid tooling..)
-- The package does not contain the environment via data-files, so the sdist
-  package might be incomplete.
 
 ## Contributing
 
