@@ -140,6 +140,9 @@ Executable exference
   } else {
     buildable: False
   }
+  other-modules: Main
+                 MainConfig
+                 MainTest
   main-is: Main.hs
   hs-source-dirs: src-exference
   ghc-options: -auto-all -caf-all -fno-spec-constr
