@@ -23,6 +23,7 @@ where
 
 import qualified Data.Set as S
 import qualified Data.Map.Strict as M
+import qualified Data.IntMap.Strict as IntMap
 import Data.Char ( ord, chr, isLower, isUpper )
 import Control.Applicative ( (<$>), (<*>), (*>), (<*) )
 import Data.Maybe ( maybeToList, fromMaybe )
@@ -72,21 +73,21 @@ forallify t = case t of
  where frees = freeVars t
 
 reduceIds :: HsType -> HsType
-reduceIds t = evalState (f t) (M.empty, 0)
+reduceIds t = evalState (f t) (IntMap.empty, 0)
   where
-    f :: HsType -> State (M.Map TVarId TVarId, TVarId) HsType
+    f :: HsType -> State (IntMap.IntMap TVarId, TVarId) HsType
     f (TypeVar i)           = TypeVar <$> g i
     f c@(TypeConstant _)    = return c
     f c@(TypeCons _)        = return c
     f (TypeArrow t1 t2)     = TypeArrow  <$> f t1 <*> f t2
     f (TypeApp   t1 t2)     = TypeApp    <$> f t1 <*> f t2
     f (TypeForall is cs t1) = TypeForall <$> mapM g is <*> mapM h cs <*> f t1
-    g :: TVarId -> State (M.Map TVarId TVarId, TVarId) TVarId
+    g :: TVarId -> State (IntMap.IntMap TVarId, TVarId) TVarId
     g i = do
       (mapping, next) <- get
-      case M.lookup i mapping of
+      case IntMap.lookup i mapping of
         Nothing -> do
-          put (M.insert i next mapping, next+1)
+          put (IntMap.insert i next mapping, next+1)
           return next
         Just x -> return x
     h (HsConstraint cls params) = HsConstraint cls <$> mapM f params
@@ -115,7 +116,7 @@ distinctify :: HsType -> HsType -> HsType
 distinctify a b = let x = largestId a in incVarIds (+(x+1)) b
 
 largestSubstsId :: Substs -> TVarId
-largestSubstsId = M.foldl' (\a b -> a `max` largestId b) 0
+largestSubstsId = IntMap.foldl' (\a b -> a `max` largestId b) 0
 
 constraintMapTypes :: (HsType -> HsType) -> HsConstraint -> HsConstraint
 constraintMapTypes f (HsConstraint a ts) = HsConstraint a (map f ts)
@@ -142,7 +143,7 @@ inflateInstances is = S.toList $ S.unions $ map (S.fromList . f) is
     f :: HsInstance -> [HsInstance]
     f i@(HsInstance iconstrs tclass iparams)
       | (HsTypeClass _ tparams tconstrs) <- tclass
-      , substs <- M.fromList $ zip tparams iparams
+      , substs <- IntMap.fromList $ zip tparams iparams
       = let 
           g :: HsConstraint -> HsInstance
           g (HsConstraint ctclass cparams) =

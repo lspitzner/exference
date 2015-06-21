@@ -29,6 +29,7 @@ import Language.Haskell.Exference.Core.Internal.ExferenceNodeBuilder
 
 import qualified Data.PQueue.Prio.Max as Q
 import qualified Data.Map as M
+import qualified Data.IntMap.Strict as IntMap
 import qualified Data.Set as S
 import qualified Data.Vector as V
 import qualified Data.Sequence as Seq
@@ -172,7 +173,7 @@ findExpressions (ExferenceInput rawType
         (Seq.singleton ((0, t), 0))
         []
         initialScopes
-        M.empty
+        IntMap.empty
         (V.fromList funcs) -- TODO: lift this further up?
         deconss
         (mkQueryClassEnv sClassEnv [])
@@ -287,7 +288,7 @@ rateScopes (Scopes _ sMap) = M.foldr' f 0.0 sMap
 -}
 
 rateUsage :: ExferenceHeuristicsConfig -> SearchNode -> Float
-rateUsage h s = M.foldr f 0.0 $ node_varUses s
+rateUsage h s = IntMap.foldr f 0.0 $ node_varUses s
   where
     f :: Int -> Float -> Float
     f 0 x = x - heuristics_tempUnusedVarPenalty h
@@ -295,7 +296,7 @@ rateUsage h s = M.foldr f 0.0 $ node_varUses s
     f n x = x - fromIntegral (n-1) * heuristics_tempMultiVarUsePenalty h
 
 getUnusedVarCount :: VarUsageMap -> Int
-getUnusedVarCount m = length $ filter (==0) $ M.elems m
+getUnusedVarCount m = length $ filter (==0) $ IntMap.elems m
 
 stateStep :: Bool -> ExferenceHeuristicsConfig -> SearchNode -> [SearchNode]
 stateStep multiPM h s = stateStep2 multiPM h
@@ -338,14 +339,14 @@ stateStep2 multiPM h s
       builderAddDepth (heuristics_functionGoalTransform h) -- TODO: different heuristic?
       builderSetReason "forall-type goal transformation"
       builderSetLastStepBinding Nothing
-      let substs = M.fromList $ zip vs $ TypeConstant <$> dataIds
+      let substs = IntMap.fromList $ zip vs $ TypeConstant <$> dataIds
       builderPrependGoal ((var, applySubsts substs t), scopeId)
       builderAddGivenConstraints $ constraintApplySubsts substs <$> cs
       return ()
     byProvided = do
       (provId, provT, provPs, forallTypes, constraints) <- scopeGetAllBindings (node_providedScopes s) scopeId
       let incF = incVarIds (+(1+node_maxTVarId s))
-      let ss = M.fromList $ zip forallTypes (incF . TypeVar <$> forallTypes)
+      let ss = IntMap.fromList $ zip forallTypes (incF . TypeVar <$> forallTypes)
       byGenericUnify
         (Right provId)
         (applySubsts ss provT)

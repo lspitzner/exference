@@ -8,6 +8,7 @@ where
 
 import Language.Haskell.Exference.Core.Types
 import qualified Data.Map.Strict as M
+import qualified Data.IntMap.Strict as IntMap
 import Data.Maybe
 
 import Debug.Hood.Observe
@@ -28,7 +29,7 @@ occursIn i (TypeApp t1 t2)     = occursIn i t1 || occursIn i t2
 occursIn i (TypeForall js _ t) = not (i `elem` js) && occursIn i t
 
 unify :: HsType -> HsType -> Maybe Substs
-unify ut1 ut2 = unify' $ UniState [(ut1, ut2)] M.empty
+unify ut1 ut2 = unify' $ UniState [(ut1, ut2)] IntMap.empty
   where
     unify' :: UniState -> Maybe Substs
     unify' (UniState [] x)      = Just x
@@ -36,7 +37,7 @@ unify ut1 ut2 = unify' $ UniState [(ut1, ut2)] M.empty
       \r -> unify' $ case r of
         Left subst -> let f = applySubst subst in UniState
           [(f a, f b) | (a,b) <- xr]
-          (uncurry M.insert subst $ M.map f ss)
+          (uncurry IntMap.insert subst $ IntMap.map f ss)
         Right eqs -> UniState (eqs++xr) ss
       )
     uniStep :: (HsType, HsType) -> Maybe (Either Subst [TypeEq])
@@ -58,7 +59,7 @@ unify ut1 ut2 = unify' $ UniState [(ut1, ut2)] M.empty
 -- treats the variables in the first parameter as constants, and returns
 -- the variable bindings for the second parameter that unify both types.
 unifyRight :: HsType -> HsType -> Maybe Substs
-unifyRight ut1 ut2 = unify' $ UniState [(ut1, ut2)] M.empty
+unifyRight ut1 ut2 = unify' $ UniState [(ut1, ut2)] IntMap.empty
   where
     unify' :: UniState -> Maybe Substs
     unify' (UniState [] x) = Just x
@@ -66,7 +67,7 @@ unifyRight ut1 ut2 = unify' $ UniState [(ut1, ut2)] M.empty
       \r -> unify' $ case r of
         Left subst -> let f = applySubst subst in UniState
           [(f a, f b) | (a,b) <- xr]
-          (uncurry M.insert subst $ M.map f ss)
+          (uncurry IntMap.insert subst $ IntMap.map f ss)
         Right eqs -> UniState (eqs++xr) ss
       )
     uniStep :: (HsType, HsType) -> Maybe (Either Subst [TypeEq])

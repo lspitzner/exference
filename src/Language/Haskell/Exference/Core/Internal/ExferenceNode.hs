@@ -35,6 +35,7 @@ import Language.Haskell.Exference.Core.ExferenceStats
 import Language.Haskell.Exference.Core.FunctionBinding
 
 import qualified Data.Map.Strict as M
+import qualified Data.IntMap.Strict as IntMap
 import qualified Data.Vector as V
 import Data.Sequence
 import Data.Foldable ( toList )
@@ -61,7 +62,7 @@ varBindingApplySubsts = second . applySubsts
 varPBindingApplySubsts :: Substs -> VarPBinding -> VarPBinding
 varPBindingApplySubsts ss (v,rt,pt,fvs,cs) =
   let
-    relevantSS = foldr M.delete ss fvs
+    relevantSS = foldr IntMap.delete ss fvs
     (newResult, params, newForalls, newCs) = splitArrowResultParams
                                            $ applySubsts relevantSS rt
   in
@@ -77,21 +78,21 @@ type ScopeId = Int
 data Scope = Scope [VarPBinding] [ScopeId]
             -- scope bindings,   superscopes
   deriving Generic
-data Scopes = Scopes ScopeId (M.Map ScopeId Scope)
+data Scopes = Scopes ScopeId (IntMap.IntMap Scope)
   deriving Generic
               -- next id     scopes
 
 initialScopes :: Scopes
-initialScopes = Scopes 1 (M.singleton 0 $ Scope [] [])
+initialScopes = Scopes 1 (IntMap.singleton 0 $ Scope [] [])
 
 scopeGetAllBindings :: Scopes -> Int -> [VarPBinding]
 scopeGetAllBindings ss@(Scopes _ scopeMap) sid =
-  case M.lookup sid scopeMap of
+  case IntMap.lookup sid scopeMap of
     Nothing -> []
     Just (Scope binds ids) -> binds ++ concatMap (scopeGetAllBindings ss) ids
 
 scopesApplySubsts :: Substs -> Scopes -> Scopes
-scopesApplySubsts substs (Scopes i scopeMap) = Scopes i $ M.map scopeF scopeMap
+scopesApplySubsts substs (Scopes i scopeMap) = Scopes i $ IntMap.map scopeF scopeMap
   where
     scopeF (Scope binds ids) = Scope (map bindF binds) ids
     bindF = varPBindingApplySubsts substs
@@ -105,17 +106,17 @@ scopesAddBinding sid binding scopes =
 scopesAddPBinding :: ScopeId -> VarPBinding -> Scopes -> Scopes
 scopesAddPBinding sid binding (Scopes nid sMap) = Scopes nid newMap
   where
-    newMap = M.adjust addBinding sid sMap
+    newMap = IntMap.adjust addBinding sid sMap
     addBinding :: Scope -> Scope
     addBinding (Scope vbinds ids) = Scope (binding:vbinds) ids
 
 addScope :: ScopeId -> Scopes -> (ScopeId, Scopes)
 addScope parent (Scopes nid sMap) = (nid, Scopes (nid+1) newMap)
   where
-    newMap   = M.insert nid newScope sMap
+    newMap   = IntMap.insert nid newScope sMap
     newScope = Scope [] [parent]
 
-type VarUsageMap = M.Map TVarId Int
+type VarUsageMap = IntMap.IntMap Int
 
 type TGoal = (VarBinding, ScopeId)
            -- goal,    id of innermost scope available
@@ -133,14 +134,14 @@ addGoalProvided :: ScopeId
 addGoalProvided sid goalBind givenBinds (Scopes nid sMap) =
     ((goalBind, nid),Scopes (nid+1) newMap)
   where
-    newMap = M.insert nid (Scope transformedBinds [sid]) sMap
+    newMap = IntMap.insert nid (Scope transformedBinds [sid]) sMap
     transformedBinds = map splitBinding givenBinds
 
 addNewScopeGoal :: ScopeId -> VarBinding -> Scopes -> (TGoal, ScopeId, Scopes)
 addNewScopeGoal sid goalBind (Scopes nid sMap) =
     ((goalBind, nid), nid, Scopes (nid+1) newMap)
   where
-    newMap = M.insert nid (Scope [] [sid]) sMap
+    newMap = IntMap.insert nid (Scope [] [sid]) sMap
 
 mkGoals :: ScopeId
         -> [VarBinding]
@@ -156,15 +157,15 @@ data SearchNode = SearchNode
   , node_deconss         :: [DeconstructorBinding]
   , node_queryClassEnv   :: QueryClassEnv
   , node_expression      :: Expression
-  , node_nextVarId       :: TVarId
-  , node_maxTVarId       :: TVarId
-  , node_nextNVarId      :: TVarId -- id used when resolving rankN-types
-  , node_depth           :: Float
+  , node_nextVarId       :: {-# UNPACK #-} !TVarId
+  , node_maxTVarId       :: {-# UNPACK #-} !TVarId
+  , node_nextNVarId      :: {-# UNPACK #-} !TVarId -- id used when resolving rankN-types
+  , node_depth           :: {-# UNPACK #-} !Float
 #if LINK_NODES
   , node_previousNode    :: Maybe SearchNode
 #endif
-  , node_lastStepReason  :: String
-  , node_lastStepBinding :: Maybe String
+  , node_lastStepReason  :: !!String
+  , node_lastStepBinding :: {-# UNPACK #-} !(Maybe String)
   }
   deriving Generic
 
@@ -198,7 +199,7 @@ instance Show SearchNode where
           )
       $$  (text $ "constrGoals= " ++ show scgoals)
       $$  (text   "scopes     = "
-           <+> brackets (vcat $ punctuate (text ", ") $ map tScope $ M.toList scopeMap)
+           <+> brackets (vcat $ punctuate (text ", ") $ map tScope $ IntMap.toList scopeMap)
           )
       $$  (text $ "classEnv   = " ++ show qClassEnv)
       $$  (text $ "expression = " ++ show sexpression)

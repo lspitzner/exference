@@ -42,6 +42,7 @@ import Control.Monad.State.CPS ( State
                                 )
 import Control.Applicative
 import qualified Data.Map as M
+import qualified Data.IntMap.Strict as IntMap
 import qualified Data.Vector as V
 import Data.Sequence
 
@@ -88,7 +89,7 @@ builderAddVars vids = SearchNodeBuilder
 
 builderAddVarUsage :: TVarId -> SearchNodeBuilder ()
 builderAddVarUsage v = SearchNodeBuilder $ modify $ \s ->
-  s { node_varUses = M.adjust (+1) v $ node_varUses s }
+  s { node_varUses = IntMap.adjust (+1) v $ node_varUses s }
   -- yes, this looks like perfect usecase for lenses;
   -- still not worth the dependency.
 
@@ -138,7 +139,7 @@ builderAllocVar = SearchNodeBuilder $ do
   s <- get
   let vid = node_nextVarId s
   put $ s { node_nextVarId = vid+1
-          , node_varUses = M.insert vid 0 $ node_varUses s }
+          , node_varUses = IntMap.insert vid 0 $ node_varUses s }
   return vid
 
 builderAllocNVar :: SearchNodeBuilder TVarId

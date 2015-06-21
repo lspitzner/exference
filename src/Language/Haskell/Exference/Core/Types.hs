@@ -37,6 +37,7 @@ import Data.Maybe ( maybeToList, fromMaybe )
 
 import qualified Data.Set as S
 import qualified Data.Map.Strict as M
+import qualified Data.IntMap.Strict as IntMap
 
 import Text.ParserCombinators.Parsec hiding (State)
 import Text.ParserCombinators.Parsec.Char
@@ -50,7 +51,7 @@ import Debug.Hood.Observe
 
 type TVarId = Int
 type Subst  = (TVarId, HsType)
-type Substs = M.Map TVarId HsType
+type Substs = IntMap.IntMap HsType
 
 data QualifiedName
   = QualifiedName [String] String
@@ -194,7 +195,7 @@ inflateHsConstraints = inflate (S.fromList . f)
   where
     f :: HsConstraint -> [HsConstraint]
     f (HsConstraint (HsTypeClass _ ids constrs) ps) =
-      map (constraintApplySubsts $ M.fromList $ zip ids ps) constrs
+      map (constraintApplySubsts $ IntMap.fromList $ zip ids ps) constrs
 
 -- uses f to find new elements. adds these new elements, and recursively
 -- tried to find even more elements. will not terminate if there are cycles
@@ -256,7 +257,7 @@ applySubst s@(i,_) f@(TypeForall js cs t) = if elem i js
   else TypeForall js (constraintApplySubst s <$> cs) (applySubst s t)
 
 applySubsts :: Substs -> HsType -> HsType
-applySubsts s v@(TypeVar i)      = fromMaybe v $ M.lookup i s
+applySubsts s v@(TypeVar i)      = fromMaybe v $ IntMap.lookup i s
 applySubsts _ c@(TypeConstant _) = c
 applySubsts _ c@(TypeCons _)     = c
 applySubsts s (TypeArrow t1 t2)  = TypeArrow (applySubsts s t1) (applySubsts s t2)
@@ -264,7 +265,7 @@ applySubsts s (TypeApp t1 t2)    = TypeApp (applySubsts s t1) (applySubsts s t2)
 applySubsts s (TypeForall js cs t) = TypeForall
                                        js
                                        (constraintApplySubsts s <$> cs)
-                                       (applySubsts (foldr M.delete s js) t)
+                                       (applySubsts (foldr IntMap.delete s js) t)
 
 freeVars :: HsType -> S.Set TVarId
 freeVars (TypeVar i)         = S.singleton i
