@@ -220,10 +220,10 @@ main = runO $ do
                       if null rs
                         then putStrLn "[no results]"
                         else forM_ rs
-                          $ \(e, ExferenceStats n d) -> do
+                          $ \(e, ExferenceStats n d m) -> do
                             putStrLn $ prettyPrint (convert qualification e)
                             putStrLn $ replicate 40 ' ' ++ "(depth " ++ show d
-                                        ++ ", " ++ show n ++ " steps)"
+                                        ++ ", " ++ show n ++ " steps, " ++ show m ++ " max pqueue size)"
                   | PrintTree `elem` flags ->
                       if not Flags_exference.buildSearchTree
                         then putStrLn "exference-core was not compiled with flag \"buildSearchTree\""
@@ -276,10 +276,10 @@ main = runO $ do
                             return $ findFirstBestExpressionsLookahead 256 input
                       case r :: [ExferenceOutputElement] of
                         [] -> putStrLn "[no results]"
-                        rs -> rs `forM_` \(e, ExferenceStats n d) -> do
+                        rs -> rs `forM_` \(e, ExferenceStats n d m) -> do
                             putStrLn $ prettyPrint (convert qualification e)
                             putStrLn $ replicate 40 ' ' ++ "(depth " ++ show d
-                                       ++ ", " ++ show n ++ " steps)"
+                                       ++ ", " ++ show n ++ " steps, " ++ show m ++ " max pqueue size)"
 
         -- printChecks     testHeuristicsConfig env
         -- printStatistics testHeuristicsConfig env

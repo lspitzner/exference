@@ -56,7 +56,7 @@ findSortNExpressions :: Int
 findSortNExpressions n input = sortBy (comparing g) $ take n $ r
   where
     r = findExpressions input
-    g (_,ExferenceStats _ f) = f
+    g (_,ExferenceStats _ f _) = f
 
 -- returns the first expressions with the best rating.
 -- best explained on examples:

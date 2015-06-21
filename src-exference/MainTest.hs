@@ -423,7 +423,7 @@ printAndStuff h env = mapM_ f (exampleInOut h env)
     f ((name, _, _, _), []) = putStrLn $ "no results for "++name++"!"
     f ((name, _, _, _), results) = mapM_ g results
       where
-        g (expr, ExferenceStats n d) = do
+        g (expr, ExferenceStats n d m) = do
           let str = show expr
           {-
           if doPf then do
@@ -434,7 +434,13 @@ printAndStuff h env = mapM_ f (exampleInOut h env)
            else
           -}
           putStrLn $ name ++ " = " ++ str
-                       ++ " (depth " ++ show d ++ ", " ++ show n ++ " steps)"
+                       ++ " (depth "
+                       ++ show d
+                       ++ ", "
+                       ++ show n
+                       ++ " steps, "
+                       ++ show m
+                       ++ " max pqueue size)"
 
 printStatistics :: ExferenceHeuristicsConfig -> EnvDictionary -> IO ()
 printStatistics h env = mapM_ f (exampleInOut h env)
@@ -469,11 +475,11 @@ printCheckExpectedResults h env = do
     putStrLn $ "rating any solutions: "
              ++ ( show
                 $ foldr g (0, 0.0)
-                $ fromMaybe (ExferenceStats 1000000 1000000) . fst <$> stats)
+                $ fromMaybe (ExferenceStats 1000000 1000000 0) . fst <$> stats)
     putStrLn $ "rating good solutions: "
              ++ ( show
                 $ foldr g (0, 0.0)
-                $ fromMaybe (ExferenceStats 1000000 1000000) . snd <$> stats)
+                $ fromMaybe (ExferenceStats 1000000 1000000 0) . snd <$> stats)
   where
     helper :: ( String -- ^ name
               , [String] -- ^ expected
@@ -504,7 +510,7 @@ printCheckExpectedResults h env = do
       putStrLn $ "  " ++ show (show first)
       return (Just fstats, Just stats)
     g :: ExferenceStats -> (Int,Float) -> (Int,Float)
-    g (ExferenceStats a b) (d,e) = (a+d,b+e)
+    g (ExferenceStats a b _) (d,e) = (a+d,b+e)
 
 printMaxUsage :: ExferenceHeuristicsConfig -> EnvDictionary -> IO ()
 printMaxUsage h (bindings, deconss, sEnv) = mapM_ f checkData

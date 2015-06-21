@@ -160,8 +160,8 @@ findExpressions (ExferenceInput rawType
                                 heuristics) =
   [ (bindingUsages, searchTree, solutions)
   | (bindingUsages, searchTree, stuples) <- resultTuples
-  , let solutions = [ (e, ExferenceStats steps compl)
-                    | (steps, compl, e) <- stuples
+  , let solutions = [ (e, ExferenceStats steps compl fsize)
+                    | (steps, compl, e, fsize) <- stuples
                     ]
   ]
   -- fmap (\(steps, compl, e) -> (e, ExferenceStats steps compl))
@@ -193,7 +193,7 @@ findExpressions (ExferenceInput rawType
                           , initialSearchTreeBuilder initNodeName (ExpHole 0)
                           , Q.singleton 0.0 rootSearchNode
                           )
-    helper :: FindExpressionsState -> [(BindingUsages, SearchTree, [(Int,Float,Expression)])]
+    helper :: FindExpressionsState -> [(BindingUsages, SearchTree, [(Int,Float,Expression,Int)])]
     helper (n, worst, bindingUsages, st, states)
       | Q.null states || n > maxSteps = []
       | ((_,s), restNodes) <- Q.deleteFindMax states =
@@ -202,7 +202,7 @@ findExpressions (ExferenceInput rawType
             newBindingUsages = case node_lastStepBinding s of
               Nothing -> bindingUsages
               Just b  -> incBindingUsage b bindingUsages
-            out = [ (n, d, e)
+            out = [ (n, d, e, qsize)
                   | solution <- potentialSolutions
                   , null (node_constraintGoals solution)
                   , let unusedVarCount = getUnusedVarCount
@@ -258,7 +258,8 @@ findExpressions (ExferenceInput rawType
               , newNodes )
         in ( newBindingUsages
            , buildSearchTree newSearchTreeBuilder initNodeName
-           , out) : rest
+           , out
+           ) : rest
 
 rateNode :: ExferenceHeuristicsConfig -> SearchNode -> Float
 rateNode h s = 0.0 - rateGoals h (node_goals s) - node_depth s + rateUsage h s
@@ -286,9 +287,8 @@ rateScopes (Scopes _ sMap) = M.foldr' f 0.0 sMap
 -}
 
 rateUsage :: ExferenceHeuristicsConfig -> SearchNode -> Float
-rateUsage h s = M.foldr f 0.0 vumap
+rateUsage h s = M.foldr f 0.0 $ node_varUses s
   where
-    vumap = node_varUses s
     f :: Int -> Float -> Float
     f 0 x = x - heuristics_tempUnusedVarPenalty h
     f 1 x = x

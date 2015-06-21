@@ -25,5 +25,6 @@ incBindingUsage s m = case M.lookup s m of
 data ExferenceStats = ExferenceStats
   { exference_steps :: Int
   , exference_complexityRating :: Float
+  , exference_finalSize :: Int
   }
   deriving (Show, Eq)
