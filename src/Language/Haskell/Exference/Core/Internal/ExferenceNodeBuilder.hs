@@ -42,6 +42,7 @@ import Control.Monad.State.CPS ( State
                                 )
 import Control.Applicative
 import qualified Data.Map as M
+import qualified Data.Vector as V
 import Data.Sequence
 
 modify :: (s -> s) -> StateT s m ()
@@ -114,7 +115,7 @@ builderAddPBinding sid pbind = SearchNodeBuilder $ modify $ \s ->
     $ node_providedScopes s
     }
 
-builderFunctions :: SearchNodeBuilder [FunctionBinding]
+builderFunctions :: SearchNodeBuilder (V.Vector FunctionBinding)
 builderFunctions = SearchNodeBuilder $ node_functions <$> get
 
 builderDeconss :: SearchNodeBuilder [DeconstructorBinding]

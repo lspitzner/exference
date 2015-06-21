@@ -31,6 +31,7 @@ import Language.Haskell.Exference.Core.Internal.ExferenceNodeBuilder
 import qualified Data.PQueue.Prio.Max as Q
 import qualified Data.Map as M
 import qualified Data.Set as S
+import qualified Data.Vector as V
 import qualified Data.Sequence as Seq
 
 import Control.DeepSeq.Generics
@@ -173,7 +174,7 @@ findExpressions (ExferenceInput rawType
         []
         initialScopes
         M.empty
-        funcs
+        (V.fromList funcs) -- TODO: lift this further up?
         deconss
         (mkQueryClassEnv sClassEnv [])
         (ExpHole 0)
@@ -457,7 +458,7 @@ findExpressionsPar (ExferenceInput rawType
           []
           initialScopes
           M.empty
-          funcs
+          (V.fromList funcs)
           deconss
           (mkQueryClassEnv sClassEnv [])
           (ExpHole 0)
@@ -583,7 +584,7 @@ stateStep2 multiPM h s
         (heuristics_stepProvidedBad h)
         ("inserting given value " ++ show provId ++ "::" ++ show provT)
     byFunctionSimple = do
-      (funcR, funcId, funcRating, funcConstrs, funcParams) <- node_functions s
+      (funcR, funcId, funcRating, funcConstrs, funcParams) <- V.toList $ node_functions s
       let incF = incVarIds (+(1+node_maxTVarId s))
       byGenericUnify
         (Left funcId)

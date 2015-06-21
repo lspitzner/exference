@@ -35,6 +35,7 @@ import Language.Haskell.Exference.Core.ExferenceStats
 import Language.Haskell.Exference.Core.FunctionBinding
 
 import qualified Data.Map.Strict as M
+import qualified Data.Vector as V
 import Data.Sequence
 import Data.Foldable ( toList )
 
@@ -151,7 +152,7 @@ data SearchNode = SearchNode
   , node_constraintGoals :: [HsConstraint]
   , node_providedScopes  :: Scopes
   , node_varUses         :: VarUsageMap
-  , node_functions       :: [FunctionBinding]
+  , node_functions       :: (V.Vector FunctionBinding)
   , node_deconss         :: [DeconstructorBinding]
   , node_queryClassEnv   :: QueryClassEnv
   , node_expression      :: Expression
