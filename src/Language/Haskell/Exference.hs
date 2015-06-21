@@ -3,9 +3,7 @@
 
 module Language.Haskell.Exference
   ( findExpressions
-  , findExpressionsPar
   , findOneExpression
-  , findOneExpressionPar
   , findSortNExpressions
   , findBestNExpressions
   , findFirstBestExpressions
@@ -42,30 +40,6 @@ import Debug.Trace
 findOneExpression :: ExferenceInput
                   -> Maybe ExferenceOutputElement
 findOneExpression input = listToMaybe $ findExpressions input
-
-findOneExpressionPar :: ExferenceInput
-                     -> IO (Maybe ExferenceOutputElement)
--- findOneExpressionPar input = findExpressionsPar input $ ListT.head
-findOneExpressionPar input = if input_maxSteps input < 1024
-  then return $ findOneExpression input
-  else case findOneExpression $ input { input_maxSteps = 512 } of
-    Nothing -> findExpressionsChunkedPar input f
-    x -> return x
-  where
-    f :: ListT.ListT IO [ExferenceOutputElement]
-      -> IO (Maybe ExferenceOutputElement)
-    f listt = do
-      x <- ListT.uncons listt
-      case x of
-        Nothing             -> return Nothing
-        Just ([], rest)     -> f rest
-        Just (elems1, rest) -> do
-          elemsR <- ListT.toList $ ListT.take 64 rest
-          return $ Just
-                 $ minimumBy (comparing (exference_complexityRating.snd))
-                 $ concat
-                 $ elems1:elemsR
-
 
 -- calculates at most n solutions, sorts by rating, returns the first m
 takeFindSortNExpressions :: Int

@@ -179,8 +179,7 @@ main = runO $ do
           printAndStuff testHeuristicsConfig env
         when (Tests `elem` flags) $ do
           when (verbosity>0) $ putStrLn "[Tests]"
-          printCheckExpectedResults par
-                                    testHeuristicsConfig { heuristics_solutionLength = 0.0 }
+          printCheckExpectedResults testHeuristicsConfig { heuristics_solutionLength = 0.0 }
                                     env
         case inputs of
           []    -> return () -- probably impossible..
@@ -253,8 +252,9 @@ main = runO $ do
                       r <- if
                         | FirstSol `elem` flags -> if par
                           then do
-                            when (verbosity>0) $ putStrLn "[running findOneExpressionPar ..]"
-                            maybeToList <$> findOneExpressionPar input
+                            putStrLn $ "WARNING: parallel version not implemented for given flags, falling back to serial!"
+                            when (verbosity>0) $ putStrLn "[running findOneExpression ..]"
+                            return $ maybeToList $ findOneExpression input
                           else do 
                             when (verbosity>0) $ putStrLn "[running findOneExpression ..]"
                             return $ maybeToList $ findOneExpression input

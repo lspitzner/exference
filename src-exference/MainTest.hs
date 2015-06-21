@@ -300,46 +300,6 @@ checkExpectedResults heuristics env = do
       xs@(x:_) -> Just (x, getExp 0 xs)
     )
 
-checkExpectedResultsPar :: ExferenceHeuristicsConfig
-                        -> EnvDictionary
-                        -> [IO ( String -- ^ name
-                               , [String] -- ^ expected
-                               , Maybe ( (Expression, ExferenceStats)
-                                         -- ^ first
-                                       , Maybe (Int, ExferenceStats)
-                                         -- ^ index and stats of expected
-                                       ) 
-                               )]
-checkExpectedResultsPar heuristics env = do
-  (name, allowUnused, patternM, typeStr, expected, hidden) <- checkData
-  let input = checkInput heuristics env typeStr allowUnused patternM hidden
-  let helper :: ListT.ListT IO ExferenceOutputElement
-             -> IO (Maybe ( (Expression, ExferenceStats)
-                          , Maybe (Int, ExferenceStats)))
-      helper l = do
-        x <- ListT.uncons l
-        case x of
-          Nothing -> return Nothing
-          Just ((e,s), rest)
-            | show e `elem` expected
-            -> return $ Just ((e,s), Just (0,s))
-            | otherwise
-            -> do
-              expr <- helper2 1 rest
-              return $ Just ((e,s), expr)
-      helper2 :: Int
-              -> ListT.ListT IO ExferenceOutputElement
-              -> IO (Maybe (Int, ExferenceStats))
-      helper2 n l = do
-        x <- ListT.uncons l
-        case x of
-          Nothing -> return Nothing
-          Just ((e,s), rest) | show e `elem` expected
-                               -> return $ Just (n,s)
-                             | otherwise
-                               -> helper2 (n+1) rest
-  return $ (,,) name expected <$> findExpressionsPar input helper
-
 {-
 checkBestResults :: ExferenceHeuristicsConfig
                  -> EnvDictionary
@@ -493,15 +453,12 @@ printStatistics h env = mapM_ f (exampleInOut h env)
          , length steps
          )
 
-printCheckExpectedResults :: Bool
-                          -> ExferenceHeuristicsConfig
+printCheckExpectedResults :: ExferenceHeuristicsConfig
                           -> EnvDictionary
                           -> IO ()
-printCheckExpectedResults par h env = do
-    let xs = if par
-          then            checkExpectedResultsPar h env
-          else return <$> checkExpectedResults    h env
-    stats <- (>>=helper) `mapM` xs
+printCheckExpectedResults h env = do
+    let xs = checkExpectedResults    h env
+    stats <- mapM helper xs
     putStrLn $ "total:     " ++ show (length stats)
     putStrLn $ "solutions: " ++ (show $ length $ catMaybes $ fst <$> stats)
     putStrLn $ "success:   " ++ ( show
