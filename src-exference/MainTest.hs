@@ -265,7 +265,7 @@ checkInput heuristics (bindings, deconss, sEnv) typeStr allowUnused patternM hid
     allowUnused
     patternM
     20000
-    (Just 131072)
+    (Just 8192)
     heuristics
 
 exampleDataTypes :: [QualifiedName]

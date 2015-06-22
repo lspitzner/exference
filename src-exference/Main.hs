@@ -208,7 +208,7 @@ main = runO $ do
                       (Unused `elem` flags)
                       (PatternMatchMC `elem` flags)
                       32768
-                      (Just 32768)
+                      (Just 8192)
                       (if Shortest `elem` flags then
                          testHeuristicsConfig
                        else
