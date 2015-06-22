@@ -60,9 +60,9 @@ data QualifiedName
   | Cons
   deriving (Eq, Ord, Generic)
 
-data HsType = TypeVar      TVarId
-            | TypeConstant TVarId  -- like TypeCons, for exference-internal
-                                   -- purposes.
+data HsType = TypeVar      {-# UNPACK #-} !TVarId
+            | TypeConstant {-# UNPACK #-} !TVarId
+              -- like TypeCons, for exference-internal purposes.
             | TypeCons     QualifiedName
             | TypeArrow    HsType HsType
             | TypeApp      HsType HsType

@@ -164,8 +164,8 @@ data SearchNode = SearchNode
 #if LINK_NODES
   , node_previousNode    :: Maybe SearchNode
 #endif
-  , node_lastStepReason  :: !!String
-  , node_lastStepBinding :: {-# UNPACK #-} !(Maybe String)
+  , node_lastStepReason  :: String
+  , node_lastStepBinding :: (Maybe String)
   }
   deriving Generic
 

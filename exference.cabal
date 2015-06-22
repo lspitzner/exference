@@ -64,13 +64,15 @@ Flag buildSearchTree
 
 Library
   --ghc-options: -fllvm
-  ghc-options: -auto-all -caf-all -fno-spec-constr
-               -rtsopts
+  ghc-options: -rtsopts
                -O2
                -j
                -Wall
                -fno-warn-unused-imports
                -fno-warn-orphans
+               -fno-spec-constr
+               -auto-all
+               -caf-all
   If flag(linkNodes) || flag(buildSearchTree)
     cpp-options: -DLINK_NODES
   If flag(buildSearchTree)
@@ -145,8 +147,7 @@ Executable exference
                  MainTest
   main-is: Main.hs
   hs-source-dirs: src-exference
-  ghc-options: -auto-all -caf-all -fno-spec-constr
-               -rtsopts
+  ghc-options: -rtsopts
                -O2
                -j
                -Wall
@@ -155,4 +156,7 @@ Executable exference
                -fno-warn-orphans
                -threaded
                -with-rtsopts "-H2G -M4G -N"
+               -fno-spec-constr
+               -auto-all
+               -caf-all 
   extensions: NoMonomorphismRestriction
