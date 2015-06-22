@@ -122,7 +122,8 @@ type TGoal = (VarBinding, ScopeId)
            -- goal,    id of innermost scope available
 
 goalApplySubst :: Substs -> TGoal -> TGoal
-goalApplySubst = first . varBindingApplySubsts
+goalApplySubst ss | IntMap.null ss = id
+                  | otherwise      = first (varBindingApplySubsts ss)
 
 -- takes a new goal data, and a new set of provided stuff, and
 -- returns some actual goal/newScope pair

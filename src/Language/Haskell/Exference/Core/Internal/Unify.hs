@@ -1,3 +1,5 @@
+{-# LANGUAGE BangPatterns #-}
+
 module Language.Haskell.Exference.Core.Internal.Unify
   ( unify
   , unifyRight
@@ -16,9 +18,11 @@ import Debug.Trace
 
 
 
-type TypeEq = (HsType, HsType)
+data TypeEq = TypeEq !HsType
+                     !HsType
 
-data UniState = UniState [TypeEq] Substs
+data UniState1 = UniState1 [TypeEq] Substs
+data UniState2 = UniState2 [TypeEq] Substs Substs
 
 occursIn :: TVarId -> HsType -> Bool
 occursIn i (TypeVar j)         = i==j
@@ -28,62 +32,77 @@ occursIn i (TypeArrow t1 t2)   = occursIn i t1 || occursIn i t2
 occursIn i (TypeApp t1 t2)     = occursIn i t1 || occursIn i t2
 occursIn i (TypeForall js _ t) = not (i `elem` js) && occursIn i t
 
-unify :: HsType -> HsType -> Maybe Substs
-unify ut1 ut2 = unify' $ UniState [(ut1, ut2)] IntMap.empty
+-- unification of types.
+-- returns two substitutions: one for variables in the first type,
+-- one for variables in the second. In the symmetric case,
+-- substituting the right-hand (second) type will be preferred.
+-- examples:
+-- unify v C -> ([v=>C], [])
+-- unify C v -> ([], [v=>C])
+-- unify v w -> ([], [w=>v])
+unify :: HsType -> HsType -> Maybe (Substs, Substs)
+unify ut1 ut2 = unify' $ UniState2 [TypeEq ut1 ut2] IntMap.empty IntMap.empty
   where
-    unify' :: UniState -> Maybe Substs
-    unify' (UniState [] x)      = Just x
-    unify' (UniState (x:xr) ss) = uniStep x >>= (
-      \r -> unify' $ case r of
-        Left subst -> let f = applySubst subst in UniState
-          [(f a, f b) | (a,b) <- xr]
-          (uncurry IntMap.insert subst $ IntMap.map f ss)
-        Right eqs -> UniState (eqs++xr) ss
+    unify' :: UniState2 -> Maybe (Substs, Substs)
+    unify' (UniState2 [] l r)      = Just (l, r)
+    unify' (UniState2 (x:xr) l r) = uniStep x >>= (
+      \ms -> unify' $ case ms of
+        Left (Left subst) -> let f = applySubst subst in UniState2
+          [ TypeEq (f a) b | TypeEq a b <- xr ]
+          (uncurry IntMap.insert subst $ IntMap.map f l)
+          r
+        Left (Right subst) -> let f = applySubst subst in UniState2
+          [ TypeEq a (f b) | TypeEq a b <- xr ]
+          l
+          (uncurry IntMap.insert subst $ IntMap.map f r)
+        Right eqs -> UniState2 (eqs++xr) l r
       )
-    uniStep :: (HsType, HsType) -> Maybe (Either Subst [TypeEq])
-    uniStep (TypeVar i1, TypeVar i2) | i1==i2 = Just (Right [])
-    uniStep (TypeVar i1, t2) = if occursIn i1 t2
+    uniStep :: TypeEq -> Maybe (Either (Either Subst Subst) [TypeEq])
+    uniStep (TypeEq (TypeVar i1) (TypeVar i2)) | i1==i2 = Just (Right [])
+    uniStep (TypeEq (t1) (TypeVar i2)) = if occursIn i2 t1
       then Nothing
-      else Just (Left (i1, t2))
-    uniStep (t1, v@(TypeVar _)) = uniStep (v, t1)
-    uniStep (TypeConstant i1, TypeConstant i2) | i1==i2 = Just (Right [])
-    uniStep (TypeCons s1, TypeCons s2) | s1==s2 = Just (Right [])
-    uniStep (TypeArrow t1 t2, TypeArrow t3 t4) = Just (Right [(t1,t3),(t2,t4)])
-    uniStep (TypeApp t1 t2, TypeApp t3 t4) = Just (Right [(t1, t3), (t2, t4)])
+      else Just $ Left $ Right (i2, t1)
+    uniStep (TypeEq (TypeVar i1) (t2)) = if occursIn i1 t2
+      then Nothing
+      else Just $ Left $ Left (i1, t2)
+    uniStep (TypeEq (TypeConstant i1) (TypeConstant i2)) | i1==i2 = Just (Right [])
+    uniStep (TypeEq (TypeCons s1) (TypeCons s2)) | s1==s2 = Just (Right [])
+    uniStep (TypeEq (TypeArrow t1 t2) (TypeArrow t3 t4)) = Just (Right [TypeEq t1 t3, TypeEq t2 t4])
+    uniStep (TypeEq (TypeApp t1 t2) (TypeApp t3 t4)) = Just (Right [TypeEq t1 t3, TypeEq t2 t4])
     -- TODO TypeForall unification
     -- THIS IS WRONG; WE IGNORE FORALLS FOR THE MOMENT
-    uniStep (TypeForall _ _ t1, t2) = uniStep (t1, t2)
-    uniStep (t1, TypeForall _ _ t2) = uniStep (t1, t2)
+    uniStep (TypeEq (TypeForall _ _ t1) (t2)) = uniStep $ TypeEq t1 t2
+    uniStep (TypeEq (t1) (TypeForall _ _ t2)) = uniStep $ TypeEq t1 t2
     uniStep _ = Nothing
 
 -- treats the variables in the first parameter as constants, and returns
 -- the variable bindings for the second parameter that unify both types.
 unifyRight :: HsType -> HsType -> Maybe Substs
-unifyRight ut1 ut2 = unify' $ UniState [(ut1, ut2)] IntMap.empty
+unifyRight ut1 ut2 = unify' $ UniState1 [TypeEq ut1 ut2] IntMap.empty
   where
-    unify' :: UniState -> Maybe Substs
-    unify' (UniState [] x) = Just x
-    unify' (UniState (x:xr) ss) = uniStep x >>= (
+    unify' :: UniState1 -> Maybe Substs
+    unify' (UniState1 [] x) = Just x
+    unify' (UniState1 (x:xr) ss) = uniStep x >>= (
       \r -> unify' $ case r of
-        Left subst -> let f = applySubst subst in UniState
-          [(f a, f b) | (a,b) <- xr]
+        Left subst -> let f = applySubst subst in UniState1
+          [ TypeEq (f a) (f b) | TypeEq a b <- xr]
           (uncurry IntMap.insert subst $ IntMap.map f ss)
-        Right eqs -> UniState (eqs++xr) ss
+        Right eqs -> UniState1 (eqs++xr) ss
       )
-    uniStep :: (HsType, HsType) -> Maybe (Either Subst [TypeEq])
-    uniStep (TypeVar i1, TypeVar i2) | i1==i2 = Just (Right [])
-    uniStep (t1, TypeVar i2) = if occursIn i2 t1
+    uniStep :: TypeEq -> Maybe (Either Subst [TypeEq])
+    uniStep (TypeEq (TypeVar i1) (TypeVar i2)) | i1==i2 = Just (Right [])
+    uniStep (TypeEq (t1) (TypeVar i2)) = if occursIn i2 t1
       then Nothing
       else Just (Left (i2, t1))
-    uniStep (TypeVar _, _) = Nothing
-    uniStep (TypeConstant i1, TypeConstant i2) | i1==i2 = Just (Right [])
-    uniStep (TypeCons s1, TypeCons s2) | s1==s2 = Just (Right [])
-    uniStep (TypeArrow t1 t2, TypeArrow t3 t4) = Just (Right [(t1,t3),(t2,t4)])
-    uniStep (TypeApp t1 t2, TypeApp t3 t4) = Just (Right [(t1, t3), (t2, t4)])
+    uniStep (TypeEq (TypeVar _) _) = Nothing
+    uniStep (TypeEq (TypeConstant i1) (TypeConstant i2)) | i1==i2 = Just (Right [])
+    uniStep (TypeEq (TypeCons s1) (TypeCons s2)) | s1==s2 = Just (Right [])
+    uniStep (TypeEq (TypeArrow t1 t2) (TypeArrow t3 t4)) = Just (Right [TypeEq t1 t3, TypeEq t2 t4])
+    uniStep (TypeEq (TypeApp t1 t2) (TypeApp t3 t4)) = Just (Right [TypeEq t1 t3, TypeEq t2 t4])
     -- TODO TypeForall unification
     -- THIS IS WRONG; WE IGNORE FORALLS FOR THE MOMENT
-    uniStep (TypeForall _ _ t1, t2) = uniStep (t1, t2)
-    uniStep (t1, TypeForall _ _ t2) = uniStep (t1, t2)
+    uniStep (TypeEq (TypeForall _ _ t1) t2)   = uniStep $ TypeEq t1 t2
+    uniStep (TypeEq (t1) (TypeForall _ _ t2)) = uniStep $ TypeEq t1 t2
     uniStep _ = Nothing
 
 --unifyDist :: HsType -> HsType -> Maybe Substs

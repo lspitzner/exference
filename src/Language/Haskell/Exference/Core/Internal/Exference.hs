@@ -381,7 +381,9 @@ stateStep2 multiPM h s
       , bTrace <- case applier of
           Left  x -> Just (show x)
           Right _ -> Nothing
-      = case unify goalType provided of
+      = case
+          -- (\r -> case r of Nothing -> r; Just jr -> traceShow (goalType, provided, jr) r) $
+          unify goalType provided of
         Nothing -> case dependencies of
           [] -> [] -- we can't (randomly) partially apply a non-function
           (d:ds) -> return $ modifyNodeBy s' $ do
@@ -408,11 +410,15 @@ stateStep2 multiPM h s
               newScopeId
               (let (r,ps,fs,cs) = splitArrowResultParams provided
                 in [(vResult, r, ds++ps, fs, cs)])
-        Just substs -> do
-          let contxt = node_queryClassEnv s
-              constrs1 = map (constraintApplySubsts substs)
+        Just (leftSS, rightSS) -> do
+          let allSS = IntMap.union leftSS rightSS
+          let substs = case applier of
+                Left _  -> leftSS
+                Right _ -> allSS
+              contxt = node_queryClassEnv s
+              !constrs1 = map (constraintApplySubsts substs)
                        $ node_constraintGoals s
-              constrs2 = map (constraintApplySubsts substs)
+              !constrs2 = map (constraintApplySubsts rightSS)
                        $ provConstrs
           newConstraints <- maybeToList
                           $ isPossible contxt (constrs1++constrs2)
@@ -420,21 +426,28 @@ stateStep2 multiPM h s
             let paramN = length dependencies
             vars <- replicateM paramN builderAllocHole
             let newGoals = mkGoals scopeId $ zip vars dependencies
-            forM_ newGoals builderAppendGoal
+            case applier of
+              Left _  ->
+                forM_ newGoals (builderAppendGoal . goalApplySubst rightSS)
+              Right _ -> 
+                forM_ newGoals builderAppendGoal
             builderApplySubst substs
             builderFillExprHole var $ case paramN of
               0 -> coreExp
               _ -> foldl ExpApply coreExp (map ExpHole vars)
             case applier of
-                Left _ -> return ()
-                Right i -> builderAddVarUsage i
+              Left _ -> return ()
+              Right i -> builderAddVarUsage i
             builderSetConstraints newConstraints
             builderFixMaxTVarId $ maximum
-                                $ largestSubstsId substs
+                                $ largestSubstsId leftSS
                                   : map largestId dependencies
             builderAddDepth depthModMatch
-            let substsTxt   = show substs ++ " unifies " ++ show goalType
-                                          ++ " and " ++ show provided
+            let substsTxt   = show (IntMap.union leftSS rightSS)
+                              ++ " unifies "
+                              ++ show goalType
+                              ++ " and "
+                              ++ show provided
             let provableTxt = "constraints (" ++ show (constrs1++constrs2)
                                               ++ ") are provable"
             builderSetReason $ reasonPart ++ ", because " ++ substsTxt

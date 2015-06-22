@@ -207,7 +207,7 @@ main = runO $ do
                       sEnv
                       (Unused `elem` flags)
                       (PatternMatchMC `elem` flags)
-                      32768
+                      65536
                       (Just 8192)
                       (if Shortest `elem` flags then
                          testHeuristicsConfig

@@ -211,9 +211,12 @@ constraintApplySubst :: Subst -> HsConstraint -> HsConstraint
 constraintApplySubst s (HsConstraint c ps) =
   HsConstraint c $ map (applySubst s) ps
 
+{-# INLINE constraintApplySubsts #-}
 constraintApplySubsts :: Substs -> HsConstraint -> HsConstraint
-constraintApplySubsts ss (HsConstraint c ps) =
-  HsConstraint c $ map (applySubsts ss) ps
+constraintApplySubsts ss c
+  | IntMap.null ss = c
+  | HsConstraint c ps <- c = HsConstraint c
+                           $ map (applySubsts ss) ps
 
 showVar :: TVarId -> String
 showVar i = if i<26 then [chr (ord 'a' + i)] else "t"++show (i-26)

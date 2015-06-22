@@ -1,4 +1,5 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE BangPatterns #-}
 
 module Language.Haskell.Exference.Core.Internal.ExferenceNodeBuilder
   ( SearchNodeBuilder
@@ -200,10 +201,12 @@ builderAddScope parentId = SearchNodeBuilder $ do
 -- not contraintGoals, because that's handled by caller
 {-# INLINE builderApplySubst #-}
 builderApplySubst :: Substs -> SearchNodeBuilder ()
-builderApplySubst substs = SearchNodeBuilder $ modify $ \s ->
-  s { node_goals = fmap (goalApplySubst substs) $ node_goals s
-    , node_providedScopes = scopesApplySubsts substs $ node_providedScopes s
-    }
+builderApplySubst substs | IntMap.null substs = return ()
+                         | otherwise = SearchNodeBuilder
+                                     $ modify $ \s ->
+  let !newGoals = fmap (goalApplySubst substs) $ node_goals s
+      !newScopes = scopesApplySubsts substs $ node_providedScopes s
+  in s { node_goals = newGoals, node_providedScopes = newScopes }
 
 {-# INLINE builderSetConstraints #-}
 builderSetConstraints :: [HsConstraint] -> SearchNodeBuilder ()
