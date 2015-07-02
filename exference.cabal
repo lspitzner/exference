@@ -1,5 +1,5 @@
 Name:          exference
-Version:       1.1.0.0
+Version:       1.2.0.0
 Cabal-Version: >= 1.8
 Build-Type:    Simple
 
@@ -99,7 +99,10 @@ Library
                    Language.Haskell.Exference.Core.Internal.ExferenceNode,
                    Language.Haskell.Exference.Core.Internal.ExferenceNodeBuilder,
                    Language.Haskell.Exference.Core.Internal.Exference
-  extensions: NoMonomorphismRestriction CPP
+  extensions:      NoMonomorphismRestriction
+                   CPP
+                   FlexibleContexts
+                   ScopedTypeVariables
   hs-source-dirs: src
   Build-Depends:
     base >=3 && <5,
@@ -121,7 +124,8 @@ Library
     hood,
     process,
     parsec,
-    directory
+    directory,
+    multistate >= 0.6.2
 
 
 Executable exference
@@ -138,7 +142,9 @@ Executable exference
       data-pprint >= 0.2.4,
       deepseq,
       hood,
-      process
+      process,
+      either,
+      multistate >= 0.6.2
   } else {
     buildable: False
   }
@@ -160,3 +166,5 @@ Executable exference
                -auto-all
                -caf-all 
   extensions: NoMonomorphismRestriction
+              FlexibleContexts
+              ScopedTypeVariables

@@ -1,5 +1,8 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE PatternGuards #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE DataKinds #-}
 
 module Language.Haskell.Exference.Core.TypeUtils
   ( reduceIds
@@ -16,6 +19,12 @@ module Language.Haskell.Exference.Core.TypeUtils
   , unknownTypeClass
   , inflateInstances
   , splitArrowResultParams
+  , emptyQNameIndex
+  , getOrCreateQNameId
+  , lookupQNameId
+  , findQName
+  , withQNameIndex
+  , showQNameIndex
   )
 where
 
@@ -39,7 +48,7 @@ import Language.Haskell.Exference.Core.Types
 -- import Language.Haskell.Exference.Core.Internal.Unify
 import qualified Data.Set as S
 import qualified Data.Map.Strict as M
-import Data.List ( intercalate )
+import Data.List ( intercalate, find )
 import Debug.Trace
 import Data.Maybe ( fromMaybe )
 import Control.Applicative ( (<$>) )
@@ -49,9 +58,52 @@ import Control.Monad.Identity ( Identity(runIdentity) )
 import Control.DeepSeq.Generics
 import GHC.Generics
 
+import Control.Monad.Trans.MultiState ( MonadMultiState(..) )
+import Control.Monad.Trans.MultiRWS
+
 import Language.Haskell.Exference.Core.Types
 
+import Text.Printf ( printf )
 
+
+
+emptyQNameIndex :: QNameIndex
+emptyQNameIndex = QNameIndex 0 M.empty M.empty
+
+getOrCreateQNameId :: MonadMultiState QNameIndex m
+                   => QualifiedName -> m QNameId
+getOrCreateQNameId name = do
+  QNameIndex next indA indB <- mGet
+  case M.lookup name indA of
+    Nothing -> do
+      mSet $ QNameIndex (next+1)
+                        (M.insert name next indA)
+                        (M.insert next name indB)
+      return next
+    Just i ->
+      return i
+
+lookupQNameId :: MonadMultiState QNameIndex m
+              => QNameId
+              -> m (Maybe QualifiedName)
+lookupQNameId qid = do
+  QNameIndex _ _ indB <- mGet
+  return $ M.lookup qid indB
+
+findQName :: MonadMultiState QNameIndex m
+          => (QualifiedName -> Bool)
+          -> m (Maybe QNameId)
+findQName p = do
+  QNameIndex _ indA _ <- mGet
+  return $ snd <$> find (\(qname, _) -> p qname) (M.toList indA)
+
+withQNameIndex :: Monad m => MultiRWST r w (QNameIndex ': ss) m a -> MultiRWST r w ss m a
+withQNameIndex = withMultiStateA emptyQNameIndex
+
+showQNameIndex :: MonadMultiState QNameIndex m => m [String]
+showQNameIndex = do
+  QNameIndex _ _ indB <- mGet
+  return $ [ printf "% 5d %s" k (show v) | (k,v) <- M.toAscList indB ]
 
 badReadVar :: String -> TVarId
 badReadVar [c] = ord c - ord 'a'
@@ -125,8 +177,8 @@ constraintMapTypes f (HsConstraint a ts) = HsConstraint a (map f ts)
 mkStaticClassEnv :: [HsTypeClass] -> [HsInstance] -> StaticClassEnv
 mkStaticClassEnv tclasses insts = StaticClassEnv tclasses (helper insts)
   where
-    helper :: [HsInstance] -> M.Map QualifiedName [HsInstance]
-    helper is = M.fromListWith (++)
+    helper :: [HsInstance] -> IntMap.IntMap [HsInstance]
+    helper is = IntMap.fromListWith (++)
               $ [ (tclass_name $ instance_tclass i, [i]) | i <- is ]
 
 constraintContainsVariables :: HsConstraint -> Bool
@@ -134,8 +186,10 @@ constraintContainsVariables = any ((-1/=).largestId) . constraint_params
 
 -- TODO: it probably is a bad idea to have any unknown type class mapped to
 --       this, as they might unify at some point.. even if they distinct.
-unknownTypeClass :: HsTypeClass
-unknownTypeClass = HsTypeClass (QualifiedName [] "EXFUnknownTC") [] []
+unknownTypeClass :: (MonadMultiState QNameIndex m) => m HsTypeClass
+unknownTypeClass = do
+  qid <- getOrCreateQNameId $ QualifiedName [] "EXFUnknownTC"
+  return $ HsTypeClass qid [] []
 
 inflateInstances :: [HsInstance] -> [HsInstance]
 inflateInstances is = S.toList $ S.unions $ map (S.fromList . f) is

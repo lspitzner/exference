@@ -57,7 +57,7 @@ get = StateT $ \s c -> c s s
 
 {-# INLINE put #-}
 put :: s -> StateT s m ()
-put x = StateT $ \_ c -> c () x
+put = \x -> StateT $ \_ c -> c () x
 
 
 newtype SearchNodeBuilder a = SearchNodeBuilder (State SearchNode a)

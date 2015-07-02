@@ -16,6 +16,7 @@ import Control.Monad ( join )
 import Data.Maybe ( fromMaybe )
 
 import qualified Data.Map.Strict as M
+import qualified Data.IntMap.Strict as IntMap
 
 import Debug.Trace
 
@@ -44,9 +45,9 @@ isPossible qClassEnv (c:constraints) =
     possibleFromInstance :: Maybe [HsConstraint]
     possibleFromInstance = msum $ f <$> is
       where
-        is = fromMaybe [] $ M.lookup (tclass_name cclass)
-                                     ( sClassEnv_instances
-                                     $ qClassEnv_env qClassEnv )
+        is = fromMaybe [] $ IntMap.lookup (tclass_name cclass)
+                                          ( sClassEnv_instances
+                                          $ qClassEnv_env qClassEnv )
         f (HsInstance instConstrs _iclass instParams) = do
           -- behold the undocumented special -14. TODO document, or add
           -- special constructor..

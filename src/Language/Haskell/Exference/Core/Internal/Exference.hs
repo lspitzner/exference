@@ -50,7 +50,7 @@ import Data.Monoid ( mempty, First(First), getFirst, mconcat )
 import Data.Foldable ( foldMap, sum )
 import Control.Monad.Morph ( lift )
 
-import Control.Concurrent.Chan
+-- import Control.Concurrent.Chan
 import Control.Concurrent ( forkIO )
 import qualified GHC.Conc.Sync
 
@@ -116,6 +116,9 @@ data ExferenceInput = ExferenceInput
                                                 -- if true. serverly increases
                                                 -- search space (decreases
                                                 -- performance).
+  , input_qNameIndex  :: QNameIndex             -- ^ the qNameIndex for
+                                                -- looking up the ids in
+                                                -- expressions.
   , input_maxSteps    :: Int                    -- ^ the maximum number of
                                                 -- steps to perform (otherwise
                                                 -- would not terminate if
@@ -151,6 +154,7 @@ findExpressions (ExferenceInput rawType
                                 sClassEnv
                                 allowUnused
                                 multiPM
+                                qNameIndex
                                 maxSteps -- since we output a [[x]],
                                          -- this would not really be
                                          -- necessary anymore. but
@@ -198,7 +202,7 @@ findExpressions (ExferenceInput rawType
     helper (n, worst, bindingUsages, st, states)
       | Q.null states || n > maxSteps = []
       | ((_,s), restNodes) <- Q.deleteFindMax states =
-        let rNodes = stateStep multiPM heuristics s
+        let rNodes = stateStep multiPM qNameIndex heuristics s
             (potentialSolutions, futures) = partition (Seq.null . node_goals) rNodes                                                      
             newBindingUsages = case node_lastStepBinding s of
               Nothing -> bindingUsages
@@ -215,9 +219,9 @@ findExpressions (ExferenceInput rawType
                           + ( heuristics_unusedVar heuristics
                             * fromIntegral unusedVarCount
                             )
-                          + ( heuristics_solutionLength heuristics
-                            * fromIntegral (length $ show e)
-                            )
+                          -- + ( heuristics_solutionLength heuristics
+                          --   * fromIntegral (length $ show e)
+                          --   )
                   ]
             f :: Float -> Float
             f x | x>900 = 0.0
@@ -298,16 +302,24 @@ rateUsage h s = IntMap.foldr f 0.0 $ node_varUses s
 getUnusedVarCount :: VarUsageMap -> Int
 getUnusedVarCount m = length $ filter (==0) $ IntMap.elems m
 
-stateStep :: Bool -> ExferenceHeuristicsConfig -> SearchNode -> [SearchNode]
-stateStep multiPM h s = stateStep2 multiPM h
+stateStep :: Bool
+          -> QNameIndex
+          -> ExferenceHeuristicsConfig
+          -> SearchNode
+          -> [SearchNode]
+stateStep multiPM qNameIndex h s = stateStep2 multiPM qNameIndex h
               -- $ (\_ -> trace (show s ++ " " ++ show (rateNode h s)) s)
               $ s
               -- trace (show (node_depth s) ++ " " ++ show (rateGoals $ node_goals s)
               --                      ++ " " ++ show (rateScopes $ node_providedScopes s)
               --                      ++ " " ++ show (node_expression s)) $
 
-stateStep2 :: Bool -> ExferenceHeuristicsConfig -> SearchNode -> [SearchNode]
-stateStep2 multiPM h s
+stateStep2 :: Bool
+           -> QNameIndex
+           -> ExferenceHeuristicsConfig
+           -> SearchNode
+           -> [SearchNode]
+stateStep2 multiPM qNameIndex h s
   | node_depth s > 200.0 = []
   | (TypeArrow _ _) <- goalType = [ modifyNodeBy s' $ arrowStep goalType [] ]
   | (TypeForall is cs t) <- goalType = [ modifyNodeBy s' $ forallStep is cs t ]
@@ -367,7 +379,7 @@ stateStep2 multiPM h s
         (heuristics_stepEnvGood h + funcRating)
         (heuristics_stepEnvBad h + funcRating)
         ("applying function " ++ show funcId)
-    byGenericUnify :: Either QualifiedName TVarId
+    byGenericUnify :: Either QNameId TVarId
                    -> HsType
                    -> [HsConstraint]
                    -> [HsType]
@@ -402,7 +414,7 @@ stateStep2 multiPM h s
             builderFixMaxTVarId $ maximum $ map largestId dependencies
             builderAddDepth depthModNoMatch
             builderSetReason $ "randomly trying to apply function "
-                              ++ show coreExp
+                              ++ showExpressionPure qNameIndex coreExp
             mapM_ builderAppendGoal =<< addScopePatternMatch
               multiPM
               goalType

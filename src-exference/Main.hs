@@ -22,6 +22,7 @@ import Language.Haskell.Exference.EnvironmentParser
 
 import Language.Haskell.Exference.SimpleDict
 import Language.Haskell.Exference.Core.Types
+import Language.Haskell.Exference.Core.TypeUtils
 import Language.Haskell.Exference.Core.Expression
 import Language.Haskell.Exference.Core.ExferenceStats
 import Language.Haskell.Exference.Core.SearchTree
@@ -40,6 +41,7 @@ import Data.Maybe ( listToMaybe, fromMaybe, maybeToList )
 import Data.Either ( lefts, rights )
 import Control.Monad.Writer.Strict
 import qualified Data.Map as M
+import qualified Data.IntMap as IntMap
 
 import Language.Haskell.Exts.Syntax ( Module(..), Decl(..), ModuleName(..) )
 import Language.Haskell.Exts.Parser ( parseModuleWithMode
@@ -51,6 +53,9 @@ import Language.Haskell.Exts.Extension ( Language (..)
                                        , Extension (..)
                                        , KnownExtension (..) )
 import Language.Haskell.Exts.Pretty
+
+import Control.Monad.Trans.MultiRWS
+import Control.Monad.Trans.Either
 
 import Data.PPrint
 import Data.Tree ( Tree(..) )
@@ -142,64 +147,64 @@ main = runO $ do
       putStrLn $ "exference version " ++ showVersion version
   if | [Version] == flags   -> printVersion
      | Help    `elem` flags -> putStrLn fullUsageInfo >> putStrLn "TODO"
-     | otherwise -> do
+     | otherwise -> runMultiRWSTNil_ $ withQNameIndex $ do
         par <- case (Parallel `elem` flags, Serial `elem` flags) of
           (False,False) -> return False
           (True, False) -> return True
           (False,True ) -> return False
           (True, True ) -> do
             error "--serial and --parallel are in conflict! aborting" 
-        when (Version `elem` flags || verbosity>0) printVersion
+        when (Version `elem` flags || verbosity>0) $ lift printVersion
         -- ((eSignatures, StaticClassEnv clss insts), messages) <- runWriter <$> parseExternal testBaseInput'
         let envDir = case [d | EnvDir d <- flags] of
                        []    -> defaultEnvPath
                        (d:_) -> d
-        when (verbosity>0) $ do
+        when (verbosity>0) $ lift $ do
           putStrLn $ "[Environment]"
           putStrLn $ "reading environment from " ++ envDir
-        let
-          envRaw = environmentFromPath envDir
         ( (eSignatures
           , eDeconss
           , sEnv@(StaticClassEnv clss insts)
           , validNames)
-         ,messages ) <- runWriter <$> envRaw
+         ,messages :: [String] ) <- withMultiWriterAW $ environmentFromPath envDir
         let
           env = (eSignatures, eDeconss, sEnv)
-        when (verbosity>0 && not (null messages)) $ do
+        when (verbosity>0 && not (null messages)) $ lift $ do
           forM_ messages $ \m -> putStrLn $ "environment warning: " ++ m
-        when (PrintEnv `elem` flags) $ do
+        when (PrintEnv `elem` flags) $ lift $ do
           when (verbosity>0) $ putStrLn "[Environment]"
           mapM_ print $ clss
-          mapM_ print $ [(i,x)| (i,xs) <- M.toList insts, x <- xs]
+          mapM_ print $ [(i,x)| (i,xs) <- IntMap.toList insts, x <- xs]
           mapM_ print $ eSignatures
           mapM_ print $ eDeconss
+        when (verbosity>0) $ showQNameIndex >>= mapM_ (lift . putStrLn)
         when (Examples `elem` flags) $ do
-          when (verbosity>0) $ putStrLn "[Examples]"
+          when (verbosity>0) $ lift $ putStrLn "[Examples]"
           printAndStuff testHeuristicsConfig env
         when (Tests `elem` flags) $ do
-          when (verbosity>0) $ putStrLn "[Tests]"
+          when (verbosity>0) $ lift $ putStrLn "[Tests]"
           printCheckExpectedResults testHeuristicsConfig { heuristics_solutionLength = 0.0 }
                                     env
         case inputs of
           []    -> return () -- probably impossible..
           (x:_) -> do
-            when (verbosity>0) $ putStrLn "[Custom Input]"
-            let mParsedType = parseType (sClassEnv_tclasses sEnv)
-                                        Nothing
-                                        validNames
-                                        (haskellSrcExtsParseMode "inputtype")
-                                        x
+            when (verbosity>0) $ lift $ putStrLn "[Custom Input]"
+            mParsedType <- runEitherT $ parseType (sClassEnv_tclasses sEnv)
+                                                  Nothing
+                                                  validNames
+                                                  (haskellSrcExtsParseMode "inputtype")
+                                                  x
             case mParsedType of
-              Left err -> do
+              Left err -> lift $ do
                 putStrLn $ "could not parse input type: " ++ err
               Right parsedType -> do
-                when (verbosity>0) $ putStrLn $ "input type parsed as: " ++ show parsedType
-                let unresolvedIdents = findInvalidNames validNames parsedType
-                when (not $ null unresolvedIdents) $ do
+                when (verbosity>0) $ lift $ putStrLn $ "input type parsed as: " ++ show parsedType
+                unresolvedIdents <- findInvalidNames validNames parsedType
+                when (not $ null unresolvedIdents) $ lift $ do
                   putStrLn $ "warning: unresolved idents in input: "
                            ++ intercalate ", " (nub $ show <$> unresolvedIdents)
                   putStrLn $ "(this may be harmless, but no instances will be connected to these.)"
+                qNameIndex <- mGet
                 let input = ExferenceInput
                       parsedType
                       eSignatures
@@ -207,6 +212,7 @@ main = runO $ do
                       sEnv
                       (Unused `elem` flags)
                       (PatternMatchMC `elem` flags)
+                      qNameIndex
                       65536
                       (Just 8192)
                       (if Shortest `elem` flags then
@@ -215,35 +221,37 @@ main = runO $ do
                          testHeuristicsConfig { heuristics_solutionLength = 0.0 })
                 if
                   | PrintAll `elem` flags -> do
-                      when (verbosity>0) $ putStrLn "[running findExpressions ..]"
+                      when (verbosity>0) $ lift $ putStrLn "[running findExpressions ..]"
                       let rs = findExpressions input
                       if null rs
-                        then putStrLn "[no results]"
+                        then lift $ putStrLn "[no results]"
                         else forM_ rs
                           $ \(e, ExferenceStats n d m) -> do
-                            putStrLn $ prettyPrint (convert qualification e)
-                            putStrLn $ replicate 40 ' ' ++ "(depth " ++ show d
+                            hsE <- convert qualification e
+                            lift $ putStrLn $ prettyPrint hsE
+                            lift $ putStrLn $ replicate 40 ' ' ++ "(depth " ++ show d
                                         ++ ", " ++ show n ++ " steps, " ++ show m ++ " max pqueue size)"
                   | PrintTree `elem` flags ->
                       if not Flags_exference.buildSearchTree
-                        then putStrLn "exference-core was not compiled with flag \"buildSearchTree\""
+                        then lift $ putStrLn "exference-core was not compiled with flag \"buildSearchTree\""
                         else do
-                          when (verbosity>0) $ putStrLn "[running findExpressionsWithStats ..]"
-                          let (_, tree, _) = last $ findExpressionsWithStats input
+                          when (verbosity>0) $ lift $ putStrLn "[running findExpressionsWithStats ..]"
+                          let (_, tree, _) = last $ findExpressionsWithStats
+                                                  $ input {input_maxSteps = 8192}
                           let showf (total,processed,expression,_)
                                 = ( printf "%d (+%d):" processed (total-processed)
-                                  , show expression
+                                  , showExpressionPure qNameIndex expression
                                   )
                           let
                             helper :: String -> Tree (String, String) -> [String]
                             helper indent (Node (n,m) ts) =
                               (printf "%-50s %s" (indent ++ n) m)
                               : concatMap (helper ("  "++indent)) ts
-                          putStrLn `mapM_` helper "" (showf <$> filterSearchTreeProcessedN 2 tree)
+                          (lift . putStrLn) `mapM_` helper "" (showf <$> filterSearchTreeProcessedN 64 tree)
                           -- putStrLn . showf `mapM_` draw
                           --   -- $ filterSearchTreeProcessedN 2
                           --   tree
-                  | EnvUsage `elem` flags -> do
+                  | EnvUsage `elem` flags -> lift $ do
                       when (verbosity>0) $ putStrLn "[running findExpressionsWithStats ..]"
                       let (stats, _, _) = last $ findExpressionsWithStats input
                           highest = take 8 $ sortBy (flip $ comparing snd) $ M.toList stats
@@ -251,34 +259,35 @@ main = runO $ do
                   | otherwise -> do
                       r <- if
                         | FirstSol `elem` flags -> if par
-                          then do
+                          then lift $ do
                             putStrLn $ "WARNING: parallel version not implemented for given flags, falling back to serial!"
                             when (verbosity>0) $ putStrLn "[running findOneExpression ..]"
                             return $ maybeToList $ findOneExpression input
-                          else do 
+                          else lift $ do 
                             when (verbosity>0) $ putStrLn "[running findOneExpression ..]"
                             return $ maybeToList $ findOneExpression input
                         | Best `elem` flags -> if par
-                          then do
+                          then lift $ do
                             putStrLn $ "WARNING: parallel version not implemented for given flags, falling back to serial!"
                             when (verbosity>0) $ putStrLn "[running findBestNExpressions ..]"
                             return $ findBestNExpressions 999 input
-                          else do
+                          else lift $ do
                             when (verbosity>0) $ putStrLn "[running findBestNExpressions ..]"
                             return $ findBestNExpressions 999 input
                         | otherwise -> if par
-                          then do
+                          then lift $ do
                             putStrLn $ "WARNING: parallel version not implemented for given flags, falling back to serial!"
                             when (verbosity>0) $ putStrLn "[running findFirstBestExpressionsLookahead ..]"
                             return $ findFirstBestExpressionsLookahead 256 input
-                          else do
+                          else lift $ do
                             when (verbosity>0) $ putStrLn "[running findFirstBestExpressionsLookahead ..]"
                             return $ findFirstBestExpressionsLookahead 256 input
                       case r :: [ExferenceOutputElement] of
-                        [] -> putStrLn "[no results]"
+                        [] -> lift $ putStrLn "[no results]"
                         rs -> rs `forM_` \(e, ExferenceStats n d m) -> do
-                            putStrLn $ prettyPrint (convert qualification e)
-                            putStrLn $ replicate 40 ' ' ++ "(depth " ++ show d
+                            hsE <- convert qualification e
+                            lift $ putStrLn $ prettyPrint hsE
+                            lift $ putStrLn $ replicate 40 ' ' ++ "(depth " ++ show d
                                        ++ ", " ++ show n ++ " steps, " ++ show m ++ " max pqueue size)"
 
         -- printChecks     testHeuristicsConfig env

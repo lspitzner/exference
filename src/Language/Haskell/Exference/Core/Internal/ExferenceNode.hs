@@ -23,6 +23,7 @@ module Language.Haskell.Exference.Core.Internal.ExferenceNode
   , addNewScopeGoal
   , initialScopes
   , addGoalProvided -- unused atm
+  , showSearchNode
   )
 where
 
@@ -46,6 +47,8 @@ import Control.Arrow ( first, second, (***) )
 
 import Control.DeepSeq.Generics
 import GHC.Generics
+
+import Control.Monad.Trans.MultiState
 
 import Debug.Hood.Observe
 
@@ -174,8 +177,63 @@ instance NFData Scope        where rnf = genericRnf
 instance NFData Scopes       where rnf = genericRnf
 instance NFData SearchNode   where rnf = genericRnf
 
-instance Show SearchNode where
-  show (SearchNode sgoals
+-- instance Show SearchNode where
+--   show (SearchNode sgoals
+--               scgoals
+--               (Scopes _ scopeMap)
+--               _svarUses
+--               _sfuncs
+--               _sdeconss
+--               qClassEnv
+--               sexpression
+--               snextVarId
+--               smaxTVarId
+--               snextNVarId
+--               sdepth
+-- #if LINK_NODES
+--               _prev
+-- #endif
+--               reason
+--               _lastStepBinding
+--               )
+--     = show
+--     $ text "SearchNode" <+> (
+--           (text   "goals      ="
+--            <+> brackets (vcat $ punctuate (text ", ") $ map tgoal $ toList sgoals)
+--           )
+--       $$  (text $ "constrGoals= " ++ show scgoals)
+--       $$  (text   "scopes     = "
+--            <+> brackets (vcat $ punctuate (text ", ") $ map tScope $ IntMap.toList scopeMap)
+--           )
+--       $$  (text $ "classEnv   = " ++ show qClassEnv)
+--       $$  (text $ "expression = " ++ showExpression sexpression)
+--       $$  (text $ "reason     = " ++ reason)
+--       $$  (parens $    (text $ "nextVarId="++show snextVarId)
+--                    <+> (text $ "maxTVarId="++show smaxTVarId)
+--                    <+> (text $ "nextNVarId="++show snextNVarId)
+--                    <+> (text $ "depth="++show sdepth))
+--     )
+--     where
+--       tgoal :: TGoal -> Doc
+--       tgoal (vt,scopeId) =  tVarType vt
+--                          <> text (" in " ++ show scopeId)
+--       tScope :: (ScopeId, Scope) -> Doc
+--       tScope (sid, Scope binds supers) =
+--             text (show sid ++ " ")
+--         <+> parens (text $ show $ supers)
+--         <+> text " " <+> brackets (
+--                               hcat $ punctuate (text ", ")
+--                                                (map tVarPType binds)
+--                             )
+--       tVarType :: (TVarId, HsType) -> Doc
+--       tVarType (i, t) = text $ showVar i ++ " :: " ++ show t
+--       tVarPType :: (TVarId, HsType, [HsType], [TVarId], [HsConstraint]) -> Doc
+--       tVarPType (i, t, ps, [], []) = tVarType (i, foldr TypeArrow t ps)
+--       tVarPType (i, t, ps, fs, cs) = tVarType (i, TypeForall fs cs (foldr TypeArrow t ps))
+
+showSearchNode :: MonadMultiState QNameIndex m => SearchNode -> m String
+showSearchNode
+  (SearchNode sgoals
               scgoals
               (Scopes _ scopeMap)
               _svarUses
@@ -193,7 +251,10 @@ instance Show SearchNode where
               reason
               _lastStepBinding
               )
-    = show
+    = do
+  exprStr <- showExpression sexpression
+  return
+    $ show
     $ text "SearchNode" <+> (
           (text   "goals      ="
            <+> brackets (vcat $ punctuate (text ", ") $ map tgoal $ toList sgoals)
@@ -203,30 +264,30 @@ instance Show SearchNode where
            <+> brackets (vcat $ punctuate (text ", ") $ map tScope $ IntMap.toList scopeMap)
           )
       $$  (text $ "classEnv   = " ++ show qClassEnv)
-      $$  (text $ "expression = " ++ show sexpression)
+      $$  (text $ "expression = " ++ exprStr)
       $$  (text $ "reason     = " ++ reason)
       $$  (parens $    (text $ "nextVarId="++show snextVarId)
                    <+> (text $ "maxTVarId="++show smaxTVarId)
                    <+> (text $ "nextNVarId="++show snextNVarId)
                    <+> (text $ "depth="++show sdepth))
     )
-    where
-      tgoal :: TGoal -> Doc
-      tgoal (vt,scopeId) =  tVarType vt
-                         <> text (" in " ++ show scopeId)
-      tScope :: (ScopeId, Scope) -> Doc
-      tScope (sid, Scope binds supers) =
-            text (show sid ++ " ")
-        <+> parens (text $ show $ supers)
-        <+> text " " <+> brackets (
-                              hcat $ punctuate (text ", ")
-                                               (map tVarPType binds)
-                            )
-      tVarType :: (TVarId, HsType) -> Doc
-      tVarType (i, t) = text $ showVar i ++ " :: " ++ show t
-      tVarPType :: (TVarId, HsType, [HsType], [TVarId], [HsConstraint]) -> Doc
-      tVarPType (i, t, ps, [], []) = tVarType (i, foldr TypeArrow t ps)
-      tVarPType (i, t, ps, fs, cs) = tVarType (i, TypeForall fs cs (foldr TypeArrow t ps))
+ where
+  tgoal :: TGoal -> Doc
+  tgoal (vt,scopeId) =  tVarType vt
+                     <> text (" in " ++ show scopeId)
+  tScope :: (ScopeId, Scope) -> Doc
+  tScope (sid, Scope binds supers) =
+        text (show sid ++ " ")
+    <+> parens (text $ show $ supers)
+    <+> text " " <+> brackets (
+                          hcat $ punctuate (text ", ")
+                                           (map tVarPType binds)
+                        )
+  tVarType :: (TVarId, HsType) -> Doc
+  tVarType (i, t) = text $ showVar i ++ " :: " ++ show t
+  tVarPType :: (TVarId, HsType, [HsType], [TVarId], [HsConstraint]) -> Doc
+  tVarPType (i, t, ps, [], []) = tVarType (i, foldr TypeArrow t ps)
+  tVarPType (i, t, ps, fs, cs) = tVarType (i, TypeForall fs cs (foldr TypeArrow t ps))
 
 showNodeDevelopment :: SearchNode -> String
 #if LINK_NODES
@@ -238,8 +299,8 @@ showNodeDevelopment s = maybe "" f (node_previousNode s) ++ show s
 showNodeDevelopment _ = "[showNodeDevelopment: exference-core was not compiled with -fLinkNodes]"
 #endif
 
-instance Observable SearchNode where
-  observer state = observeOpaque (show state) state
+-- instance Observable SearchNode where
+--   observer state = observeOpaque (show state) state
 
 splitBinding :: (TVarId, HsType) -> VarPBinding
 splitBinding (v,t) = let (rt,pts,fvs,cs) = splitArrowResultParams t in (v,rt,pts,fvs,cs)

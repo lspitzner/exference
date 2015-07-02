@@ -2,16 +2,16 @@
 {-# LANGUAGE PatternGuards #-}
 
 module Language.Haskell.Exference.SimpleDict
-  ( defaultBindings
-  , emptyClassEnv
-  , defaultClassEnv
+  ( -- defaultBindings
+    emptyClassEnv
+  -- , defaultClassEnv
   , defaultHeuristicsConfig
-  , testQueryClassEnv
-  , typeId
-  , typeReturn
-  , typeUnsafe
-  , typeBind
-  , typeJoin
+  -- , testQueryClassEnv
+  -- , typeId
+  -- , typeReturn
+  -- , typeUnsafe
+  -- , typeBind
+  -- , typeJoin
   )
 where
 
@@ -25,6 +25,7 @@ import Language.Haskell.Exference.TypeFromHaskellSrc ( unsafeReadType0 )
 
 import qualified Data.Set as S
 import qualified Data.Map.Strict as M
+import qualified Data.IntMap.Strict as IntMap
 
 import Control.Arrow ( second )
 
@@ -32,167 +33,167 @@ import Debug.Hood.Observe
 
 
 
-typeReturn, typeUnsafe, typeBind, typeJoin, typeId :: HsType
-typeId     = read "a -> a"
-typeReturn = read "a -> m a"
-typeUnsafe = read "a -> b"
-typeBind   = read "m a -> (a -> m b) -> m b"
-typeJoin   = read "m (m a) -> m a"
+-- typeReturn, typeUnsafe, typeBind, typeJoin, typeId :: HsType
+-- typeId     = read "a -> a"
+-- typeReturn = read "a -> m a"
+-- typeUnsafe = read "a -> b"
+-- typeBind   = read "m a -> (a -> m b) -> m b"
+-- typeJoin   = read "m (m a) -> m a"
 
-toBindings :: [(String, Float, String)] -> [(QualifiedName, Float, HsType)]
-toBindings = map (\(a,b,c) -> (QualifiedName [] a, b, unsafeReadType0 c))
+-- toBindings :: [(String, Float, String)] -> [(QualifiedName, Float, HsType)]
+-- toBindings = map (\(a,b,c) -> (QualifiedName [] a, b, unsafeReadType0 c))
 
 -- function, penalty for using that function, type
 -- value ignored for pattern-matches
-defaultBindings :: [RatedHsFunctionDecl]
-defaultBindings = toBindings
-  [
-  -- functor
-    ("fmap",     1.0, "(Functor f) => (a -> b) -> f a -> f b")
-  -- applicative
-  , ("pure",     3.0, "(Applicative f) => a -> f a")
-  , ("(<*>)",    3.0, "(Applicative f) => f (a->b) -> f a -> f b")
-  -- monad
-  , ("(>>=)",    0.0, "(Monad m) => m a -> (a -> m b) -> m b")
-  --, ("(>>)",     8.0, "Monad m => m a -> m b -> m b")
-  -- show
-  , ("show",     3.0, "(Show a) => a -> String")
-  -- eq
-  , ("(==)",     4.0, "Eq a => a -> a -> Bool")
-  , ("(/=)",     10.0, "Eq a => a -> a -> Bool") -- bad, cause same sig as (==)..
-  -- num
-  , ("fromInteger", 9.9, "Num a => Integer -> a")
-  -- real
-  , ("toRational", 9.9, "Real a => a -> Rational")
-  -- integral
-  , ("toInteger", 9.9, "Integral a => a -> Integer")
-  -- fractional
-  , ("fromRational", 9.9, "Fractional a => Rational -> a")
-  -- realfrac
-  , ("truncate", 9.9, "RealFrac a, Integral b => a -> b")
-  , ("round"   , 9.9, "RealFrac a, Integral b => a -> b")
-  , ("ceiling" , 9.9, "RealFrac a, Integral b => a -> b")
-  , ("floor"   , 9.9, "RealFrac a, Integral b => a -> b")
-  -- other
-  , ("(,)",      0.0, "a -> b -> Tuple2 a b")
-  , ("zip",      0.0, "List a -> List b -> List (Tuple2 a b)")
-  , ("repeat",   5.0, "a -> List a")
-  , ("foldr",    0.0, "(a -> b -> b) -> b -> List a -> b")
-  --, ("foldr0",   0.0,  "(a -> List a -> List a) -> a -> List a")
-  , ("()",       9.9, "Unit")
-  , ("State",    3.0, "(s -> Tuple2 a s) -> State s a")
-  , ("[]",       40.0, "List a")
-  , ("(:)",      4.0, "a -> List a -> List a")
-  , ("(,)",      0.0, "Tuple2 a b -> INFPATTERN a b")
-  , ("State",    0.0, "State s a -> INFPATTERN (s -> Tuple2 a s)")
-  , ("Just",     5.0, "a -> Maybe a")
-  , ("sequence", 3.0, "Monad m => List (m a) -> m (List a)")
-  ]
+-- defaultBindings :: [RatedHsFunctionDecl]
+-- defaultBindings = toBindings
+--   [
+--   -- functor
+--     ("fmap",     1.0, "(Functor f) => (a -> b) -> f a -> f b")
+--   -- applicative
+--   , ("pure",     3.0, "(Applicative f) => a -> f a")
+--   , ("(<*>)",    3.0, "(Applicative f) => f (a->b) -> f a -> f b")
+--   -- monad
+--   , ("(>>=)",    0.0, "(Monad m) => m a -> (a -> m b) -> m b")
+--   --, ("(>>)",     8.0, "Monad m => m a -> m b -> m b")
+--   -- show
+--   , ("show",     3.0, "(Show a) => a -> String")
+--   -- eq
+--   , ("(==)",     4.0, "Eq a => a -> a -> Bool")
+--   , ("(/=)",     10.0, "Eq a => a -> a -> Bool") -- bad, cause same sig as (==)..
+--   -- num
+--   , ("fromInteger", 9.9, "Num a => Integer -> a")
+--   -- real
+--   , ("toRational", 9.9, "Real a => a -> Rational")
+--   -- integral
+--   , ("toInteger", 9.9, "Integral a => a -> Integer")
+--   -- fractional
+--   , ("fromRational", 9.9, "Fractional a => Rational -> a")
+--   -- realfrac
+--   , ("truncate", 9.9, "RealFrac a, Integral b => a -> b")
+--   , ("round"   , 9.9, "RealFrac a, Integral b => a -> b")
+--   , ("ceiling" , 9.9, "RealFrac a, Integral b => a -> b")
+--   , ("floor"   , 9.9, "RealFrac a, Integral b => a -> b")
+--   -- other
+--   , ("(,)",      0.0, "a -> b -> Tuple2 a b")
+--   , ("zip",      0.0, "List a -> List b -> List (Tuple2 a b)")
+--   , ("repeat",   5.0, "a -> List a")
+--   , ("foldr",    0.0, "(a -> b -> b) -> b -> List a -> b")
+--   --, ("foldr0",   0.0,  "(a -> List a -> List a) -> a -> List a")
+--   , ("()",       9.9, "Unit")
+--   , ("State",    3.0, "(s -> Tuple2 a s) -> State s a")
+--   , ("[]",       40.0, "List a")
+--   , ("(:)",      4.0, "a -> List a -> List a")
+--   , ("(,)",      0.0, "Tuple2 a b -> INFPATTERN a b")
+--   , ("State",    0.0, "State s a -> INFPATTERN (s -> Tuple2 a s)")
+--   , ("Just",     5.0, "a -> Maybe a")
+--   , ("sequence", 3.0, "Monad m => List (m a) -> m (List a)")
+--   ]
 
 emptyClassEnv :: StaticClassEnv
 emptyClassEnv = StaticClassEnv {
   sClassEnv_tclasses = [],
-  sClassEnv_instances = M.empty
+  sClassEnv_instances = IntMap.empty
 }
 
-defaultClassEnv :: StaticClassEnv
-defaultClassEnv = mkStaticClassEnv classes instances
-  where
-    classes = [ c_show
-              , c_functor, c_applicative, c_monad
-              , c_eq, c_ord
-              , c_enum
-              , c_num, c_real, c_integral
-              , c_fractional, c_realfrac, c_floating, c_realfloat]
-    instances = inflateInstances
-              $ [ list_show, list_monad, maybe_monad, maybe_show, tuple_show]
-              ++ integral_instances
-              ++ realfloat_instances
+-- defaultClassEnv :: StaticClassEnv
+-- defaultClassEnv = mkStaticClassEnv classes instances
+--   where
+--     classes = [ c_show
+--               , c_functor, c_applicative, c_monad
+--               , c_eq, c_ord
+--               , c_enum
+--               , c_num, c_real, c_integral
+--               , c_fractional, c_realfrac, c_floating, c_realfloat]
+--     instances = inflateInstances
+--               $ [ list_show, list_monad, maybe_monad, maybe_show, tuple_show]
+--               ++ integral_instances
+--               ++ realfloat_instances
+-- 
+-- c_show            = HsTypeClass (QualifiedName [] "Show") [badReadVar "a"] []
+-- c_functor         = HsTypeClass (QualifiedName [] "Functor") [badReadVar "f"] []
+-- c_applicative     = HsTypeClass (QualifiedName [] "Applicative") [badReadVar "f"]
+--                                               [HsConstraint c_functor [read "f"]]
+-- c_monad           = HsTypeClass (QualifiedName [] "Monad") [badReadVar "m"]
+--                                         [HsConstraint c_applicative [read "m"]]
+-- c_monadState      = HsTypeClass
+--                       (QualifiedName [] "MonadState")
+--                       [badReadVar "s", badReadVar "m"]
+--                       [HsConstraint c_monad [read "m"]]
+-- c_eq              = HsTypeClass
+--                       (QualifiedName [] "Eq")
+--                       [badReadVar "a"]
+--                       []
+-- c_num             = HsTypeClass
+--                       (QualifiedName [] "Num")
+--                       [badReadVar "a"]
+--                       [ HsConstraint c_show [read "a"]
+--                       , HsConstraint c_eq [read "a"]]
+-- c_ord             = HsTypeClass
+--                       (QualifiedName [] "Ord")
+--                       [badReadVar "a"]
+--                       [HsConstraint c_eq [read "a"]]
+-- c_real            = HsTypeClass
+--                       (QualifiedName [] "Real")
+--                       [badReadVar "a"]
+--                       [ HsConstraint c_ord [read "a"]
+--                       , HsConstraint c_num [read "a"]]
+-- c_fractional      = HsTypeClass
+--                       (QualifiedName [] "Fractional")
+--                       [badReadVar "a"]
+--                       [HsConstraint c_num [read "a"]]
+-- c_enum            = HsTypeClass
+--                       (QualifiedName [] "Enum")
+--                       [badReadVar "a"]
+--                       []
+-- c_integral        = HsTypeClass
+--                       (QualifiedName [] "Integral")
+--                       [badReadVar "a"]
+--                       [ HsConstraint c_real [read "a"]
+--                       , HsConstraint c_enum [read "a"]]
+-- c_realfrac        = HsTypeClass
+--                       (QualifiedName [] "RealFrac")
+--                       [badReadVar "a"]
+--                       [ HsConstraint c_real [read "a"]
+--                       , HsConstraint c_fractional [read "a"]]
+-- c_floating        = HsTypeClass
+--                       (QualifiedName [] "Floating")
+--                       [badReadVar "a"]
+--                       [HsConstraint c_fractional [read "a"]]
+-- c_realfloat       = HsTypeClass
+--                       (QualifiedName [] "RealFloat")
+--                       [badReadVar "a"]
+--                       [ HsConstraint c_realfrac [read "a"]
+--                       , HsConstraint c_floating [read "a"]]
+-- 
+-- list_show         = HsInstance [HsConstraint c_show [read "a"]] c_show [read "List a"]
+-- --list_functor      = HsInstance [] c_functor     [read "List"]
+-- --list_applicative  = HsInstance [] c_applicative [read "List"]
+-- list_monad        = HsInstance [] c_monad       [read "List"]
+-- --maybe_functor     = HsInstance [] c_functor     [read "Maybe"]
+-- --maybe_applicative = HsInstance [] c_functor     [read "Maybe"]
+-- maybe_monad       = HsInstance [] c_functor     [read "Maybe"]
+-- maybe_show        = HsInstance [HsConstraint c_show [read "a"]] c_show [read "Maybe a"]
+-- tuple_show        = HsInstance [HsConstraint c_show [read "a"]
+--                                ,HsConstraint c_show [read "b"]] c_show [read "Tuple2 a b"]
+-- integral_instances  = mkInstances c_integral ["Int", "Integer"]
+-- realfloat_instances = mkInstances c_realfloat ["Float", "Double"]
 
-c_show            = HsTypeClass (QualifiedName [] "Show") [badReadVar "a"] []
-c_functor         = HsTypeClass (QualifiedName [] "Functor") [badReadVar "f"] []
-c_applicative     = HsTypeClass (QualifiedName [] "Applicative") [badReadVar "f"]
-                                              [HsConstraint c_functor [read "f"]]
-c_monad           = HsTypeClass (QualifiedName [] "Monad") [badReadVar "m"]
-                                        [HsConstraint c_applicative [read "m"]]
-c_monadState      = HsTypeClass
-                      (QualifiedName [] "MonadState")
-                      [badReadVar "s", badReadVar "m"]
-                      [HsConstraint c_monad [read "m"]]
-c_eq              = HsTypeClass
-                      (QualifiedName [] "Eq")
-                      [badReadVar "a"]
-                      []
-c_num             = HsTypeClass
-                      (QualifiedName [] "Num")
-                      [badReadVar "a"]
-                      [ HsConstraint c_show [read "a"]
-                      , HsConstraint c_eq [read "a"]]
-c_ord             = HsTypeClass
-                      (QualifiedName [] "Ord")
-                      [badReadVar "a"]
-                      [HsConstraint c_eq [read "a"]]
-c_real            = HsTypeClass
-                      (QualifiedName [] "Real")
-                      [badReadVar "a"]
-                      [ HsConstraint c_ord [read "a"]
-                      , HsConstraint c_num [read "a"]]
-c_fractional      = HsTypeClass
-                      (QualifiedName [] "Fractional")
-                      [badReadVar "a"]
-                      [HsConstraint c_num [read "a"]]
-c_enum            = HsTypeClass
-                      (QualifiedName [] "Enum")
-                      [badReadVar "a"]
-                      []
-c_integral        = HsTypeClass
-                      (QualifiedName [] "Integral")
-                      [badReadVar "a"]
-                      [ HsConstraint c_real [read "a"]
-                      , HsConstraint c_enum [read "a"]]
-c_realfrac        = HsTypeClass
-                      (QualifiedName [] "RealFrac")
-                      [badReadVar "a"]
-                      [ HsConstraint c_real [read "a"]
-                      , HsConstraint c_fractional [read "a"]]
-c_floating        = HsTypeClass
-                      (QualifiedName [] "Floating")
-                      [badReadVar "a"]
-                      [HsConstraint c_fractional [read "a"]]
-c_realfloat       = HsTypeClass
-                      (QualifiedName [] "RealFloat")
-                      [badReadVar "a"]
-                      [ HsConstraint c_realfrac [read "a"]
-                      , HsConstraint c_floating [read "a"]]
 
-list_show         = HsInstance [HsConstraint c_show [read "a"]] c_show [read "List a"]
---list_functor      = HsInstance [] c_functor     [read "List"]
---list_applicative  = HsInstance [] c_applicative [read "List"]
-list_monad        = HsInstance [] c_monad       [read "List"]
---maybe_functor     = HsInstance [] c_functor     [read "Maybe"]
---maybe_applicative = HsInstance [] c_functor     [read "Maybe"]
-maybe_monad       = HsInstance [] c_functor     [read "Maybe"]
-maybe_show        = HsInstance [HsConstraint c_show [read "a"]] c_show [read "Maybe a"]
-tuple_show        = HsInstance [HsConstraint c_show [read "a"]
-                               ,HsConstraint c_show [read "b"]] c_show [read "Tuple2 a b"]
-integral_instances  = mkInstances c_integral ["Int", "Integer"]
-realfloat_instances = mkInstances c_realfloat ["Float", "Double"]
+-- mkInstances :: HsTypeClass -> [String] -> [HsInstance]
+-- mkInstances tc strs = map f strs
+--   where
+--     f s = HsInstance [] tc [read s]
 
-
-mkInstances :: HsTypeClass -> [String] -> [HsInstance]
-mkInstances tc strs = map f strs
-  where
-    f s = HsInstance [] tc [read s]
-
-testQueryClassEnv = mkQueryClassEnv defaultClassEnv
-    [ HsConstraint c_show [read "v"]
-    , HsConstraint c_show [read "w"]
-    , HsConstraint c_functor [read "x"]
-    , HsConstraint c_monad   [read "y"]
-    , HsConstraint c_monadState [read "s", read "z"]
-    , HsConstraint c_show [read "MyFoo"]
-    , HsConstraint c_show [read "B"]
-    ]
+-- testQueryClassEnv = mkQueryClassEnv defaultClassEnv
+--     [ HsConstraint c_show [read "v"]
+--     , HsConstraint c_show [read "w"]
+--     , HsConstraint c_functor [read "x"]
+--     , HsConstraint c_monad   [read "y"]
+--     , HsConstraint c_monadState [read "s", read "z"]
+--     , HsConstraint c_show [read "MyFoo"]
+--     , HsConstraint c_show [read "B"]
+--     ]
 
 defaultHeuristicsConfig :: ExferenceHeuristicsConfig
 defaultHeuristicsConfig = ExferenceHeuristicsConfig

@@ -1,7 +1,10 @@
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE MonadComprehensions #-}
 
 module Language.Haskell.Exference.Core.Expression
   ( Expression (..)
+  , showExpression
+  , showExpressionPure
   , fillExprHole
   , simplifyLets
   , simplifyEta
@@ -11,67 +14,146 @@ where
 
 
 import Language.Haskell.Exference.Core.Types
+import Language.Haskell.Exference.Core.TypeUtils
 import Data.List ( intercalate )
 import Data.Function ( on )
+import Data.Maybe ( fromMaybe )
+import Control.Monad ( forM )
+import Data.Functor.Identity ( runIdentity )
 
 import Control.DeepSeq.Generics
 import GHC.Generics
+
+import Control.Monad.Trans.MultiState
 
 import Debug.Hood.Observe
 
 
 
 data Expression = ExpVar TVarId -- a
-                | ExpName QualifiedName -- Prelude.zip
+                | ExpName QNameId -- Prelude.zip
                 | ExpLambda TVarId Expression -- \x -> exp
                 | ExpApply Expression Expression -- f x
                 | ExpHole TVarId                 -- h
-                | ExpLetMatch QualifiedName [TVarId] Expression Expression
+                | ExpLetMatch QNameId [TVarId] Expression Expression
                             -- let (Foo a b c) = bExp in inExp
                 | ExpLet TVarId Expression Expression
                             -- let x = bExp in inExp
                 | ExpCaseMatch
                     Expression
-                    [(QualifiedName, [TVarId], Expression)]
+                    [(QNameId, [TVarId], Expression)]
                      -- case mExp of Foo a b -> e1; Bar c d -> e2
   deriving (Eq, Generic)
 
 instance NFData Expression where rnf = genericRnf
 
-instance Show Expression where
-  showsPrec _ (ExpVar i) = showString $ showVar i
-  showsPrec d (ExpName s) = showsPrec d s
-  showsPrec d (ExpLambda i e) =
-    showParen (d>0) $ showString ("\\" ++ showVar i ++ " -> ") . showsPrec 1 e
-  showsPrec d (ExpApply e1 e2) =
-    showParen (d>1) $ showsPrec 2 e1 . showString " " . showsPrec 3 e2
-  showsPrec _ (ExpHole i) = showString $ "_" ++ showVar i
-  showsPrec d (ExpLetMatch n vars bindExp inExp) =
-      showParen (d>2)
-    $ showString ("let ("++show n++" "++intercalate " " (map showVar vars) ++ ") = ")
-    . shows bindExp . showString " in " . showsPrec 0 inExp
-  showsPrec d (ExpLet i bindExp inExp) =
-      showParen (d>2)
+-- instance Show Expression where
+--   showsPrec _ (ExpVar i) = showString $ showVar i
+--   showsPrec d (ExpName s) = showsPrec d s
+--   showsPrec d (ExpLambda i e) =
+--     showParen (d>0) $ showString ("\\" ++ showVar i ++ " -> ") . showsPrec 1 e
+--   showsPrec d (ExpApply e1 e2) =
+--     showParen (d>1) $ showsPrec 2 e1 . showString " " . showsPrec 3 e2
+--   showsPrec _ (ExpHole i) = showString $ "_" ++ showVar i
+--   showsPrec d (ExpLetMatch n vars bindExp inExp) =
+--       showParen (d>2)
+--     $ showString ("let ("++show n++" "++intercalate " " (map showVar vars) ++ ") = ")
+--     . shows bindExp . showString " in " . showsPrec 0 inExp
+--   showsPrec d (ExpLet i bindExp inExp) =
+--       showParen (d>2)
+--     $ showString ("let " ++ showVar i ++ " = ")
+--     . showsPrec 3 bindExp
+--     . showString " in "
+--     . showsPrec 0 inExp
+--   showsPrec d (ExpCaseMatch bindExp alts) =
+--       showParen (d>2)
+--     $ showString ("case ")
+--     . showsPrec 3 bindExp
+--     . showString " of { "
+--     . ( \s -> intercalate "; "
+--            (map (\(cons, vars, expr) ->
+--               show cons++" "++intercalate " " (map showVar vars)++" -> "
+--               ++showsPrec 3 expr "")
+--             alts)
+--          ++ s
+--       )
+--     . showString " }"
+
+showExpression :: forall m
+                . MonadMultiState QNameIndex m
+               => Expression -> m String
+showExpression e = ($ "") <$> h 0 e
+ where
+  h :: Int -> Expression -> m ShowS
+  h _ (ExpVar i) = return $ showString $ showVar i
+  h _ (ExpName s) =
+    [ showString
+      $ fromMaybe "badNameInternalError"
+      $ show <$> maybeQName
+    | maybeQName <- lookupQNameId s
+    ] 
+  h d (ExpLambda i e1) =
+    [ showParen (d>0) $ showString ("\\" ++ showVar i ++ " -> ") . eShows
+    | eShows <- h 1 e1
+    ]
+  h d (ExpApply e1 e2) =
+    [ showParen (d>1) $ e1Shows . showString " " . e2Shows
+    | e1Shows <- h 2 e1
+    , e2Shows <- h 3 e2
+    ]    
+  h _ (ExpHole i) = return $ showString $ "_" ++ showVar i
+  h d (ExpLetMatch n vars bindExp inExp) =
+    [ showParen (d>2)
+    $ showString ("let ("++nStr++" "++intercalate " " (map showVar vars) ++ ") = ")
+    . bindShows . showString " in " . inShows
+    | bindShows <- h 0 bindExp
+    , inShows   <- h 0 inExp
+    , nMaybe    <- lookupQNameId n
+    , let nStr = fromMaybe "badNameInternalError" $ show <$> nMaybe
+    ]
+      
+  h d (ExpLet i bindExp inExp) =
+    [ showParen (d>2)
     $ showString ("let " ++ showVar i ++ " = ")
-    . showsPrec 3 bindExp
+    . bindShows
     . showString " in "
-    . showsPrec 0 inExp
-  showsPrec d (ExpCaseMatch bindExp alts) =
-      showParen (d>2)
+    . inShows
+    | bindShows <- h 3 bindExp
+    , inShows <- h 0 inExp
+    ]
+  h d (ExpCaseMatch bindExp alts) =
+    [ showParen (d>2)
     $ showString ("case ")
-    . showsPrec 3 bindExp
+    . bindShows
     . showString " of { "
     . ( \s -> intercalate "; "
            (map (\(cons, vars, expr) ->
-              show cons++" "++intercalate " " (map showVar vars)++" -> "
-              ++showsPrec 3 expr "")
-            alts)
+              cons ""++" "++intercalate " " (map showVar vars)++" -> "
+              ++expr "")
+            altsShows)
          ++ s
       )
     . showString " }"
+    | bindShows <- h 3 bindExp
+    , altsShows <- alts `forM` \(cons, vars, expr) ->
+        [ (showString
+          $ fromMaybe "badNameInternalError"
+          $ show <$> maybeQName
+          , vars
+          , exprShows)
+        | maybeQName <- lookupQNameId cons
+        , exprShows <- h 3 expr
+        ]
+    ]
 
-instance Observable Expression where
-  observer x = observeOpaque (show x) x
+showExpressionPure :: QNameIndex -> Expression -> String
+showExpressionPure qNameIndex e = runIdentity
+                                $ runMultiStateTNil
+                                $ withMultiStateA qNameIndex
+                                $ showExpression e
+
+-- instance Observable Expression where
+--   observer x = observeOpaque (show x) x
 
 fillExprHole :: TVarId -> Expression -> Expression -> Expression
 fillExprHole vid t orig@(ExpHole j) | vid==j = t

@@ -1,7 +1,11 @@
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE PatternGuards #-}
 
 module Language.Haskell.Exference.Core.Types
   ( TVarId
+  , QNameId
+  , QNameIndex(..)
   , QualifiedName(..)
   , HsType (..)
   , Subst
@@ -18,7 +22,7 @@ module Language.Haskell.Exference.Core.Types
   , inflateHsConstraints
   , applySubst
   , applySubsts
-  , typeParser
+  -- , typeParser
   , containsVar
   , showVar
   , mkQueryClassEnv
@@ -36,6 +40,7 @@ import Control.Applicative ( (<$>), (<*>), (*>), (<*) )
 import Data.Maybe ( maybeToList, fromMaybe )
 
 import qualified Data.Set as S
+import qualified Data.IntSet as IntSet
 import qualified Data.Map.Strict as M
 import qualified Data.IntMap.Strict as IntMap
 
@@ -50,6 +55,7 @@ import Debug.Hood.Observe
 
 
 type TVarId = Int
+type QNameId = Int
 type Subst  = (TVarId, HsType)
 type Substs = IntMap.IntMap HsType
 
@@ -63,14 +69,20 @@ data QualifiedName
 data HsType = TypeVar      {-# UNPACK #-} !TVarId
             | TypeConstant {-# UNPACK #-} !TVarId
               -- like TypeCons, for exference-internal purposes.
-            | TypeCons     QualifiedName
+            | TypeCons     {-# UNPACK #-} !QNameId
             | TypeArrow    HsType HsType
             | TypeApp      HsType HsType
             | TypeForall   [TVarId] [HsConstraint] HsType
   deriving (Ord, Eq, Generic)
 
+data QNameIndex = QNameIndex
+  { qNameIndex_nextId :: QNameId
+  , qNameIndex_indexA :: M.Map QualifiedName QNameId
+  , qNameIndex_indexB :: M.Map QNameId QualifiedName
+  }
+
 data HsTypeClass = HsTypeClass
-  { tclass_name :: QualifiedName
+  { tclass_name :: QNameId
   , tclass_params :: [TVarId]
   , tclass_constraints :: [HsConstraint]
   }
@@ -91,7 +103,7 @@ data HsConstraint = HsConstraint
 
 data StaticClassEnv = StaticClassEnv
   { sClassEnv_tclasses :: [HsTypeClass]
-  , sClassEnv_instances :: M.Map QualifiedName [HsInstance]
+  , sClassEnv_instances :: IntMap.IntMap [HsInstance]
   }
   deriving (Show, Generic)
 
@@ -99,7 +111,7 @@ data QueryClassEnv = QueryClassEnv
   { qClassEnv_env :: StaticClassEnv
   , qClassEnv_constraints :: S.Set HsConstraint
   , qClassEnv_inflatedConstraints :: S.Set HsConstraint
-  , qClassEnv_varConstraints :: M.Map TVarId (S.Set HsConstraint)
+  , qClassEnv_varConstraints :: IntMap.IntMap (S.Set HsConstraint)
   }
   deriving (Generic)
 
@@ -141,8 +153,8 @@ instance Show HsType where
 instance Observable HsType where
   observer x = observeOpaque (show x) x
 
-instance Read HsType where
-  readsPrec _ = maybeToList . parseType
+-- instance Read HsType where
+--   readsPrec _ = maybeToList . parseType
 
 instance Show HsConstraint where
   show (HsConstraint c ps) = unwords $ show (tclass_name c) : map show ps
@@ -172,7 +184,7 @@ mkQueryClassEnv sClassEnv constrs = addQueryClassEnv constrs $ QueryClassEnv {
   qClassEnv_env = sClassEnv,
   qClassEnv_constraints = S.empty,
   qClassEnv_inflatedConstraints = S.empty,
-  qClassEnv_varConstraints = M.empty
+  qClassEnv_varConstraints = IntMap.empty
 }
 
 addQueryClassEnv :: [HsConstraint] -> QueryClassEnv -> QueryClassEnv
@@ -183,12 +195,12 @@ addQueryClassEnv constrs env = env {
 }
   where
     csSet = S.fromList constrs `S.union` qClassEnv_constraints env
-    helper :: [HsConstraint] -> M.Map TVarId (S.Set HsConstraint)
+    helper :: [HsConstraint] -> IntMap.IntMap (S.Set HsConstraint)
     helper cs =
-      let ids :: S.Set TVarId
-          ids = fold $ freeVars <$> (constraint_params =<< cs)
-      in M.fromSet (flip filterHsConstraintsByVarId
-                    $ inflateHsConstraints csSet) ids
+      let ids :: IntSet.IntSet
+          ids = IntSet.fromList $ S.toList $ fold $ freeVars <$> (constraint_params =<< cs)
+      in IntMap.fromSet (flip filterHsConstraintsByVarId
+                        $ inflateHsConstraints csSet) ids
 
 inflateHsConstraints :: S.Set HsConstraint -> S.Set HsConstraint
 inflateHsConstraints = inflate (S.fromList . f)
@@ -215,39 +227,39 @@ constraintApplySubst s (HsConstraint c ps) =
 constraintApplySubsts :: Substs -> HsConstraint -> HsConstraint
 constraintApplySubsts ss c
   | IntMap.null ss = c
-  | HsConstraint c ps <- c = HsConstraint c
-                           $ map (applySubsts ss) ps
+  | HsConstraint cl ps <- c = HsConstraint cl
+                            $ map (applySubsts ss) ps
 
 showVar :: TVarId -> String
 showVar i = if i<26 then [chr (ord 'a' + i)] else "t"++show (i-26)
 
-parseType :: String -> Maybe (HsType, String)
-parseType s = either (const Nothing) Just
-            $ runParser (    (,)
-                         <$> typeParser
-                         <*> many anyChar)
-                        ()
-                        ""
-                        s
-
-typeParser :: Parser HsType
-typeParser = parseAll
-  where
-    parseAll :: Parser HsType
-    parseAll = parseUn >>= parseBin
-    parseUn :: Parser HsType -- TODO: forall
-    parseUn = spaces *> (
-            try (TypeCons . QualifiedName [] <$> ((:) <$> satisfy isUpper <*> many alphaNum))
-        <|> try ((TypeVar . (\x -> x - ord 'a') . ord) <$> satisfy isLower)
-        <|>     (char '(' *> parseAll <* char ')')
-      )
-    parseBin :: HsType -> Parser HsType
-    parseBin left =
-        try (    try (TypeArrow left <$> (spaces *> string "->" *> parseAll))
-             <|>     ((TypeApp   left <$> (space *> parseUn)) >>= parseBin)
-             )
-        <|>
-        (spaces *> return left)
+-- parseType :: _ => String -> m (Maybe (HsType, String))
+-- parseType s = either (const Nothing) Just
+--             $ runParser (    (,)
+--                          <$> typeParser
+--                          <*> many anyChar)
+--                         ()
+--                         ""
+--                         s
+-- 
+-- typeParser :: forall m . (_) => Parser (m HsType)
+-- typeParser = parseAll
+--   where
+--     parseAll :: Parser (m HsType)
+--     parseAll = parseUn >>= parseBin
+--     parseUn :: Parser (m HsType) -- TODO: forall
+--     parseUn = spaces *> (
+--             try (TypeCons . QualifiedName [] <$> ((:) <$> satisfy isUpper <*> many alphaNum))
+--         <|> try ((TypeVar . (\x -> x - ord 'a') . ord) <$> satisfy isLower)
+--         <|>     (char '(' *> parseAll <* char ')')
+--       )
+--     parseBin :: HsType -> Parser HsType
+--     parseBin left =
+--         try (    try (TypeArrow left <$> (spaces *> string "->" *> parseAll))
+--              <|>     ((TypeApp   left <$> (space *> parseUn)) >>= parseBin)
+--              )
+--         <|>
+--         (spaces *> return left)
 
 applySubst :: Subst -> HsType -> HsType
 applySubst (i, t) v@(TypeVar j) = if i==j then t else v
