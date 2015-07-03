@@ -8,6 +8,7 @@ module Language.Haskell.Exference.Core.Types
   , QNameIndex(..)
   , QualifiedName(..)
   , HsType (..)
+  , HsTypeOffset (..)
   , Subst
   , Substs
   , HsTypeClass (..)
@@ -19,6 +20,7 @@ module Language.Haskell.Exference.Core.Types
                   , qClassEnv_inflatedConstraints
                   , qClassEnv_varConstraints )
   , constraintApplySubsts
+  , constraintApplySubsts'
   , inflateHsConstraints
   , applySubst
   , applySubsts
@@ -74,6 +76,8 @@ data HsType = TypeVar      {-# UNPACK #-} !TVarId
             | TypeApp      HsType HsType
             | TypeForall   [TVarId] [HsConstraint] HsType
   deriving (Ord, Eq, Generic)
+
+data HsTypeOffset = HsTypeOffset HsType !Int
 
 data QNameIndex = QNameIndex
   { qNameIndex_nextId :: QNameId
@@ -223,12 +227,29 @@ constraintApplySubst :: Subst -> HsConstraint -> HsConstraint
 constraintApplySubst s (HsConstraint c ps) =
   HsConstraint c $ map (applySubst s) ps
 
+-- returns if any change was necessary,
+-- plus the (potentially changed) constraint
+constraintApplySubst' :: Subst -> HsConstraint -> (Bool, HsConstraint)
+constraintApplySubst' s (HsConstraint c ps) =
+  let applied = map (applySubst' s) ps
+  in (any fst applied, HsConstraint c $ snd <$> applied)
+
 {-# INLINE constraintApplySubsts #-}
 constraintApplySubsts :: Substs -> HsConstraint -> HsConstraint
 constraintApplySubsts ss c
   | IntMap.null ss = c
   | HsConstraint cl ps <- c = HsConstraint cl
                             $ map (applySubsts ss) ps
+
+-- returns if any change was necessary,
+-- plus the (potentially changed) constraint
+{-# INLINE constraintApplySubsts' #-}
+constraintApplySubsts' :: Substs -> HsConstraint -> (Bool, HsConstraint)
+constraintApplySubsts' ss c
+  | IntMap.null ss = (False, c)
+  | HsConstraint cl ps <- c =
+      let applied = map (applySubsts' ss) ps
+      in (any fst applied, HsConstraint cl $ snd <$> applied)
 
 showVar :: TVarId -> String
 showVar i = if i<26 then [chr (ord 'a' + i)] else "t"++show (i-26)
@@ -271,6 +292,25 @@ applySubst s@(i,_) f@(TypeForall js cs t) = if elem i js
   then f
   else TypeForall js (constraintApplySubst s <$> cs) (applySubst s t)
 
+applySubst' :: Subst -> HsType -> (Bool, HsType)
+applySubst' (i, t) v@(TypeVar j) = if i==j then (True, t) else (False, v)
+applySubst' _ c@(TypeConstant _) = (False, c)
+applySubst' _ c@(TypeCons _)     = (False, c)
+applySubst' s (TypeArrow t1 t2)  =
+  let (b1, t1') = applySubst' s t1
+      (b2, t2') = applySubst' s t2
+  in (b1||b2, TypeArrow t1' t2')
+applySubst' s (TypeApp t1 t2)    =
+  let (b1, t1') = applySubst' s t1
+      (b2, t2') = applySubst' s t2
+  in (b1||b2, TypeApp t1' t2')
+applySubst' s@(i,_) f@(TypeForall js cs t) = if elem i js
+  then (False, f)
+  else
+    let applied = constraintApplySubst' s <$> cs
+        (b, t') = applySubst' s t
+    in (b || any fst applied, TypeForall js (snd <$> applied) t')
+
 applySubsts :: Substs -> HsType -> HsType
 applySubsts s v@(TypeVar i)      = fromMaybe v $ IntMap.lookup i s
 applySubsts _ c@(TypeConstant _) = c
@@ -281,6 +321,24 @@ applySubsts s (TypeForall js cs t) = TypeForall
                                        js
                                        (constraintApplySubsts s <$> cs)
                                        (applySubsts (foldr IntMap.delete s js) t)
+
+applySubsts' :: Substs -> HsType -> (Bool, HsType)
+applySubsts' s v@(TypeVar i)      = fromMaybe (False, v)
+                                  $ (,) True <$> IntMap.lookup i s
+applySubsts' _ c@(TypeConstant _) = (False, c)
+applySubsts' _ c@(TypeCons _)     = (False, c)
+applySubsts' s (TypeArrow t1 t2)  =
+  let (b1, t1') = applySubsts' s t1
+      (b2, t2') = applySubsts' s t2
+  in (b1||b2, TypeArrow t1' t2')
+applySubsts' s (TypeApp t1 t2)    =
+  let (b1, t1') = applySubsts' s t1
+      (b2, t2') = applySubsts' s t2
+  in (b1||b2, TypeApp t1' t2')
+applySubsts' s (TypeForall js cs t) =
+  let applied = constraintApplySubsts' s <$> cs
+      (b, t') = applySubsts' (foldr IntMap.delete s js) t
+  in (b || any fst applied, TypeForall js (snd <$> applied) t')
 
 freeVars :: HsType -> S.Set TVarId
 freeVars (TypeVar i)         = S.singleton i

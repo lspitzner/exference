@@ -49,11 +49,7 @@ isPossible qClassEnv (c:constraints) =
                                           ( sClassEnv_instances
                                           $ qClassEnv_env qClassEnv )
         f (HsInstance instConstrs _iclass instParams) = do
-          -- behold the undocumented special -14. TODO document, or add
-          -- special constructor..
-          let tempTuplePs     = foldl TypeApp (TypeConstant (-14)) cparams
-          let tempTupleInstPs = foldl TypeApp (TypeConstant (-14)) instParams
-          substs <- unifyRight tempTuplePs tempTupleInstPs
+          substs <- unifyRightEqs $ zipWith TypeEq cparams instParams
           isPossible
             qClassEnv
             (map (constraintApplySubsts substs) instConstrs)
