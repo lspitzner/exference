@@ -164,7 +164,9 @@ Executable exference
                -with-rtsopts "-H2G -M4G -N"
                -fno-spec-constr
                -auto-all
-               -caf-all 
+               -caf-all
+               -- -fllvm
+
   extensions: NoMonomorphismRestriction
               FlexibleContexts
               ScopedTypeVariables

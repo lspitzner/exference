@@ -8,7 +8,7 @@ module Language.Haskell.Exference.Core.Internal.ExferenceNode
   , Scope (..)
   , ScopeId
   , VarPBinding
-  , VarBinding
+  , VarBinding (..)
   , VarUsageMap
   , varBindingApplySubsts
   , varPBindingApplySubsts
@@ -54,13 +54,14 @@ import Debug.Hood.Observe
 
 
 
-type VarBinding = (TVarId, HsType)
+data VarBinding = VarBinding {-# UNPACK #-} !TVarId HsType
+ deriving Generic
 type VarPBinding = (TVarId, HsType, [HsType], [TVarId], [HsConstraint])
                 -- var, result, params, forallTypes, constraints
 
 
 varBindingApplySubsts :: Substs -> VarBinding -> VarBinding
-varBindingApplySubsts = second . applySubsts
+varBindingApplySubsts substs (VarBinding v t) = VarBinding v (applySubsts substs t)
 
 varPBindingApplySubsts :: Substs -> VarPBinding -> VarPBinding
 varPBindingApplySubsts ss (v,rt,pt,fvs,cs) =
@@ -173,6 +174,7 @@ data SearchNode = SearchNode
   }
   deriving Generic
 
+instance NFData VarBinding   where rnf = genericRnf
 instance NFData Scope        where rnf = genericRnf
 instance NFData Scopes       where rnf = genericRnf
 instance NFData SearchNode   where rnf = genericRnf
@@ -283,11 +285,11 @@ showSearchNode
                           hcat $ punctuate (text ", ")
                                            (map tVarPType binds)
                         )
-  tVarType :: (TVarId, HsType) -> Doc
-  tVarType (i, t) = text $ showVar i ++ " :: " ++ show t
+  tVarType :: VarBinding -> Doc
+  tVarType (VarBinding i t) = text $ showVar i ++ " :: " ++ show t
   tVarPType :: (TVarId, HsType, [HsType], [TVarId], [HsConstraint]) -> Doc
-  tVarPType (i, t, ps, [], []) = tVarType (i, foldr TypeArrow t ps)
-  tVarPType (i, t, ps, fs, cs) = tVarType (i, TypeForall fs cs (foldr TypeArrow t ps))
+  tVarPType (i, t, ps, [], []) = tVarType $ VarBinding i (foldr TypeArrow t ps)
+  tVarPType (i, t, ps, fs, cs) = tVarType $ VarBinding i (TypeForall fs cs (foldr TypeArrow t ps))
 
 showNodeDevelopment :: SearchNode -> String
 #if LINK_NODES
@@ -302,5 +304,5 @@ showNodeDevelopment _ = "[showNodeDevelopment: exference-core was not compiled w
 -- instance Observable SearchNode where
 --   observer state = observeOpaque (show state) state
 
-splitBinding :: (TVarId, HsType) -> VarPBinding
-splitBinding (v,t) = let (rt,pts,fvs,cs) = splitArrowResultParams t in (v,rt,pts,fvs,cs)
+splitBinding :: VarBinding -> VarPBinding
+splitBinding (VarBinding v t) = let (rt,pts,fvs,cs) = splitArrowResultParams t in (v,rt,pts,fvs,cs)

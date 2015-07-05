@@ -174,7 +174,7 @@ findExpressions (ExferenceInput rawType
   where
     t = forallify rawType
     rootSearchNode = SearchNode
-        (Seq.singleton ((0, t), 0))
+        (Seq.singleton (VarBinding 0 t, 0))
         []
         initialScopes
         IntMap.empty
@@ -273,7 +273,7 @@ rateNode h s = 0.0 - rateGoals h (node_goals s) - node_depth s + rateUsage h s
 rateGoals :: ExferenceHeuristicsConfig -> Seq.Seq TGoal -> Float
 rateGoals h = sum . fmap rateGoal
   where
-    rateGoal ((_,t),_) = tComplexity t
+    rateGoal (VarBinding _ t,_) = tComplexity t
     -- TODO: actually measure performance with different values,
     --       use derived values instead of (arbitrarily) chosen ones.
     tComplexity (TypeVar _)         = heuristics_goalVar h
@@ -325,18 +325,18 @@ stateStep2 multiPM qNameIndex h s
   | (TypeForall is cs t) <- goalType = [ modifyNodeBy s' $ forallStep is cs t ]
   | otherwise = byProvided ++ byFunctionSimple
   where
-    (((var, goalType), scopeId) Seq.:< gr) = Seq.viewl $ node_goals s
+    ((VarBinding var goalType, scopeId) Seq.:< gr) = Seq.viewl $ node_goals s
     s' = s { node_goals = gr }
-    arrowStep :: HsType -> [(TVarId, HsType)] -> SearchNodeBuilder ()
+    arrowStep :: HsType -> [VarBinding] -> SearchNodeBuilder ()
     arrowStep g ts
       | (TypeArrow t1 t2) <- g = do
           nextId <- builderAllocVar
-          arrowStep t2 ((nextId, t1):ts)
+          arrowStep t2 ((VarBinding nextId t1):ts)
       | otherwise = do
           nextId <- builderAllocHole
           newScopeId <- builderAddScope scopeId
           builderFillExprHole var
-            $ foldr ExpLambda (ExpHole nextId) $ reverse $ map fst ts
+            $ foldr ExpLambda (ExpHole nextId) $ reverse $ map (\(VarBinding v _) -> v) ts
           builderAddDepth (heuristics_functionGoalTransform h)
           builderSetReason "function goal transform"
           builderSetLastStepBinding Nothing
@@ -352,7 +352,7 @@ stateStep2 multiPM qNameIndex h s
       builderSetReason "forall-type goal transformation"
       builderSetLastStepBinding Nothing
       let substs = IntMap.fromList $ zip vs $ TypeConstant <$> dataIds
-      builderPrependGoal ((var, applySubsts substs t), scopeId)
+      builderPrependGoal (VarBinding var (applySubsts substs t), scopeId)
       builderAddGivenConstraints $ constraintApplySubsts substs <$> cs
       return ()
     byProvided = do
@@ -418,7 +418,7 @@ stateStep2 multiPM qNameIndex h s
                                         vResult
                                         (ExpApply coreExp $ ExpHole vParam)
                                         (ExpHole var)
-            builderPrependGoal ((vParam, d), scopeId)
+            builderPrependGoal (VarBinding vParam d, scopeId)
             newScopeId <- builderAddScope scopeId
             builderAddConstraintGoals provConstrs
             case applier of
@@ -451,7 +451,7 @@ stateStep2 multiPM qNameIndex h s
           return $ modifyNodeBy s' $ do
             let paramN = length dependencies
             vars <- replicateM paramN builderAllocHole
-            let newGoals = mkGoals scopeId $ zip vars dependencies
+            let newGoals = mkGoals scopeId $ zipWith VarBinding vars dependencies
             case applier of
               Left _  ->
                 forM_ newGoals (builderAppendGoal . goalApplySubst rightSS)
@@ -489,7 +489,7 @@ addScopePatternMatch :: Bool -- should p-m on anything but newtypes?
                      -> [VarPBinding]
                      -> SearchNodeBuilder [TGoal]
 addScopePatternMatch multiPM goalType vid sid bindings = case bindings of
-  []                                    -> return [((vid, goalType), sid)]
+  []                                    -> return [(VarBinding vid goalType, sid)]
   (b@(v,vtResult,vtParams,_,_):bindingRest) -> do
     offset <- builderGetTVarOffset
     let incF = incVarIds (+offset)
@@ -515,7 +515,7 @@ addScopePatternMatch multiPM goalType vid sid bindings = case bindings of
               builderAddVarUsage v
               builderSetReason $ "pattern matching on " ++ showVar v
               let newProvTypes = map (applySubsts substs) resultTypes
-                  newBinds = zipWith (curry splitBinding) vars newProvTypes
+                  newBinds = zipWith (\x y -> splitBinding (VarBinding x y)) vars newProvTypes
                   expr = ExpLetMatch matchId vars (ExpVar v) (ExpHole vid)
               builderFillExprHole vid expr
               when (not $ null matchRs)
@@ -531,7 +531,7 @@ addScopePatternMatch multiPM goalType vid sid bindings = case bindings of
                 builderAddVarUsage v
                 newVid <- builderAllocHole
                 let newProvTypes = map (applySubsts substs) resultTypes
-                    newBinds = zipWith (curry splitBinding) vars newProvTypes
+                    newBinds = zipWith (\x y -> splitBinding (VarBinding x y)) vars newProvTypes
                 when (not $ null matchRs)
                      (builderFixMaxTVarId $ maximum $ map largestId newProvTypes)
                 return ((matchId, vars, ExpHole newVid), (newVid, reverse newBinds, newSid))
