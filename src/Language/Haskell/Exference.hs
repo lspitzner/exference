@@ -10,6 +10,7 @@ module Language.Haskell.Exference
   , takeFindSortNExpressions
   , findFirstExpressionLookahead
   , findFirstBestExpressionsLookahead
+  , findFirstBestExpressionsLookaheadPreferNoConstraints
   , ExferenceInput ( .. )
   , ExferenceOutputElement
   , ExferenceStats (..)
@@ -56,7 +57,7 @@ findSortNExpressions :: Int
 findSortNExpressions n input = sortBy (comparing g) $ take n $ r
   where
     r = findExpressions input
-    g (_,ExferenceStats _ f _) = f
+    g (_, _, ExferenceStats _ f _) = f
 
 -- returns the first expressions with the best rating.
 -- best explained on examples:
@@ -69,7 +70,9 @@ findFirstBestExpressions :: ExferenceInput
                          -> [ExferenceOutputElement]
 findFirstBestExpressions input
   | r <- findExpressions input
-  , f <- head . groupBy ((>=) `on` exference_complexityRating.snd)
+  , f <- head . groupBy (\(~(_, _, stats1)) (~(_, _, stats2)) -> 
+                              exference_complexityRating stats1
+                           >= exference_complexityRating stats2)
   = case r of
     [] -> []
     _  -> f $ reverse $ f $ r
@@ -96,13 +99,16 @@ findFirstExpressionLookahead n input = f 999999 Nothing (findExpressionsChunked 
     f 0 best     _       = best
     f r best     ([]:sr) = f (r-1) best sr
     f _ Nothing  (s:sr)  = f n (Just $ minElem s) sr
-    f r (Just b) (s:sr)  | sbest <- minElem s
-                         , exference_complexityRating (snd sbest)
-                         < exference_complexityRating (snd b)
+    f r (Just (b@(_, _, statsB))) (s:sr) 
+                         | sbest@(_, _, statsBest) <- minElem s
+                         , exference_complexityRating statsBest
+                         < exference_complexityRating statsB
                          = f n (Just sbest) sr
                          | otherwise = f (r-1) (Just b) sr
     minElem :: [ExferenceOutputElement] -> ExferenceOutputElement
-    minElem = minimumBy (comparing (exference_complexityRating.snd))
+    minElem = minimumBy (\(~(_, _, stats1)) (~(_, _, stats2)) ->
+                           compare (exference_complexityRating stats1)
+                                   (exference_complexityRating stats2))
 
 -- a combination of the return-multiple-if-same-rating and the
 -- look-some-steps-ahead-for-better-solution functionalities.
@@ -123,11 +129,57 @@ findFirstBestExpressionsLookahead n input =
   f _ _ ss []           = ss
   f 0 _ ss _            = ss
   f i r ss ([]:qss)     = f (i-1) r ss qss
-  f i r ss ((q:qs):qss) | rq <- exference_complexityRating (snd q)
+  f i r ss ((q@(_, _, statsQ):qs):qss)
+                        | rq <- exference_complexityRating statsQ
                         = if
                         | rq < r    -> f n rq [q] (qs:qss)
                         | rq == r   -> f n r (q:ss) (qs:qss)
                         | otherwise -> f i r ss (qs:qss)
+
+-- a combination of the return-multiple-if-same-rating and the
+-- look-some-steps-ahead-for-better-solution functionalities.
+-- for example,
+-- [2,3,2,2,4,5,6,7] -> [2,2,2]
+--  does not stop at 3, but looks ahead, then returns all the 2-rated solutions
+findFirstBestExpressionsLookaheadPreferNoConstraints :: Int
+                                                     -> ExferenceInput
+                                                     -> [ExferenceOutputElement]
+findFirstBestExpressionsLookaheadPreferNoConstraints n input =
+  f 999999 99999.9 [] [] (findExpressionsChunked input)
+ where
+  f :: Int
+    -> Float
+    -> [ExferenceOutputElement] -- solutions without constraints
+    -> [ExferenceOutputElement] -- solution(s) with constraints
+    -> [[ExferenceOutputElement]]
+    -> [ExferenceOutputElement]
+  -- out of potential solutions, nothing constraint-free found
+  f _ _ [] ssc []           = ssc
+  -- out of potential solutions, found good stuff
+  f _ _ ss _   []           = ss
+  -- out of lookahead, return what we have (ss wont be null)
+  f 0 _ ss _   _            = ss
+  -- simple reduce when no good solutions yet
+  f i r [] ssc ([]:qss)     = f i r [] ssc qss
+  -- lookahead step when we already have some good solution
+  f i r ss ssc ([]:qss)     = f (i-1) r ss ssc qss
+  -- finding one/the first good solution
+  f i r ss _   ((q@(_, [], statsQ):qs):qss)
+                        | rq <- exference_complexityRating statsQ
+                        = if
+                        | null ss   -> f n rq [q] [] (qs:qss)
+                        | rq < r    -> f n rq [q] [] (qs:qss)
+                        | rq == r   -> f n r (q:ss) [] (qs:qss)
+                        | otherwise -> f i r ss [] (qs:qss)
+  -- finding a bad solution when there are no good solutions yet
+  f i r [] ssc ((q@(_, _, statsQ):qs):qss)
+                        | rq <- exference_complexityRating statsQ
+                        = if
+                        | rq < r    -> f i rq [] [q] (qs:qss)
+                        | rq == r   -> f i r [] (q:ssc) (qs:qss)
+                        | otherwise -> f i r [] ssc (qs:qss)
+  -- finding a bad solution when we already have good solutions
+  f i r ss _   ((_:qs):qss) = f (i-1) r ss [] (qs:qss)
 
 -- like findSortNExpressions, but retains only the best rating
 findBestNExpressions :: Int
@@ -137,4 +189,7 @@ findBestNExpressions n input
   | r <- findSortNExpressions n input
   = case r of
     [] -> []
-    _  -> head $ groupBy ((>=) `on` exference_complexityRating.snd) $ r
+    _  -> head $ groupBy (\(~(_, _, stats1)) (~(_, _, stats2)) -> 
+                              exference_complexityRating stats1
+                           >= exference_complexityRating stats2)
+                         r

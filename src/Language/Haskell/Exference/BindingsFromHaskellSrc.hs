@@ -64,7 +64,7 @@ transformDecl :: ( ContainsType QNameIndex s
               -> EitherT String (MultiRWST r w s m) [HsFunctionDecl]
 transformDecl tcs ds mn (TypeSig _loc names qtype)
   = insName qtype $ do
-      ctype <- convertType tcs (Just mn) ds qtype
+      (ctype, _) <- convertType tcs (Just mn) ds qtype
       mapM (helper mn ctype) names
 transformDecl _ _ _ _ = return []
 

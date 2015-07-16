@@ -21,8 +21,8 @@ module Language.Haskell.Exference.Core.TypeUtils
   , splitArrowResultParams
   , emptyQNameIndex
   , getOrCreateQNameId
-  , lookupQNameId
   , findQName
+  , lookupQNameId
   , withQNameIndex
   , showQNameIndex
   )
@@ -82,13 +82,6 @@ getOrCreateQNameId name = do
       return next
     Just i ->
       return i
-
-lookupQNameId :: MonadMultiState QNameIndex m
-              => QNameId
-              -> m (Maybe QualifiedName)
-lookupQNameId qid = do
-  QNameIndex _ _ indB <- mGet
-  return $ M.lookup qid indB
 
 findQName :: MonadMultiState QNameIndex m
           => (QualifiedName -> Bool)

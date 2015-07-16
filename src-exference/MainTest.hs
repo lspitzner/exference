@@ -288,6 +288,8 @@ checkInput heuristics (bindings, deconss, sEnv) typeStr allowUnused patternM hid
     deconss
     sEnv
     allowUnused
+    False
+    8192
     patternM
     qNameIndex
     20000
@@ -325,19 +327,19 @@ checkExpectedResults heuristics env = mapMultiRWST (return . runIdentity)
   return $ do
     input <- checkInput heuristics env typeStr allowUnused patternM hidden
     let getExp :: Int
-               -> [(Expression, ExferenceStats)]
+               -> [(Expression, [HsConstraint], ExferenceStats)]
                -> MultiRWST r w s Identity (Maybe (Int, ExferenceStats))
         getExp _ [] = return $ Nothing
-        getExp n ((e,s):r) = do
+        getExp n ((e, _, s):r) = do
           eStr <- showExpression e
           if eStr `elem` expected
             then return $ Just (n,s)
             else getExp (n+1) r
     r <- case findExpressions input of
         []       -> return $ Nothing
-        xs@(x:_) -> [ Just (x, rs)
-                    | rs <- getExp 0 xs
-                    ]
+        xs@((e, _, stats):_) -> [ Just ((e, stats), rs)
+                                | rs <- getExp 0 xs
+                                ]
     return $
       ( name
       , expected
@@ -441,7 +443,7 @@ exampleOutput :: ( m ~ MultiRWST r w s m0
                  )
               => ExferenceHeuristicsConfig
               -> EnvDictionary
-              -> m [[(Expression, ExferenceStats)]]
+              -> m [[(Expression, [HsConstraint], ExferenceStats)]]
 exampleOutput heuristics (bindings, deconss, sEnv) =
   exampleInput `forM` \(_, allowUnused, patternM, s) -> do
     ty <- unsafeReadType (sClassEnv_tclasses sEnv) exampleDataTypes s
@@ -453,6 +455,8 @@ exampleOutput heuristics (bindings, deconss, sEnv) =
                 deconss
                 sEnv
                 allowUnused
+                False
+                8192
                 patternM
                 qNameIndex
                 32768
@@ -466,7 +470,9 @@ exampleInOut :: ( m ~ MultiRWST r w s m0
                 )
              => ExferenceHeuristicsConfig
              -> EnvDictionary
-             -> m [((String, Bool, Bool, String), [(Expression, ExferenceStats)])]
+             -> m [( (String, Bool, Bool, String)
+                   , [(Expression, [HsConstraint], ExferenceStats)]
+                   )]
 exampleInOut h env =
   zip exampleInput <$> exampleOutput h env
 
@@ -479,7 +485,7 @@ printAndStuff h env = exampleInOut h env >>= mapM_ f
     f ((name, _, _, _), []) = lift $ putStrLn $ "no results for "++name++"!"
     f ((name, _, _, _), results) = mapM_ g results
       where
-        g (expr, ExferenceStats n d m) = do
+        g (expr, _, ExferenceStats n d m) = do
           str <- showExpression expr
           {-
           if doPf then do
@@ -511,7 +517,7 @@ printStatistics h env = exampleInOut h env >>= mapM_ f
               $ printf "%12s: head=%6d avg=%6d min=%6d max=%6d %s" name hd avg minV maxV
                                      (if n==6 then "" else " n = " ++ show n)
     getStats results =
-      let steps = map (exference_steps.snd) results
+      let steps = map (\(_, _, stats) -> exference_steps stats) results
       in ( head steps
          , sum steps `div` length steps
          , minimum steps
@@ -597,6 +603,8 @@ printMaxUsage h (bindings, deconss, sEnv) = sequence_ $ do
                   deconss
                   sEnv
                   allowUnused
+                  False
+                  8192
                   patternM
                   qNameIndex
                   16384
@@ -622,6 +630,8 @@ printSearchTree h (bindings, deconss, sEnv) = sequence_ $ do
                   deconss
                   sEnv
                   allowUnused
+                  False
+                  8192
                   patternM
                   qNameIndex
                   256

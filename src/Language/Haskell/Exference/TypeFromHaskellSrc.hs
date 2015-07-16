@@ -10,7 +10,6 @@ module Language.Haskell.Exference.TypeFromHaskellSrc
   , convertName
   , convertQName
   , convertModuleName
-  , ConvMap
   , getVar
   -- , ConversionMonad
   , parseType
@@ -55,7 +54,7 @@ import Debug.Trace
 
 -- type ConversionMonad = EitherT String (State (Int, ConvMap))
 
-data ConvData = ConvData Int ConvMap
+data ConvData = ConvData Int T.TypeVarIndex
 
 haskellSrcExtsParseMode :: String -> P.ParseMode
 haskellSrcExtsParseMode s = P.ParseMode (s++".hs")
@@ -81,10 +80,15 @@ convertType :: ( ContainsType T.QNameIndex s
             -> Maybe ModuleName
             -> [T.QualifiedName]
             -> Type
-            -> EitherT String (MultiRWST r w s m) T.HsType
+            -> EitherT String (MultiRWST r w s m) (T.HsType, T.TypeVarIndex)
 convertType tcs mn ds t =
-  mapEitherT (withMultiStateA (ConvData 0 M.empty))
-    $ convertTypeInternal tcs mn ds t
+  mapEitherT conv $ convertTypeInternal tcs mn ds t
+ where
+  conv m = [ [ (r, index)
+             | r <- eith
+             ]
+           | (eith, ConvData _ index) <- withMultiStateAS (ConvData 0 M.empty) m
+           ]
 
 convertTypeInternal :: ( MonadMultiState T.QNameIndex m
                        , MonadMultiState ConvData m
@@ -129,8 +133,6 @@ convertTypeInternal tcs defModuleName ds ty = helper ty
       <*> convertConstraint tcs defModuleName ds `mapM` cs
       <*> helper t
   helper x                = left $ "unknown type element: " ++ show x -- TODO
-
-type ConvMap = M.Map Name Int
 
 getVar :: MonadMultiState ConvData m => Name -> m Int
 getVar n = do
@@ -253,7 +255,7 @@ parseType :: ( ContainsType T.QNameIndex s
           -> [T.QualifiedName]
           -> P.ParseMode
           -> String
-          -> EitherT String (MultiRWST r w s m) T.HsType
+          -> EitherT String (MultiRWST r w s m) (T.HsType, T.TypeVarIndex)
 parseType tcs mn ds m s = case P.parseTypeWithMode m s of
   f@(P.ParseFailed _ _) -> left $ show f
   P.ParseOk t           -> convertType tcs mn ds t
@@ -269,7 +271,7 @@ unsafeReadType tcs ds s = do
   parseRes <- runEitherT $ parseType tcs Nothing ds (haskellSrcExtsParseMode "type") s
   return $ case parseRes of
     Left _ -> error $ "unsafeReadType: could not parse type: " ++ s
-    Right t -> t
+    Right (t, _) -> t
 
 unsafeReadType0 :: ( ContainsType T.QNameIndex s
                    , Monad m
@@ -280,7 +282,7 @@ unsafeReadType0 s = do
   parseRes <- runEitherT $ parseType [] Nothing [] (haskellSrcExtsParseMode "type") s
   return $ case parseRes of
     Left _ -> error $ "unsafeReadType: could not parse type: " ++ s
-    Right t -> t
+    Right (t, _) -> t
 
 tyVarTransform :: MonadMultiState ConvData m
                => TyVarBind

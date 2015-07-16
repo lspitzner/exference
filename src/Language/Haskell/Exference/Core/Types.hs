@@ -1,6 +1,7 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE PatternGuards #-}
+{-# LANGUAGE MonadComprehensions #-}
 
 module Language.Haskell.Exference.Core.Types
   ( TVarId
@@ -30,6 +31,9 @@ module Language.Haskell.Exference.Core.Types
   , mkQueryClassEnv
   , addQueryClassEnv
   , freeVars
+  , showHsConstraint
+  , lookupQNameId
+  , TypeVarIndex
   )
 where
 
@@ -45,12 +49,17 @@ import qualified Data.Set as S
 import qualified Data.IntSet as IntSet
 import qualified Data.Map.Strict as M
 import qualified Data.IntMap.Strict as IntMap
+import qualified Data.List as L
 
 import Text.ParserCombinators.Parsec hiding (State)
 import Text.ParserCombinators.Parsec.Char
 
+import Language.Haskell.Exts.Syntax ( Name (..) )
+
 import Control.DeepSeq.Generics
 import GHC.Generics
+import Data.Data ( Data )
+import Control.Monad.Trans.MultiState
 
 import Debug.Hood.Observe
 
@@ -66,7 +75,7 @@ data QualifiedName
   | ListCon
   | TupleCon Int
   | Cons
-  deriving (Eq, Ord, Generic)
+  deriving (Eq, Ord, Generic, Data)
 
 data HsType = TypeVar      {-# UNPACK #-} !TVarId
             | TypeConstant {-# UNPACK #-} !TVarId
@@ -75,7 +84,7 @@ data HsType = TypeVar      {-# UNPACK #-} !TVarId
             | TypeArrow    HsType HsType
             | TypeApp      HsType HsType
             | TypeForall   [TVarId] [HsConstraint] HsType
-  deriving (Ord, Eq, Generic)
+  deriving (Ord, Eq, Generic, Data)
 
 data HsTypeOffset = HsTypeOffset HsType !Int
 
@@ -84,32 +93,42 @@ data QNameIndex = QNameIndex
   , qNameIndex_indexA :: M.Map QualifiedName QNameId
   , qNameIndex_indexB :: M.Map QNameId QualifiedName
   }
+  deriving (Show, Data)
+
+type TypeVarIndex = M.Map Name Int
+
+lookupQNameId :: MonadMultiState QNameIndex m
+              => QNameId
+              -> m (Maybe QualifiedName)
+lookupQNameId qid = do
+  QNameIndex _ _ indB <- mGet
+  return $ M.lookup qid indB
 
 data HsTypeClass = HsTypeClass
   { tclass_name :: QNameId
   , tclass_params :: [TVarId]
   , tclass_constraints :: [HsConstraint]
   }
-  deriving (Eq, Show, Ord, Generic)
+  deriving (Eq, Show, Ord, Generic, Data)
 
 data HsInstance = HsInstance
   { instance_constraints :: [HsConstraint]
   , instance_tclass :: HsTypeClass
   , instance_params :: [HsType]
   }
-  deriving (Eq, Show, Ord, Generic)
+  deriving (Eq, Show, Ord, Generic, Data)
 
 data HsConstraint = HsConstraint
   { constraint_tclass :: HsTypeClass
   , constraint_params :: [HsType]
   }
-  deriving (Eq, Ord, Generic)
+  deriving (Eq, Ord, Generic, Data)
 
 data StaticClassEnv = StaticClassEnv
   { sClassEnv_tclasses :: [HsTypeClass]
   , sClassEnv_instances :: IntMap.IntMap [HsInstance]
   }
-  deriving (Show, Generic)
+  deriving (Show, Generic, Data)
 
 data QueryClassEnv = QueryClassEnv
   { qClassEnv_env :: StaticClassEnv
@@ -154,6 +173,50 @@ instance Show HsType where
     . showString " => "
     . showsPrec (-2) t
 
+showHsType :: forall m
+            . MonadMultiState QNameIndex m
+           => TypeVarIndex
+           -> HsType
+           -> m String
+showHsType convMap t = ($ "") <$> h 0 t
+ where
+  h :: Int -> HsType -> m ShowS
+  h _ (TypeVar i)      = return
+                       $ showString
+                       $ maybe "badNameInternalError"
+                               (\(Ident n, _) -> n)
+                       $ L.find ((i ==) .  snd)
+                       $ M.toList convMap
+  h _ (TypeConstant i) = return
+                       $ showString
+                       $ maybe "badNameInternalError"
+                               (\(Ident n, _) -> n)
+                       $ L.find ((i ==) .  snd)
+                       $ M.toList convMap
+  h _ (TypeCons s) =
+    [ showString $ maybe "badNameInternalError" show r
+    | r <- lookupQNameId s
+    ]
+  h d (TypeArrow t1 t2) =
+    [ showParen (d> -2) $ t1Shows . showString " -> " . t2Shows
+    | t1Shows <- h (-1) t1
+    , t2Shows <- h (-1) t2
+    ]
+  h d (TypeApp t1 t2) =
+    [ showParen (d> -1) $ t1Shows . showString " " . t2Shows
+    | t1Shows <- h 0 t1
+    , t2Shows <- h 0 t2
+    ]
+  h d (TypeForall [] [] t) = h d t
+  h d (TypeForall is cs t) =
+    [ showParen (d>0)
+      $ showString ("forall " ++ intercalate ", " (showVar <$> is) ++ " . ")
+      . showParen True (\x -> foldr (++) x $ intersperse ", " $ map show cs)
+      . showString " => "
+      . tShows
+    | tShows <- h (-2) t
+    ]
+
 instance Observable HsType where
   observer x = observeOpaque (show x) x
 
@@ -162,6 +225,15 @@ instance Observable HsType where
 
 instance Show HsConstraint where
   show (HsConstraint c ps) = unwords $ show (tclass_name c) : map show ps
+
+showHsConstraint :: MonadMultiState QNameIndex m
+                 => TypeVarIndex
+                 -> HsConstraint
+                 -> m String
+showHsConstraint convMap (HsConstraint c ps) = do
+  maybeName <- lookupQNameId (tclass_name c)
+  tyStrs <- mapM (showHsType convMap) ps
+  return $ unwords $ maybe "badNameInternalError" show maybeName : tyStrs  
 
 instance Show QueryClassEnv where
   show (QueryClassEnv _ cs _ _) = "(QueryClassEnv _ " ++ show cs ++ " _)"

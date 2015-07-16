@@ -291,14 +291,19 @@ showSearchNode
   tVarPType (i, t, ps, [], []) = tVarType $ VarBinding i (foldr TypeArrow t ps)
   tVarPType (i, t, ps, fs, cs) = tVarType $ VarBinding i (TypeForall fs cs (foldr TypeArrow t ps))
 
-showNodeDevelopment :: SearchNode -> String
+showNodeDevelopment :: forall m 
+                     . MonadMultiState QNameIndex m
+                    => SearchNode
+                    -> m String
 #if LINK_NODES
-showNodeDevelopment s = maybe "" f (node_previousNode s) ++ show s
-  where
-    f :: SearchNode -> String
-    f x = showNodeDevelopment x ++ "\n"
+showNodeDevelopment s = case node_previousNode s of
+  Nothing -> showSearchNode s
+  Just p  -> do
+    pStr <- showNodeDevelopment p
+    cStr <- showSearchNode s
+    return $ pStr ++ "\n" ++ cStr
 #else
-showNodeDevelopment _ = "[showNodeDevelopment: exference-core was not compiled with -fLinkNodes]"
+showNodeDevelopment _ = return "[showNodeDevelopment: exference-core was not compiled with -fLinkNodes]"
 #endif
 
 -- instance Observable SearchNode where

@@ -56,6 +56,8 @@ import qualified GHC.Conc.Sync
 
 import qualified ListT
 
+import Data.Data ( Data )
+
 -- import Data.DeriveTH
 import Debug.Hood.Observe
 import Debug.Trace
@@ -99,6 +101,7 @@ data ExferenceHeuristicsConfig = ExferenceHeuristicsConfig
   , heuristics_unusedVar              :: Float
   , heuristics_solutionLength         :: Float
   }
+  deriving (Show, Data)
 
 data ExferenceInput = ExferenceInput
   { input_goalType    :: HsType                 -- ^ try to find a expression
@@ -111,6 +114,13 @@ data ExferenceInput = ExferenceInput
   , input_envClasses  :: StaticClassEnv
   , input_allowUnused :: Bool                   -- ^ if false, forbid solutions
                                                 -- where any bind is unused
+  , input_allowConstraints :: Bool              -- ^ if true, allow solutions
+                                                -- that have unproven
+                                                -- constraints remaining.
+  , input_allowConstraintsStopStep :: Int       -- ^ stop ignoring
+                                                -- tc-constraints after this
+                                                -- step to have some chance to
+                                                -- find some solution.
   , input_multiPM     :: Bool                   -- ^ pattern match on
                                                 -- multi-constructor data types
                                                 -- if true. serverly increases
@@ -133,8 +143,9 @@ data ExferenceInput = ExferenceInput
                                                 -- solutions).
   , input_heuristicsConfig :: ExferenceHeuristicsConfig
   }
+  deriving (Show, Data)
 
-type ExferenceOutputElement = (Expression, ExferenceStats)
+type ExferenceOutputElement = (Expression, [HsConstraint], ExferenceStats)
 type ExferenceChunkElement = (BindingUsages, SearchTree, [ExferenceOutputElement])
 
 type RatedNodes = Q.MaxPQueue Float SearchNode
@@ -153,6 +164,8 @@ findExpressions (ExferenceInput rawType
                                 deconss
                                 sClassEnv
                                 allowUnused
+                                allowConstraints
+                                allowConstraintsStopStep
                                 multiPM
                                 qNameIndex
                                 maxSteps -- since we output a [[x]],
@@ -165,8 +178,8 @@ findExpressions (ExferenceInput rawType
                                 heuristics) =
   [ (bindingUsages, searchTree, solutions)
   | (bindingUsages, searchTree, stuples) <- resultTuples
-  , let solutions = [ (e, ExferenceStats steps compl fsize)
-                    | (steps, compl, e, fsize) <- stuples
+  , let solutions = [ (e, constrs, ExferenceStats steps compl fsize)
+                    | (steps, compl, e, constrs, fsize) <- stuples
                     ]
   ]
   -- fmap (\(steps, compl, e) -> (e, ExferenceStats steps compl))
@@ -198,18 +211,30 @@ findExpressions (ExferenceInput rawType
                           , initialSearchTreeBuilder initNodeName (ExpHole 0)
                           , Q.singleton 0.0 rootSearchNode
                           )
-    helper :: FindExpressionsState -> [(BindingUsages, SearchTree, [(Int,Float,Expression,Int)])]
+    helper :: FindExpressionsState
+           -> [( BindingUsages
+               , SearchTree
+               , [(Int,Float,Expression,[HsConstraint],Int)]
+               )]
     helper (n, worst, bindingUsages, st, states)
       | Q.null states || n > maxSteps = []
       | ((_,s), restNodes) <- Q.deleteFindMax states =
-        let rNodes = stateStep multiPM qNameIndex heuristics s
+        let rNodes = stateStep multiPM
+                               (allowConstraints && n<allowConstraintsStopStep)
+                               qNameIndex
+                               heuristics
+                               s
             (potentialSolutions, futures) = partition (Seq.null . node_goals) rNodes                                                      
             newBindingUsages = case node_lastStepBinding s of
               Nothing -> bindingUsages
               Just b  -> incBindingUsage b bindingUsages
-            out = [ (n, d, e, qsize)
+            out = [ (n, d, e, remainingConstraints, qsize)
                   | solution <- potentialSolutions
-                  , null (node_constraintGoals solution)
+                  , let contxt = node_queryClassEnv solution
+                  , remainingConstraints <- maybeToList
+                                          $ filterUnresolved contxt
+                                          $ node_constraintGoals solution
+                  , allowConstraints || null remainingConstraints
                   , let unusedVarCount = getUnusedVarCount
                                            (node_varUses solution)
                   , allowUnused || unusedVarCount==0
@@ -303,11 +328,13 @@ getUnusedVarCount :: VarUsageMap -> Int
 getUnusedVarCount m = length $ filter (==0) $ IntMap.elems m
 
 stateStep :: Bool
+          -> Bool
           -> QNameIndex
           -> ExferenceHeuristicsConfig
           -> SearchNode
           -> [SearchNode]
-stateStep multiPM qNameIndex h s = stateStep2 multiPM qNameIndex h
+stateStep multiPM allowConstrs qNameIndex h s
+  = stateStep2 multiPM allowConstrs qNameIndex h
               -- $ (\_ -> trace (show s ++ " " ++ show (rateNode h s)) s)
               $ s
               -- trace (show (node_depth s) ++ " " ++ show (rateGoals $ node_goals s)
@@ -315,11 +342,12 @@ stateStep multiPM qNameIndex h s = stateStep2 multiPM qNameIndex h
               --                      ++ " " ++ show (node_expression s)) $
 
 stateStep2 :: Bool
+           -> Bool
            -> QNameIndex
            -> ExferenceHeuristicsConfig
            -> SearchNode
            -> [SearchNode]
-stateStep2 multiPM qNameIndex h s
+stateStep2 multiPM allowConstrs qNameIndex h s
   | node_depth s > 200.0 = []
   | (TypeArrow _ _) <- goalType = [ modifyNodeBy s' $ arrowStep goalType [] ]
   | (TypeForall is cs t) <- goalType = [ modifyNodeBy s' $ forallStep is cs t ]
@@ -445,9 +473,11 @@ stateStep2 multiPM qNameIndex h s
                        $ node_constraintGoals s
               constrs2 = map (constraintApplySubsts rightSS)
                        $ provConstrs
-          newConstraints <- if any fst constrs1
-            then maybeToList $ isPossible contxt (map snd constrs1 ++ constrs2)
-            else (map snd constrs1 ++) <$> maybeToList (isPossible contxt constrs2)
+          newConstraints <- if allowConstrs
+            then [map snd constrs1 ++ constrs2]
+            else if any fst constrs1
+              then maybeToList $ isPossible contxt (map snd constrs1 ++ constrs2)
+              else (map snd constrs1 ++) <$> maybeToList (isPossible contxt constrs2)
           return $ modifyNodeBy s' $ do
             let paramN = length dependencies
             vars <- replicateM paramN builderAllocHole

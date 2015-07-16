@@ -41,6 +41,7 @@ import Data.Maybe ( listToMaybe, fromMaybe, maybeToList )
 import Data.Either ( lefts, rights )
 import Control.Monad.Writer.Strict
 import qualified Data.Map as M
+import qualified Data.Set as S
 import qualified Data.IntMap as IntMap
 
 import Language.Haskell.Exts.Syntax ( Module(..), Decl(..), ModuleName(..) )
@@ -94,6 +95,7 @@ data Flag = Verbose Int
           | Unused
           | PatternMatchMC
           | Qualification Int
+          | Constraints
   deriving (Show, Eq)
 
 options :: [OptDescr Flag]
@@ -118,6 +120,7 @@ options =
   , Option ['c'] ["patternMatchMC"] (NoArg PatternMatchMC) "pattern match on multi-constructor data types (might lead to hang-ups at the moment)"
   , Option ['q'] ["fullqualification"] (NoArg $ Qualification 2) "fully qualify the identifiers in the output"
   , Option []    ["somequalification"] (NoArg $ Qualification 1) "fully qualify non-operator-identifiers in the output"
+  , Option ['w'] ["allowConstraints"] (NoArg Constraints) "allow additional (unproven) constraints in solutions"
   ]
 
 mainOpts :: [String] -> IO ([Flag], [String])
@@ -189,15 +192,15 @@ main = runO $ do
           []    -> return () -- probably impossible..
           (x:_) -> do
             when (verbosity>0) $ lift $ putStrLn "[Custom Input]"
-            mParsedType <- runEitherT $ parseType (sClassEnv_tclasses sEnv)
+            eParsedType <- runEitherT $ parseType (sClassEnv_tclasses sEnv)
                                                   Nothing
                                                   validNames
                                                   (haskellSrcExtsParseMode "inputtype")
                                                   x
-            case mParsedType of
+            case eParsedType of
               Left err -> lift $ do
                 putStrLn $ "could not parse input type: " ++ err
-              Right parsedType -> do
+              Right (parsedType, tVarIndex) -> do
                 when (verbosity>0) $ lift $ putStrLn $ "input type parsed as: " ++ show parsedType
                 unresolvedIdents <- findInvalidNames validNames parsedType
                 when (not $ null unresolvedIdents) $ lift $ do
@@ -211,6 +214,8 @@ main = runO $ do
                       eDeconss
                       sEnv
                       (Unused `elem` flags)
+                      (Constraints `elem` flags)
+                      8192
                       (PatternMatchMC `elem` flags)
                       qNameIndex
                       65536
@@ -219,6 +224,10 @@ main = runO $ do
                          testHeuristicsConfig
                        else
                          testHeuristicsConfig { heuristics_solutionLength = 0.0 })
+                when (verbosity>0) $ lift $ do
+                  putStrLn $ "full input:"
+                  doc <- pprint input
+                  print doc
                 if
                   | PrintAll `elem` flags -> do
                       when (verbosity>0) $ lift $ putStrLn "[running findExpressions ..]"
@@ -226,9 +235,15 @@ main = runO $ do
                       if null rs
                         then lift $ putStrLn "[no results]"
                         else forM_ rs
-                          $ \(e, ExferenceStats n d m) -> do
+                          $ \(e, constrs, ExferenceStats n d m) -> do
                             hsE <- convert qualification e
                             lift $ putStrLn $ prettyPrint hsE
+                            when (not $ null constrs) $ do
+                              constrStrs <- mapM (showHsConstraint tVarIndex)
+                                          $ S.toList
+                                          $ S.fromList
+                                          $ constrs
+                              lift $ putStrLn $ "but only with additional contraints: " ++ intercalate ", " constrStrs
                             lift $ putStrLn $ replicate 40 ' ' ++ "(depth " ++ show d
                                         ++ ", " ++ show n ++ " steps, " ++ show m ++ " max pqueue size)"
                   | PrintTree `elem` flags ->
@@ -277,16 +292,27 @@ main = runO $ do
                         | otherwise -> if par
                           then lift $ do
                             putStrLn $ "WARNING: parallel version not implemented for given flags, falling back to serial!"
-                            when (verbosity>0) $ putStrLn "[running findFirstBestExpressionsLookahead ..]"
-                            return $ findFirstBestExpressionsLookahead 256 input
+                            when (verbosity>0) $ putStrLn "[running findFirstBestExpressionsLookaheadPreferNoConstraints ..]"
+                            return $ findFirstBestExpressionsLookaheadPreferNoConstraints 256 input
                           else lift $ do
-                            when (verbosity>0) $ putStrLn "[running findFirstBestExpressionsLookahead ..]"
-                            return $ findFirstBestExpressionsLookahead 256 input
+                            if Constraints `elem` flags
+                              then do
+                                when (verbosity>0) $ putStrLn "[running findFirstBestExpressionsLookahead ..]"
+                                return $ findFirstBestExpressionsLookahead 256 input
+                              else do
+                                when (verbosity>0) $ putStrLn "[running findFirstBestExpressionsLookaheadPreferNoConstraints ..]"
+                                return $ findFirstBestExpressionsLookaheadPreferNoConstraints 256 input {input_allowConstraints = True}
                       case r :: [ExferenceOutputElement] of
                         [] -> lift $ putStrLn "[no results]"
-                        rs -> rs `forM_` \(e, ExferenceStats n d m) -> do
+                        rs -> rs `forM_` \(e, constrs, ExferenceStats n d m) -> do
                             hsE <- convert qualification e
                             lift $ putStrLn $ prettyPrint hsE
+                            when (not $ null constrs) $ do
+                              constrStrs <- mapM (showHsConstraint tVarIndex)
+                                          $ S.toList
+                                          $ S.fromList
+                                          $ constrs
+                              lift $ putStrLn $ "but only with additional contraints: " ++ intercalate ", " constrStrs
                             lift $ putStrLn $ replicate 40 ' ' ++ "(depth " ++ show d
                                        ++ ", " ++ show n ++ " steps, " ++ show m ++ " max pqueue size)"
 
