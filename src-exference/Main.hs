@@ -201,7 +201,8 @@ main = runO $ do
               Left err -> lift $ do
                 putStrLn $ "could not parse input type: " ++ err
               Right (parsedType, tVarIndex) -> do
-                when (verbosity>0) $ lift $ putStrLn $ "input type parsed as: " ++ show parsedType
+                typeStr <- showHsType tVarIndex parsedType
+                when (verbosity>0) $ lift $ putStrLn $ "input type parsed as: " ++ typeStr
                 unresolvedIdents <- findInvalidNames validNames parsedType
                 when (not $ null unresolvedIdents) $ lift $ do
                   putStrLn $ "warning: unresolved idents in input: "

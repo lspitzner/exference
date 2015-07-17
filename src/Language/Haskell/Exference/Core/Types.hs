@@ -34,6 +34,7 @@ module Language.Haskell.Exference.Core.Types
   , showHsConstraint
   , lookupQNameId
   , TypeVarIndex
+  , showHsType
   )
 where
 
