@@ -17,6 +17,7 @@ import Language.Haskell.Exts.Syntax
 import Language.Haskell.Exts.Pretty
 import Language.Haskell.Exference.Core.FunctionBinding
 import Language.Haskell.Exference.TypeFromHaskellSrc
+import Language.Haskell.Exference.TypeDeclsFromHaskellSrc
 import Language.Haskell.Exference.Core.Types
 import Language.Haskell.Exference.Core.TypeUtils
 
@@ -53,13 +54,14 @@ getClassEnv :: ( ContainsType [String] w
                , Applicative m
                )
             => [QualifiedName]
+            -> TypeDeclMap
             -> [Module]
             -> MultiRWST r w s m (StaticClassEnv, Int)
-getClassEnv ds ms = do
-  etcs <- getTypeClasses ds ms
+getClassEnv ds tDeclMap ms = do
+  etcs <- getTypeClasses ds tDeclMap ms
   mapM_ (mTell . (:[])) $ lefts etcs
   let tcs = rights etcs
-  einsts <- getInstances tcs ds ms
+  einsts <- getInstances tcs ds tDeclMap ms
   mapM_ (mTell . (:[])) $ lefts einsts
   let insts_uninflated = rights einsts
   let insts = inflateInstances insts_uninflated
@@ -74,9 +76,10 @@ getTypeClasses :: forall m r w s m0
                   , m ~ MultiRWST r w s m0
                   )
                => [QualifiedName]
+               -> TypeDeclMap
                -> [Module]
                -> m [Either String HsTypeClass]
-getTypeClasses ds ms = do
+getTypeClasses ds tDeclMap ms = do
   let mdecls = [ (moduleName, d)
                | (Module _ moduleName _ _ _ _ decls) <- ms
                , d <- decls
@@ -102,6 +105,7 @@ getTypeClasses ds ms = do
                 , ctypes <- types `forM` convertTypeInternal []
                                                              (Just moduleName)
                                                              ds
+                                                             tDeclMap
                 ]
               convF (ParenA c)           = convF c
               convF c                    = left
@@ -135,9 +139,10 @@ getInstances :: forall m m0 r w s
                 )
              => [HsTypeClass]
              -> [QualifiedName]
+             -> TypeDeclMap
              -> [Module]
              -> m [Either String HsInstance]
-getInstances tcs ds ms = sequence $ do
+getInstances tcs ds tDeclMap ms = sequence $ do
   Module _ mn _ _ _ _ decls <- ms
   InstDecl _ _ _vars cntxt qname tps _ <- decls
     -- vars would be the forall binds in
@@ -160,9 +165,10 @@ getInstances tcs ds ms = sequence $ do
           constrTransform
             (Just mn)
             ds
+            tDeclMap
             (\str -> find ((str==).tclass_name) tcs)
             asst
-        rtps <- convertTypeInternal tcs (Just mn) ds `mapM` tps
+        rtps <- convertTypeInternal tcs (Just mn) ds tDeclMap `mapM` tps
         ic <- hoistEither instClass
         return $ HsInstance constrs ic rtps
         -- either (Left . (("instance for "++name++": ")++)) Right
@@ -173,15 +179,16 @@ constrTransform :: ( MonadMultiState QNameIndex m
                    )
                 => Maybe ModuleName
                 -> [QualifiedName]
+                -> TypeDeclMap
                 -> (QNameId -> Maybe HsTypeClass)
                 -> Asst
                 -> EitherT String m HsConstraint
-constrTransform mn ds tcLookupF (ClassA qname types) = do
-  let ctypes = convertTypeInternal [] mn ds `mapM` types
+constrTransform mn ds tDeclMap tcLookupF (ClassA qname types) = do
+  let ctypes = convertTypeInternal [] mn ds tDeclMap `mapM` types
   let qn = convertQName mn ds qname
   qnid <- getOrCreateQNameId qn
   case tcLookupF qnid of
     Nothing -> left $ "unknown type class: " ++ show qn
     Just tc -> HsConstraint tc <$> ctypes
-constrTransform mn ds tcLookupF (ParenA c) = constrTransform mn ds tcLookupF c
-constrTransform _ _ _ c = left $ "unknown HsConstraint: " ++ show c
+constrTransform mn ds tDeclMap tcLookupF (ParenA c) = constrTransform mn ds tDeclMap tcLookupF c
+constrTransform _ _ _ _ c = left $ "unknown HsConstraint: " ++ show c

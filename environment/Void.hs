@@ -19,3 +19,5 @@ instance GHC.Generics.Generic Void
 absurd :: Void -> a
 
 vacuous :: Functor f => f Void -> f a
+
+type Not x = x -> Void

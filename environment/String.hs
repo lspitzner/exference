@@ -1,7 +1,6 @@
 module Data.String where
 
-
-data String
+type String = [Data.Char.Char]
 
 -- class IsString a where
 --   fromString :: String -> a 

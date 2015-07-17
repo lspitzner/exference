@@ -19,6 +19,7 @@ import Language.Haskell.Exference.ExpressionToHaskellSrc
 import Language.Haskell.Exference.BindingsFromHaskellSrc
 import Language.Haskell.Exference.ClassEnvFromHaskellSrc
 import Language.Haskell.Exference.TypeFromHaskellSrc
+import Language.Haskell.Exference.TypeDeclsFromHaskellSrc
 import Language.Haskell.Exference.Core.FunctionBinding
 
 import Language.Haskell.Exference.Core.Types
@@ -40,6 +41,7 @@ import Data.Maybe ( listToMaybe, fromMaybe, maybeToList, catMaybes )
 import Data.Either ( lefts, rights )
 import Control.Monad.Writer.Strict
 import qualified Data.Map as M
+import qualified Data.IntMap as IntMap
 import Data.Tree ( drawTree )
 import qualified ListT
 
@@ -64,7 +66,7 @@ import Debug.Trace
 
 checkData :: [(String, Bool, Bool, String, [String], [String])]
 checkData =
-  [ (,,,,,) "showmap"    False False "(Text.Show.Show b) => (a -> b) -> [a] -> [Data.String.String]"
+  [ (,,,,,) "showmap"    False False "(Text.Show.Show b) => (a -> b) -> [a] -> [String]"
                                      ["\\b -> Data.Functor.fmap (\\g -> Text.Show.show (b g))"
                                      ,"\\b -> (\\c -> ((Control.Monad.>>=) c) (\\g -> Control.Applicative.pure (Text.Show.show (b g))))"]
                                      []
@@ -270,7 +272,9 @@ filterBindingsSimple es = filterBindings $ \n -> case n of
 checkInput :: ( m ~ MultiRWST r w s m0
               , Monad m0
               , Functor m0
-              , ContainsType QNameIndex s )
+              , ContainsType QNameIndex s
+              , ContainsType TypeDeclMap r
+              )
            => ExferenceHeuristicsConfig
            -> EnvDictionary
            -> String
@@ -279,7 +283,8 @@ checkInput :: ( m ~ MultiRWST r w s m0
            -> [String]
            -> m ExferenceInput
 checkInput heuristics (bindings, deconss, sEnv) typeStr allowUnused patternM hidden = do
-  ty <- unsafeReadType (sClassEnv_tclasses sEnv) exampleDataTypes typeStr
+  tDeclMap <- mAsk
+  ty <- unsafeReadType (sClassEnv_tclasses sEnv) exampleDataTypes tDeclMap typeStr
   filteredBindings <- filterBindingsSimple hidden bindings
   qNameIndex <- mGet
   return $ ExferenceInput
@@ -309,6 +314,7 @@ checkExpectedResults :: forall m m0 r w s
                         , Monad m0
                         , Functor m0
                         , ContainsType QNameIndex s
+                        , ContainsType TypeDeclMap r
                         )
                      => ExferenceHeuristicsConfig
                      -> EnvDictionary
@@ -446,7 +452,7 @@ exampleOutput :: ( m ~ MultiRWST r w s m0
               -> m [[(Expression, [HsConstraint], ExferenceStats)]]
 exampleOutput heuristics (bindings, deconss, sEnv) =
   exampleInput `forM` \(_, allowUnused, patternM, s) -> do
-    ty <- unsafeReadType (sClassEnv_tclasses sEnv) exampleDataTypes s
+    ty <- unsafeReadType (sClassEnv_tclasses sEnv) exampleDataTypes (IntMap.empty) s
     filteredBindings <- filterBindingsSimple ["join", "liftA2"] bindings
     qNameIndex <- mGet
     return $ takeFindSortNExpressions 10 10 $ ExferenceInput
@@ -526,7 +532,9 @@ printStatistics h env = exampleInOut h env >>= mapM_ f
          )
 
 printCheckExpectedResults :: forall r w s
-                           . ContainsType QNameIndex s
+                           . ( ContainsType QNameIndex s
+                             , ContainsType TypeDeclMap r
+                             )
                           => ExferenceHeuristicsConfig
                           -> EnvDictionary
                           -> MultiRWST r w s IO ()
@@ -594,7 +602,7 @@ printMaxUsage :: ( ContainsType QNameIndex s )
 printMaxUsage h (bindings, deconss, sEnv) = sequence_ $ do
   (name, allowUnused, patternM, typeStr, _expected, hidden) <- checkData
   return $ do
-    ty <- unsafeReadType (sClassEnv_tclasses sEnv) exampleDataTypes typeStr
+    ty <- unsafeReadType (sClassEnv_tclasses sEnv) exampleDataTypes (IntMap.empty) typeStr
     filteredBindings <- filterBindingsSimple hidden bindings
     qNameIndex <- mGet
     let input = ExferenceInput
@@ -621,7 +629,7 @@ printSearchTree :: ( ContainsType QNameIndex s )
 printSearchTree h (bindings, deconss, sEnv) = sequence_ $ do
   (name, allowUnused, patternM, typeStr, _expected, hidden) <- checkData
   return $ do
-    ty <- unsafeReadType (sClassEnv_tclasses sEnv) exampleDataTypes typeStr
+    ty <- unsafeReadType (sClassEnv_tclasses sEnv) exampleDataTypes (IntMap.empty) typeStr
     filteredBindings <- filterBindingsSimple hidden bindings
     qNameIndex <- mGet
     let input = ExferenceInput

@@ -19,6 +19,7 @@ import Language.Haskell.Exference
 import Language.Haskell.Exference.ExpressionToHaskellSrc
 import Language.Haskell.Exference.BindingsFromHaskellSrc
 import Language.Haskell.Exference.ClassEnvFromHaskellSrc
+import Language.Haskell.Exference.TypeDeclsFromHaskellSrc
 import Language.Haskell.Exference.TypeFromHaskellSrc
 import Language.Haskell.Exference.Core.FunctionBinding
 import Language.Haskell.Exference.FunctionDecl
@@ -146,7 +147,9 @@ parseModules :: forall m r w s
                   ( [HsFunctionDecl]
                   , [DeconstructorBinding]
                   , StaticClassEnv
-                  , [QualifiedName] )
+                  , [QualifiedName]
+                  , TypeDeclMap
+                  )
 parseModules l = do
   rawTuples <- lift $ mapM hRead l
   let eParsed = map hParse rawTuples
@@ -162,10 +165,13 @@ parseModules l = do
   mapM_ (mTell . (:[])) $ lefts eParsed
   let mods = rights eParsed
   let ds = getDataTypes mods
-  (cntxt@(StaticClassEnv clss insts), n_insts) <- getClassEnv ds mods
+  typeDeclsE <- getTypeDecls ds mods
+  lefts typeDeclsE `forM_` (mTell . (:[]))
+  let typeDecls = IntMap.fromList $ (\x -> (tdecl_name x, x)) <$> rights typeDeclsE
+  (cntxt@(StaticClassEnv clss insts), n_insts) <- getClassEnv ds typeDecls mods
   -- TODO: try to exfere this stuff
   (decls, deconss) <- do
-    stuff <- mapM (hExtractBinds cntxt ds) mods
+    stuff <- mapM (hExtractBinds cntxt ds typeDecls) mods
     return $ concat *** concat $ unzip stuff
   clssNames <- catMaybes <$> mapM (lookupQNameId . tclass_name) clss
   let allValidNames = ds ++ clssNames
@@ -195,6 +201,7 @@ parseModules l = do
            , builtInDeconstructors++deconss
            , cntxt
            , allValidNames
+           , typeDecls
            )
   where
     hRead :: (ParseMode, String) -> IO (ParseMode, String)
@@ -205,14 +212,15 @@ parseModules l = do
       ParseOk modul       -> Right modul
     hExtractBinds :: StaticClassEnv
                   -> [QualifiedName]
+                  -> TypeDeclMap
                   -> Module
                   -> m ([HsFunctionDecl], [DeconstructorBinding]) 
-    hExtractBinds cntxt ds modul@(Module _ (ModuleName _mname) _ _ _ _ _) = do
+    hExtractBinds cntxt ds tDeclMap modul@(Module _ (ModuleName _mname) _ _ _ _ _) = do
       -- tell $ return $ mname
-      eFromData <- getDataConss (sClassEnv_tclasses cntxt) ds [modul]
+      eFromData <- getDataConss (sClassEnv_tclasses cntxt) ds tDeclMap [modul]
       eDecls <- (++)
-        <$> getDecls ds (sClassEnv_tclasses cntxt) [modul]
-        <*> getClassMethods (sClassEnv_tclasses cntxt) ds [modul]
+        <$> getDecls ds (sClassEnv_tclasses cntxt) tDeclMap [modul]
+        <*> getClassMethods (sClassEnv_tclasses cntxt) ds tDeclMap [modul]
       mapM_ (mTell . (:[])) $ lefts eFromData ++ lefts eDecls
       -- tell $ map show $ rights ebinds
       let (binds1s, deconss) = unzip $ rights eFromData
@@ -231,12 +239,14 @@ parseModulesSimple :: ( ContainsType [String] w
                         ( [RatedHsFunctionDecl]
                         , [DeconstructorBinding]
                         , StaticClassEnv
-                        , [QualifiedName] )
+                        , [QualifiedName]
+                        , TypeDeclMap
+                        )
 parseModulesSimple s = helper
                    <$> parseModules [(haskellSrcExtsParseMode s, s)]
  where
   addRating (a,b) = (a,0.0,b)
-  helper (decls, deconss, cntxt, ds) = (addRating <$> decls, deconss, cntxt, ds)
+  helper (decls, deconss, cntxt, ds, tdm) = (addRating <$> decls, deconss, cntxt, ds, tdm)
 
 ratingsFromFile :: String -> IO (Either String [(QualifiedName, Float)])
 ratingsFromFile s = do
@@ -273,7 +283,9 @@ environmentFromModuleAndRatings :: ( ContainsType [String] w
                                     ( [FunctionBinding]
                                     , [DeconstructorBinding]
                                     , StaticClassEnv
-                                    , [QualifiedName] )
+                                    , [QualifiedName]
+                                    , TypeDeclMap
+                                    )
 environmentFromModuleAndRatings s1 s2 = do
   let exts1 = [ TypeOperators
               , ExplicitForAll
@@ -289,12 +301,12 @@ environmentFromModuleAndRatings s1 s2 = do
                        False
                        False
                        Nothing
-  (decls, deconss, cntxt, ds) <- parseModules [(mode, s1)]
+  (decls, deconss, cntxt, ds, tdm) <- parseModules [(mode, s1)]
   r <- lift $ ratingsFromFile s2
   case r of
     Left e -> do
       mTell ["could not parse ratings!",e]
-      return ([], [], cntxt, [])
+      return ([], [], cntxt, [], tdm)
     Right ratingsRaw -> do
       ratings <- ratingsRaw `forM` \(qname, rval) ->
             [ (qnid, rval)
@@ -304,7 +316,7 @@ environmentFromModuleAndRatings s1 s2 = do
                     , fromMaybe 0.0 (lookup a ratings)
                     , b
                     )
-      return $ (map f decls, deconss, cntxt, ds)
+      return $ (map f decls, deconss, cntxt, ds, tdm)
 
 
 environmentFromPath :: ( ContainsType [String] w
@@ -315,12 +327,14 @@ environmentFromPath :: ( ContainsType [String] w
                          ( [FunctionBinding]
                          , [DeconstructorBinding]
                          , StaticClassEnv
-                         , [QualifiedName] )
+                         , [QualifiedName]
+                         , TypeDeclMap
+                         )
 environmentFromPath p = do
   files <- lift $ getDirectoryContents p
   let modules = ((p ++ "/")++) <$> filter (".hs" `isSuffixOf`) files
   let ratings = ((p ++ "/")++) <$> filter (".ratings" `isSuffixOf`) files
-  (decls, deconss, cntxt, dts) <- parseModules
+  (decls, deconss, cntxt, dts, tdm) <- parseModules
     [ (mode, m)
     | m <- modules
     , let mode = haskellSrcExtsParseMode m]
@@ -353,4 +367,4 @@ environmentFromPath p = do
                 , fromMaybe 0.0 (lookup a rs')
                 , b
                 )
-  return $ (map f decls, deconss, cntxt, dts)
+  return $ (map f decls, deconss, cntxt, dts, tdm)

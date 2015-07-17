@@ -17,6 +17,7 @@ import Language.Haskell.Exference.ExpressionToHaskellSrc
 import Language.Haskell.Exference.BindingsFromHaskellSrc
 import Language.Haskell.Exference.ClassEnvFromHaskellSrc
 import Language.Haskell.Exference.TypeFromHaskellSrc
+import Language.Haskell.Exference.TypeDeclsFromHaskellSrc
 import Language.Haskell.Exference.Core.FunctionBinding
 import Language.Haskell.Exference.EnvironmentParser
 
@@ -168,7 +169,8 @@ main = runO $ do
         ( (eSignatures
           , eDeconss
           , sEnv@(StaticClassEnv clss insts)
-          , validNames)
+          , validNames
+          , tdeclMap )
          ,messages :: [String] ) <- withMultiWriterAW $ environmentFromPath envDir
         let
           env = (eSignatures, eDeconss, sEnv)
@@ -176,6 +178,7 @@ main = runO $ do
           forM_ messages $ \m -> putStrLn $ "environment warning: " ++ m
         when (PrintEnv `elem` flags) $ lift $ do
           when (verbosity>0) $ putStrLn "[Environment]"
+          mapM_ print $ IntMap.elems tdeclMap
           mapM_ print $ clss
           mapM_ print $ [(i,x)| (i,xs) <- IntMap.toList insts, x <- xs]
           mapM_ print $ eSignatures
@@ -186,8 +189,9 @@ main = runO $ do
           printAndStuff testHeuristicsConfig env
         when (Tests `elem` flags) $ do
           when (verbosity>0) $ lift $ putStrLn "[Tests]"
-          printCheckExpectedResults testHeuristicsConfig { heuristics_solutionLength = 0.0 }
-                                    env
+          withMultiReader tdeclMap $ printCheckExpectedResults
+                                       testHeuristicsConfig { heuristics_solutionLength = 0.0 }
+                                       env
         case inputs of
           []    -> return () -- probably impossible..
           (x:_) -> do
@@ -195,6 +199,7 @@ main = runO $ do
             eParsedType <- runEitherT $ parseType (sClassEnv_tclasses sEnv)
                                                   Nothing
                                                   validNames
+                                                  tdeclMap
                                                   (haskellSrcExtsParseMode "inputtype")
                                                   x
             case eParsedType of

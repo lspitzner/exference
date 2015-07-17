@@ -16,18 +16,6 @@ instance Prelude.Integral a => Prelude.RealFrac (Ratio a)
 instance (Prelude.Integral a, Text.Show.Show a) => Text.Show.Show (Ratio a)
 instance (Foreign.Storable.Storable a, Prelude.Integral a) => Foreign.Storable.Storable (Ratio a)
 
-data Rational
-
-instance Prelude.Enum Rational
-instance Data.Data.Data.Eq.Eq Rational
-instance Prelude.Fractional Rational
-instance Data.Data.Data Rational
-instance Prelude.Num Rational
-instance Data.Data.Data.Ord.Ord Rational
-instance Text.Read.Read Rational
-instance Prelude.Real Rational
-instance Prelude.RealFrac Rational
-instance Text.Show.Show Rational
-instance Foreign.Storable.Storable Rational
+type Rational = Ratio Prelude.Integer
 
 (%) :: Prelude.Integral a => a -> a -> Ratio a 

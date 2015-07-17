@@ -17,6 +17,7 @@ import Language.Haskell.Exts.Syntax
 import Language.Haskell.Exts.Pretty
 import Language.Haskell.Exference.Core.FunctionBinding
 import Language.Haskell.Exference.TypeFromHaskellSrc
+import Language.Haskell.Exference.TypeDeclsFromHaskellSrc
 import Language.Haskell.Exference.Core.Types
 import Language.Haskell.Exference.Core.TypeUtils
 import Language.Haskell.Exference.FunctionDecl
@@ -44,14 +45,15 @@ getDecls :: ( ContainsType QNameIndex s
             )
          => [QualifiedName]
          -> [HsTypeClass]
+         -> TypeDeclMap
          -> [Module]
          -> MultiRWST r w s m [(Either String HsFunctionDecl)]
-getDecls ds tcs modules = fmap (>>= (either (return.Left) (map Right)))
-                        $ sequence
-                        $ do
+getDecls ds tcs tDeclMap modules = fmap (>>= (either (return.Left) (map Right)))
+                                $ sequence
+                                $ do
   Module _loc mn _pragma _warning _mexp _imp decls <- modules
   d <- decls
-  return $ runEitherT $ transformDecl tcs ds mn d
+  return $ runEitherT $ transformDecl tcs ds mn tDeclMap d
 
 transformDecl :: ( ContainsType QNameIndex s
                  , Monad m
@@ -60,13 +62,14 @@ transformDecl :: ( ContainsType QNameIndex s
               => [HsTypeClass]
               -> [QualifiedName]
               -> ModuleName
+              -> TypeDeclMap
               -> Decl
               -> EitherT String (MultiRWST r w s m) [HsFunctionDecl]
-transformDecl tcs ds mn (TypeSig _loc names qtype)
+transformDecl tcs ds mn tDeclMap (TypeSig _loc names qtype)
   = insName qtype $ do
-      (ctype, _) <- convertType tcs (Just mn) ds qtype
+      (ctype, _) <- convertType tcs (Just mn) ds tDeclMap qtype
       mapM (helper mn ctype) names
-transformDecl _ _ _ _ = return []
+transformDecl _ _ _ _ _ = return []
 
 transformDecl' :: ( MonadMultiState QNameIndex m
                   , MonadMultiState ConvData m
@@ -76,13 +79,14 @@ transformDecl' :: ( MonadMultiState QNameIndex m
                => [HsTypeClass]
                -> [QualifiedName]
                -> ModuleName
+               -> TypeDeclMap
                -> Decl
                -> EitherT String m [HsFunctionDecl]
-transformDecl' tcs ds mn (TypeSig _loc names qtype)
+transformDecl' tcs ds mn tDeclMap (TypeSig _loc names qtype)
   = insName qtype $ do
-      ctype <- convertTypeInternal tcs (Just mn) ds qtype
+      ctype <- convertTypeInternal tcs (Just mn) ds tDeclMap qtype
       mapM (helper mn ctype) names
-transformDecl' _ _ _ _ = return []
+transformDecl' _ _ _ _ _ = return []
 
 insName :: (Functor m, Monad m)
         => Type -> EitherT String m a -> EitherT String m a
@@ -102,10 +106,11 @@ getDataConss :: ( ContainsType QNameIndex s
                 )
              => [HsTypeClass]
              -> [QualifiedName]
+             -> TypeDeclMap
              -> [Module]
              -> MultiRWST r w s m [Either String ( [HsFunctionDecl]
                                                  , DeconstructorBinding )]
-getDataConss tcs ds modules = sequence $ do
+getDataConss tcs ds tDeclMap modules = sequence $ do
   Module _loc moduleName _pragma _warning _mexp _imp decls <- modules
   DataDecl _loc _newtflag cntxt name params conss _derives <- decls
   let
@@ -139,7 +144,7 @@ getDataConss tcs ds modules = sequence $ do
       (cname,tys) <- case conDecl of
         ConDecl c t -> right (c, t)
         x           -> left $ "unknown ConDecl: " ++ show x
-      convTs <- convertTypeInternal tcs (Just moduleName) ds `mapM` tys
+      convTs <- convertTypeInternal tcs (Just moduleName) ds tDeclMap `mapM` tys
       qid <- getOrCreateQNameId $ convertModuleName moduleName cname
       return $ (qid, convTs)
   let
@@ -169,9 +174,10 @@ getClassMethods :: ( ContainsType QNameIndex s
                    )
                 => [HsTypeClass]
                 -> [QualifiedName]
+                -> TypeDeclMap
                 -> [Module]
                 -> MultiRWST r w s m [Either String HsFunctionDecl]
-getClassMethods tcs ds modules = fmap join $ sequence $ do
+getClassMethods tcs ds tDeclMap modules = fmap join $ sequence $ do
   Module _loc moduleName _pragma _warning _mexp _imp decls <- modules
   ClassDecl _ _ name@(Ident nameStr) vars _ cdecls <- decls
   return $ do
@@ -195,7 +201,7 @@ getClassMethods tcs ds modules = fmap join $ sequence $ do
             Right cnstr ->
               mapM ( runEitherT
                    . fmap (map (addConstraint cnstr))
-                   . transformDecl' tcs ds moduleName)
+                   . transformDecl' tcs ds moduleName tDeclMap)
                 $ [ d | ClsDecl d <- cdecls ]
         let _ = rEithers :: [Either String [HsFunctionDecl]]
         return $ concatMap (either (return . Left . errorMod) (map Right))
@@ -207,7 +213,13 @@ getClassMethods tcs ds modules = fmap join $ sequence $ do
       --(n, ForallType [] [c] t)
 
 getDataTypes :: [Module] -> [QualifiedName]
-getDataTypes modules = do
-  Module _loc moduleName _pragma _warning _mexp _imp decls <- modules
-  DataDecl _ _ _ name _ _ _ <- decls
-  return $ convertModuleName moduleName name
+getDataTypes modules = d1 ++ d2
+ where
+  d1 = do
+    Module _loc moduleName _pragma _warning _mexp _imp decls <- modules
+    DataDecl _ _ _ name _ _ _ <- decls
+    return $ convertModuleName moduleName name
+  d2 = do
+    Module _loc moduleName _pragma _warning _mexp _imp decls <- modules
+    TypeDecl _ name _ _ <- decls
+    return $ convertModuleName moduleName name

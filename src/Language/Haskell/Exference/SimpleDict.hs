@@ -21,7 +21,7 @@ import Language.Haskell.Exference.Core ( ExferenceHeuristicsConfig(..) )
 import Language.Haskell.Exference.Core.Types
 import Language.Haskell.Exference.Core.TypeUtils
 import Language.Haskell.Exference.FunctionDecl
-import Language.Haskell.Exference.TypeFromHaskellSrc ( unsafeReadType0 )
+import Language.Haskell.Exference.TypeDeclsFromHaskellSrc ( unsafeReadType0 )
 
 import qualified Data.Set as S
 import qualified Data.Map.Strict as M

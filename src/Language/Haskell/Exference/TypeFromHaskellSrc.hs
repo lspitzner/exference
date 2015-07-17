@@ -5,17 +5,14 @@
 
 module Language.Haskell.Exference.TypeFromHaskellSrc
   ( ConvData(..)
-  , convertType
-  , convertTypeInternal
+  , convertTypeNoDecl
+  , convertTypeNoDeclInternal
   , convertName
   , convertQName
   , convertModuleName
   , getVar
   -- , ConversionMonad
-  , parseType
   , parseQualifiedName
-  , unsafeReadType
-  , unsafeReadType0
   , tyVarTransform
   , haskellSrcExtsParseMode
   , findInvalidNames
@@ -73,7 +70,7 @@ haskellSrcExtsParseMode s = P.ParseMode (s++".hs")
             , MultiParamTypeClasses ]
     exts2 = map EnableExtension exts1
 
-convertType :: ( ContainsType T.QNameIndex s
+convertTypeNoDecl :: ( ContainsType T.QNameIndex s
                , Monad m
                )
             => [T.HsTypeClass]
@@ -81,8 +78,8 @@ convertType :: ( ContainsType T.QNameIndex s
             -> [T.QualifiedName]
             -> Type
             -> EitherT String (MultiRWST r w s m) (T.HsType, T.TypeVarIndex)
-convertType tcs mn ds t =
-  mapEitherT conv $ convertTypeInternal tcs mn ds t
+convertTypeNoDecl tcs mn ds t =
+  mapEitherT conv $ convertTypeNoDeclInternal tcs mn ds t
  where
   conv m = [ [ (r, index)
              | r <- eith
@@ -90,7 +87,7 @@ convertType tcs mn ds t =
            | (eith, ConvData _ index) <- withMultiStateAS (ConvData 0 M.empty) m
            ]
 
-convertTypeInternal :: ( MonadMultiState T.QNameIndex m
+convertTypeNoDeclInternal :: ( MonadMultiState T.QNameIndex m
                        , MonadMultiState ConvData m
                        )
                     => [T.HsTypeClass]
@@ -100,7 +97,7 @@ convertTypeInternal :: ( MonadMultiState T.QNameIndex m
                                          -- (to keep things unique)
                     -> Type
                     -> EitherT String m T.HsType
-convertTypeInternal tcs defModuleName ds ty = helper ty
+convertTypeNoDeclInternal tcs defModuleName ds ty = helper ty
  where
   helper (TyFun a b)      = T.TypeArrow
                               <$> helper a
@@ -195,7 +192,7 @@ convertConstraint :: ( MonadMultiState T.QNameIndex m
                   -> EitherT String m T.HsConstraint
 convertConstraint tcs defModuleName@(Just _) ds (ClassA qname types)
   | str    <- convertQName defModuleName ds qname
-  , ctypes <- mapM (convertTypeInternal tcs defModuleName ds) types
+  , ctypes <- mapM (convertTypeNoDeclInternal tcs defModuleName ds) types
   = do
       strId <- TU.getOrCreateQNameId str
       unknown <- TU.unknownTypeClass
@@ -205,7 +202,7 @@ convertConstraint tcs defModuleName@(Just _) ds (ClassA qname types)
                               $ tcs)
                               ts
 convertConstraint tcs Nothing ds (ClassA (UnQual (Symbol "[]")) types)
-  | ctypes <- mapM (convertTypeInternal tcs Nothing ds) types
+  | ctypes <- mapM (convertTypeNoDeclInternal tcs Nothing ds) types
   = do
       ts <- ctypes
       unknown <- TU.unknownTypeClass
@@ -216,7 +213,7 @@ convertConstraint tcs Nothing ds (ClassA (UnQual (Symbol "[]")) types)
                  $ tcs )
                  ts
 convertConstraint tcs Nothing ds (ClassA (UnQual (Ident name)) types)
-  | ctypes <- mapM (convertTypeInternal tcs Nothing ds) types
+  | ctypes <- mapM (convertTypeNoDeclInternal tcs Nothing ds) types
   = do
       ts <- ctypes
       unknown <- TU.unknownTypeClass
@@ -229,7 +226,7 @@ convertConstraint tcs Nothing ds (ClassA (UnQual (Ident name)) types)
       let tc = fromMaybe unknown $ snd <$> find (searchF . fst) tcsTuples
       return $ T.HsConstraint tc ts
 convertConstraint tcs _ ds (ClassA q@(Qual {}) types)
-  | ctypes <- mapM (convertTypeInternal tcs Nothing ds) types
+  | ctypes <- mapM (convertTypeNoDeclInternal tcs Nothing ds) types
   , name <- convertQName Nothing ds q
   = do
       ts <- ctypes
@@ -246,43 +243,6 @@ convertConstraint env defModuleName ds (ParenA c)
   = convertConstraint env defModuleName ds c
 convertConstraint _ _ _ c
   = left $ "bad constraint: " ++ show c
-
-parseType :: ( ContainsType T.QNameIndex s
-             , Monad m
-             )
-          => [T.HsTypeClass]
-          -> Maybe ModuleName
-          -> [T.QualifiedName]
-          -> P.ParseMode
-          -> String
-          -> EitherT String (MultiRWST r w s m) (T.HsType, T.TypeVarIndex)
-parseType tcs mn ds m s = case P.parseTypeWithMode m s of
-  f@(P.ParseFailed _ _) -> left $ show f
-  P.ParseOk t           -> convertType tcs mn ds t
-
-unsafeReadType :: ( ContainsType T.QNameIndex s
-                  , Monad m
-                  )
-               => [T.HsTypeClass]
-               -> [T.QualifiedName]
-               -> String
-               -> MultiRWST r w s m T.HsType
-unsafeReadType tcs ds s = do
-  parseRes <- runEitherT $ parseType tcs Nothing ds (haskellSrcExtsParseMode "type") s
-  return $ case parseRes of
-    Left _ -> error $ "unsafeReadType: could not parse type: " ++ s
-    Right (t, _) -> t
-
-unsafeReadType0 :: ( ContainsType T.QNameIndex s
-                   , Monad m
-                   )
-                => String
-                -> MultiRWST r w s m T.HsType
-unsafeReadType0 s = do
-  parseRes <- runEitherT $ parseType [] Nothing [] (haskellSrcExtsParseMode "type") s
-  return $ case parseRes of
-    Left _ -> error $ "unsafeReadType: could not parse type: " ++ s
-    Right (t, _) -> t
 
 tyVarTransform :: MonadMultiState ConvData m
                => TyVarBind
