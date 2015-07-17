@@ -32,7 +32,7 @@ import Control.Monad.Trans.Either ( runEitherT
                                   , left
                                   )
 
-import Control.Monad ( forM, join )
+import Control.Monad ( forM, join, liftM )
 import Data.Either ( lefts, rights )
 import Data.Bifunctor ( bimap )
 
@@ -64,10 +64,10 @@ applyTypeDecls m = go
                          , t2' <- go t2
                          ]
   go (TypeApp l r) = goApp [r] l
-  go (TypeForall vars constrs t) = TypeForall vars constrs <$> go t
+  go (TypeForall vars constrs t) = TypeForall vars constrs `liftM` go t
   goApp rs (TypeApp l r)      = goApp (r:rs) l
   goApp rs (TypeCons qnId)    = case IntMap.lookup qnId m of
-    Nothing                  -> foldl TypeApp (TypeCons qnId) <$> mapM go rs
+    Nothing                  -> foldl TypeApp (TypeCons qnId) `liftM` mapM go rs
     Just (Left _)            -> Right $ TypeCons qnId -- no need to show the
                                    -- same error multiple times, or is there?
     Just (Right (HsTypeDecl _ vs t))
@@ -81,7 +81,7 @@ applyTypeDecls m = go
                                 , let substituted = applySubsts substs t
                                 ]
     _                        -> Left $ "wrong number of parameters for type declaration " ++ show qnId
-  goApp rs l               = foldl1 TypeApp <$> mapM go (l:rs)
+  goApp rs l               = foldl1 TypeApp `liftM` mapM go (l:rs)
 
 getTypeDecls :: ( ContainsType QNameIndex s
                 , Monad m
@@ -93,7 +93,7 @@ getTypeDecls ds modules = do
   rawList <- sequence $ do
     Module _loc mn _pragma _warning _mexp _imp decls <- modules
     TypeDecl _loc name rawVars rawTy <- decls
-    return $ fmap (bimap (("when parsing type declaration "++show name++": ")++) id)
+    return $ liftM (bimap (("when parsing type declaration "++show name++": ")++) id)
            $ runEitherT
            $ do
       (ty, tyVarIndex) <- convertTypeNoDecl [] (Just mn) ds rawTy
@@ -103,7 +103,7 @@ getTypeDecls ds modules = do
       -- no new type variables should appear on the left hand side.
       vars <- mapEitherT (withMultiStateA (ConvData 1000 tyVarIndex)) $ rawVars `forM` tyVarTransform
       return $ HsTypeDecl qNameId vars ty
-  let converter (HsTypeDecl n vs t) = HsTypeDecl n vs <$> applyTypeDecls resultMap t
+  let converter (HsTypeDecl n vs t) = HsTypeDecl n vs `liftM` applyTypeDecls resultMap t
       resultMap :: IntMap (Either String HsTypeDecl)
       resultMap = IntMap.map converter
                 $ IntMap.fromList

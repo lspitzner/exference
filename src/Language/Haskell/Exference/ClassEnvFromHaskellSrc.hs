@@ -34,7 +34,7 @@ import Control.Applicative ( (<$>), (<*>), Applicative )
 import Data.Maybe ( fromMaybe )
 import Data.Either ( lefts, rights )
 import Data.List ( find )
-
+import Data.Traversable ( traverse )
 import Control.Monad.Trans.MultiRWS
 import Data.HList.ContainsType
 

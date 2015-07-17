@@ -45,6 +45,7 @@ import Data.List ( intercalate, intersperse )
 import Data.Foldable ( fold, foldMap )
 import Control.Applicative ( (<$>), (<*>), (*>), (<*) )
 import Data.Maybe ( maybeToList, fromMaybe )
+import Control.Monad ( liftM )
 
 import qualified Data.Set as S
 import qualified Data.IntSet as IntSet
@@ -60,6 +61,7 @@ import Language.Haskell.Exts.Syntax ( Name (..) )
 import Control.DeepSeq.Generics
 import GHC.Generics
 import Data.Data ( Data )
+import Data.Typeable ( Typeable )
 import Control.Monad.Trans.MultiState
 
 import Debug.Hood.Observe
@@ -76,7 +78,7 @@ data QualifiedName
   | ListCon
   | TupleCon Int
   | Cons
-  deriving (Eq, Ord, Generic, Data)
+  deriving (Eq, Ord, Generic, Data, Typeable)
 
 data HsType = TypeVar      {-# UNPACK #-} !TVarId
             | TypeConstant {-# UNPACK #-} !TVarId
@@ -85,7 +87,7 @@ data HsType = TypeVar      {-# UNPACK #-} !TVarId
             | TypeArrow    HsType HsType
             | TypeApp      HsType HsType
             | TypeForall   [TVarId] [HsConstraint] HsType
-  deriving (Ord, Eq, Generic, Data)
+  deriving (Ord, Eq, Generic, Data, Typeable)
 
 data HsTypeOffset = HsTypeOffset HsType !Int
 
@@ -94,7 +96,7 @@ data QNameIndex = QNameIndex
   , qNameIndex_indexA :: M.Map QualifiedName QNameId
   , qNameIndex_indexB :: M.Map QNameId QualifiedName
   }
-  deriving (Show, Data)
+  deriving (Show, Data, Typeable)
 
 type TypeVarIndex = M.Map Name Int
 
@@ -110,26 +112,26 @@ data HsTypeClass = HsTypeClass
   , tclass_params :: [TVarId]
   , tclass_constraints :: [HsConstraint]
   }
-  deriving (Eq, Show, Ord, Generic, Data)
+  deriving (Eq, Show, Ord, Generic, Data, Typeable)
 
 data HsInstance = HsInstance
   { instance_constraints :: [HsConstraint]
   , instance_tclass :: HsTypeClass
   , instance_params :: [HsType]
   }
-  deriving (Eq, Show, Ord, Generic, Data)
+  deriving (Eq, Show, Ord, Generic, Data, Typeable)
 
 data HsConstraint = HsConstraint
   { constraint_tclass :: HsTypeClass
   , constraint_params :: [HsType]
   }
-  deriving (Eq, Ord, Generic, Data)
+  deriving (Eq, Ord, Generic, Data, Typeable)
 
 data StaticClassEnv = StaticClassEnv
   { sClassEnv_tclasses :: [HsTypeClass]
   , sClassEnv_instances :: IntMap.IntMap [HsInstance]
   }
-  deriving (Show, Generic, Data)
+  deriving (Show, Generic, Data, Typeable)
 
 data QueryClassEnv = QueryClassEnv
   { qClassEnv_env :: StaticClassEnv
@@ -179,7 +181,7 @@ showHsType :: forall m
            => TypeVarIndex
            -> HsType
            -> m String
-showHsType convMap t = ($ "") <$> h 0 t
+showHsType convMap t = ($ "") `liftM` h 0 t
  where
   h :: Int -> HsType -> m ShowS
   h _ (TypeVar i)      = return
@@ -208,14 +210,14 @@ showHsType convMap t = ($ "") <$> h 0 t
     | t1Shows <- h 0 t1
     , t2Shows <- h 0 t2
     ]
-  h d (TypeForall [] [] t) = h d t
-  h d (TypeForall is cs t) =
+  h d (TypeForall [] [] ty) = h d ty
+  h d (TypeForall is cs ty) =
     [ showParen (d>0)
       $ showString ("forall " ++ intercalate ", " (showVar <$> is) ++ " . ")
       . showParen True (\x -> foldr (++) x $ intersperse ", " $ map show cs)
       . showString " => "
       . tShows
-    | tShows <- h (-2) t
+    | tShows <- h (-2) ty
     ]
 
 instance Observable HsType where
@@ -302,10 +304,10 @@ constraintApplySubst s (HsConstraint c ps) =
 
 -- returns if any change was necessary,
 -- plus the (potentially changed) constraint
-constraintApplySubst' :: Subst -> HsConstraint -> (Bool, HsConstraint)
-constraintApplySubst' s (HsConstraint c ps) =
-  let applied = map (applySubst' s) ps
-  in (any fst applied, HsConstraint c $ snd <$> applied)
+-- constraintApplySubst' :: Subst -> HsConstraint -> (Bool, HsConstraint)
+-- constraintApplySubst' s (HsConstraint c ps) =
+--   let applied = map (applySubst' s) ps
+--   in (any fst applied, HsConstraint c $ snd <$> applied)
 
 {-# INLINE constraintApplySubsts #-}
 constraintApplySubsts :: Substs -> HsConstraint -> HsConstraint
@@ -365,24 +367,24 @@ applySubst s@(i,_) f@(TypeForall js cs t) = if elem i js
   then f
   else TypeForall js (constraintApplySubst s <$> cs) (applySubst s t)
 
-applySubst' :: Subst -> HsType -> (Bool, HsType)
-applySubst' (i, t) v@(TypeVar j) = if i==j then (True, t) else (False, v)
-applySubst' _ c@(TypeConstant _) = (False, c)
-applySubst' _ c@(TypeCons _)     = (False, c)
-applySubst' s (TypeArrow t1 t2)  =
-  let (b1, t1') = applySubst' s t1
-      (b2, t2') = applySubst' s t2
-  in (b1||b2, TypeArrow t1' t2')
-applySubst' s (TypeApp t1 t2)    =
-  let (b1, t1') = applySubst' s t1
-      (b2, t2') = applySubst' s t2
-  in (b1||b2, TypeApp t1' t2')
-applySubst' s@(i,_) f@(TypeForall js cs t) = if elem i js
-  then (False, f)
-  else
-    let applied = constraintApplySubst' s <$> cs
-        (b, t') = applySubst' s t
-    in (b || any fst applied, TypeForall js (snd <$> applied) t')
+-- applySubst' :: Subst -> HsType -> (Bool, HsType)
+-- applySubst' (i, t) v@(TypeVar j) = if i==j then (True, t) else (False, v)
+-- applySubst' _ c@(TypeConstant _) = (False, c)
+-- applySubst' _ c@(TypeCons _)     = (False, c)
+-- applySubst' s (TypeArrow t1 t2)  =
+--   let (b1, t1') = applySubst' s t1
+--       (b2, t2') = applySubst' s t2
+--   in (b1||b2, TypeArrow t1' t2')
+-- applySubst' s (TypeApp t1 t2)    =
+--   let (b1, t1') = applySubst' s t1
+--       (b2, t2') = applySubst' s t2
+--   in (b1||b2, TypeApp t1' t2')
+-- applySubst' s@(i,_) f@(TypeForall js cs t) = if elem i js
+--   then (False, f)
+--   else
+--     let applied = constraintApplySubst' s <$> cs
+--         (b, t') = applySubst' s t
+--     in (b || any fst applied, TypeForall js (snd <$> applied) t')
 
 applySubsts :: Substs -> HsType -> HsType
 applySubsts s v@(TypeVar i)      = fromMaybe v $ IntMap.lookup i s

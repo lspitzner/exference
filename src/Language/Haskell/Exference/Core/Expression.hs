@@ -20,6 +20,8 @@ import Data.Function ( on )
 import Data.Maybe ( fromMaybe )
 import Control.Monad ( forM )
 import Data.Functor.Identity ( runIdentity )
+import Data.Functor ( (<$>) )
+import Control.Monad ( liftM )
 
 import Control.DeepSeq.Generics
 import GHC.Generics
@@ -82,7 +84,7 @@ instance NFData Expression where rnf = genericRnf
 showExpression :: forall m
                 . MonadMultiState QNameIndex m
                => Expression -> m String
-showExpression e = ($ "") <$> h 0 e
+showExpression e = ($ "") `liftM` h 0 e
  where
   h :: Int -> Expression -> m ShowS
   h _ (ExpVar i) = return $ showString $ showVar i

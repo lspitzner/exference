@@ -49,6 +49,7 @@ import Data.Function ( on )
 import Data.Monoid ( mempty, First(First), getFirst, mconcat )
 import Data.Foldable ( foldMap, sum )
 import Control.Monad.Morph ( lift )
+import Data.Typeable ( Typeable )
 
 -- import Control.Concurrent.Chan
 import Control.Concurrent ( forkIO )
@@ -101,7 +102,7 @@ data ExferenceHeuristicsConfig = ExferenceHeuristicsConfig
   , heuristics_unusedVar              :: Float
   , heuristics_solutionLength         :: Float
   }
-  deriving (Show, Data)
+  deriving (Show, Data, Typeable)
 
 data ExferenceInput = ExferenceInput
   { input_goalType    :: HsType                 -- ^ try to find a expression
@@ -143,7 +144,7 @@ data ExferenceInput = ExferenceInput
                                                 -- solutions).
   , input_heuristicsConfig :: ExferenceHeuristicsConfig
   }
-  deriving (Show, Data)
+  deriving (Show, Data, Typeable)
 
 type ExferenceOutputElement = (Expression, [HsConstraint], ExferenceStats)
 type ExferenceChunkElement = (BindingUsages, SearchTree, [ExferenceOutputElement])
