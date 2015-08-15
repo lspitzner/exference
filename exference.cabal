@@ -45,6 +45,7 @@ data-files:
   environment/Typeable.hs
   environment/Void.hs
   environment/Word.hs
+  environment/Text.hs
 
 
 
