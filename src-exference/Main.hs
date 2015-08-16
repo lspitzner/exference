@@ -40,6 +40,7 @@ import Data.Ord ( comparing )
 import Text.Printf
 import Data.Maybe ( listToMaybe, fromMaybe, maybeToList )
 import Data.Either ( lefts, rights )
+import Data.Functor.Identity ( runIdentity )
 import Control.Monad.Writer.Strict
 import qualified Data.Map as M
 import qualified Data.Set as S
@@ -97,6 +98,7 @@ data Flag = Verbose Int
           | PatternMatchMC
           | Qualification Int
           | Constraints
+          | AllowFix
   deriving (Show, Eq)
 
 options :: [OptDescr Flag]
@@ -116,6 +118,7 @@ options =
   , Option ['j'] ["parallel"]    (NoArg Parallel)      "use the parallelized version of the algorithm"
   , Option ['o'] ["short"]       (NoArg Shortest)      "prefer shorter solutions"
   , Option ['f'] ["first"]       (NoArg FirstSol)      "stop after finding the first solution"
+  , Option []    ["fix"]         (NoArg AllowFix)      "allow the `fix` function in the environment"
   , Option ['b'] ["best"]        (NoArg Best)          "calculate all solutions, and print the best one"
   , Option ['u'] ["allowUnused"] (NoArg Unused)        "allow unused input variables"
   , Option ['c'] ["patternMatchMC"] (NoArg PatternMatchMC) "pattern match on multi-constructor data types (might lead to hang-ups at the moment)"
@@ -214,9 +217,14 @@ main = runO $ do
                            ++ intercalate ", " (nub $ show <$> unresolvedIdents)
                   putStrLn $ "(this may be harmless, but no instances will be connected to these.)"
                 qNameIndex <- mGet
+                let hidden = if AllowFix `elem` flags then [] else ["fix"]
+                let filteredBindings = runIdentity
+                                     $ runMultiRWSTNil
+                                     $ withMultiStateA qNameIndex
+                                     $ filterBindingsSimple hidden eSignatures
                 let input = ExferenceInput
                       parsedType
-                      eSignatures
+                      filteredBindings
                       eDeconss
                       sEnv
                       (Unused `elem` flags)

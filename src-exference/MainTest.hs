@@ -7,6 +7,7 @@ module MainTest
   , printStatistics
   , printMaxUsage
   , printSearchTree
+  , filterBindingsSimple -- TODO: refactor/move this
   )
 where
 
