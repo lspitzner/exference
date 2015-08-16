@@ -24,6 +24,7 @@ module Language.Haskell.Exference.Core.Internal.ExferenceNode
   , initialScopes
   , addGoalProvided -- unused atm
   , showSearchNode
+  , showSearchNode'
   )
 where
 
@@ -40,6 +41,7 @@ import qualified Data.IntMap.Strict as IntMap
 import qualified Data.Vector as V
 import Data.Sequence
 import Data.Foldable ( toList )
+import Data.Functor.Identity ( runIdentity )
 
 import Text.PrettyPrint
 
@@ -232,6 +234,12 @@ instance NFData SearchNode   where rnf = genericRnf
 --       tVarPType :: (TVarId, HsType, [HsType], [TVarId], [HsConstraint]) -> Doc
 --       tVarPType (i, t, ps, [], []) = tVarType (i, foldr TypeArrow t ps)
 --       tVarPType (i, t, ps, fs, cs) = tVarType (i, TypeForall fs cs (foldr TypeArrow t ps))
+
+showSearchNode' :: QNameIndex -> SearchNode -> String
+showSearchNode' ind sn = runIdentity
+                       $ runMultiStateTNil
+                       $ withMultiStateA ind
+                       $ showSearchNode sn
 
 showSearchNode :: MonadMultiState QNameIndex m => SearchNode -> m String
 showSearchNode

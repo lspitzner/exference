@@ -78,7 +78,7 @@ Control.Monad.join               = 0.0
 Data.Void.vacuous = 50.0
 Data.Void.absurd  = 12.0
 
-Data.Bool.bool = 5.0
+Data.Bool.bool = 20.0
 
 Text.Read.readMaybe        = 10.0
 Text.Read.readEither       = 10.0

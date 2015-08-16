@@ -27,6 +27,8 @@ import Language.Haskell.Exference.Core.Internal.ConstraintSolver
 import Language.Haskell.Exference.Core.Internal.ExferenceNode
 import Language.Haskell.Exference.Core.Internal.ExferenceNodeBuilder
 
+import Control.Monad.Trans.MultiState
+
 import qualified Data.PQueue.Prio.Max as Q
 import qualified Data.Map as M
 import qualified Data.IntMap.Strict as IntMap
@@ -336,7 +338,7 @@ stateStep :: Bool
           -> [SearchNode]
 stateStep multiPM allowConstrs qNameIndex h s
   = stateStep2 multiPM allowConstrs qNameIndex h
-              -- $ (\_ -> trace (show s ++ " " ++ show (rateNode h s)) s)
+              -- $ (\_ -> trace (showSearchNode' qNameIndex s ++ " " ++ show (rateNode h s)) s)
               $ s
               -- trace (show (node_depth s) ++ " " ++ show (rateGoals $ node_goals s)
               --                      ++ " " ++ show (rateScopes $ node_providedScopes s)
