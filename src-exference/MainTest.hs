@@ -338,13 +338,15 @@ checkExpectedResults heuristics env = mapMultiRWST (return . runIdentity)
                -> MultiRWST r w s Identity (Maybe (Int, ExferenceStats))
         getExp _ [] = return $ Nothing
         getExp n ((e, _, s):r) = do
-          eStr <- showExpression e
+          eStr <- showExpression $ simplifyEta $ simplifyLets $ e
           if eStr `elem` expected
             then return $ Just (n,s)
             else getExp (n+1) r
     r <- case findExpressions input of
         []       -> return $ Nothing
-        xs@((e, _, stats):_) -> [ Just ((e, stats), rs)
+        xs@((e, _, stats):_) -> [ Just ( (simplifyEta $ simplifyLets $ e, stats)
+                                       , rs
+                                       )
                                 | rs <- getExp 0 xs
                                 ]
     return $

@@ -242,7 +242,7 @@ findExpressions (ExferenceInput rawType
                                            (node_varUses solution)
                   , allowUnused || unusedVarCount==0
                   , let e = -- trace (showNodeDevelopment solution) $ 
-                            simplifyEta $ simplifyLets $ node_expression solution
+                            node_expression solution
                   , let d = node_depth solution
                           + ( heuristics_unusedVar heuristics
                             * fromIntegral unusedVarCount

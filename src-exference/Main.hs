@@ -250,7 +250,7 @@ main = runO $ do
                         then lift $ putStrLn "[no results]"
                         else forM_ rs
                           $ \(e, constrs, ExferenceStats n d m) -> do
-                            hsE <- convert qualification e
+                            hsE <- convert qualification $ simplifyEta $ simplifyLets $ e
                             lift $ putStrLn $ prettyPrint hsE
                             when (not $ null constrs) $ do
                               constrStrs <- mapM (showHsConstraint tVarIndex)
@@ -269,7 +269,7 @@ main = runO $ do
                                                   $ input {input_maxSteps = 8192}
                           let showf (total,processed,expression,_)
                                 = ( printf "%d (+%d):" processed (total-processed)
-                                  , showExpressionPure qNameIndex expression
+                                  , showExpressionPure qNameIndex $ simplifyEta $ simplifyLets $ expression
                                   )
                           let
                             helper :: String -> Tree (String, String) -> [String]
@@ -284,7 +284,7 @@ main = runO $ do
                       when (verbosity>0) $ putStrLn "[running findExpressionsWithStats ..]"
                       let (stats, _, _) = last $ findExpressionsWithStats input
                           highest = take 8 $ sortBy (flip $ comparing snd) $ M.toList stats
-                      putStrLn $ show highest
+                      putStrLn $ show $ highest
                   | otherwise -> do
                       r <- if
                         | FirstSol `elem` flags -> if par
@@ -319,7 +319,7 @@ main = runO $ do
                       case r :: [ExferenceOutputElement] of
                         [] -> lift $ putStrLn "[no results]"
                         rs -> rs `forM_` \(e, constrs, ExferenceStats n d m) -> do
-                            hsE <- convert qualification e
+                            hsE <- convert qualification $ simplifyEta $ simplifyLets $ e
                             lift $ putStrLn $ prettyPrint hsE
                             when (not $ null constrs) $ do
                               constrStrs <- mapM (showHsConstraint tVarIndex)
