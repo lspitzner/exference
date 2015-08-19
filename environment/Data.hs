@@ -31,23 +31,23 @@ class Typeable a => Data a where
             => (forall d e. (Data d, Data e) => c (t d e))
             -> Data.Maybe.Maybe (c a)
 
-  gmapT :: (forall b. Data b => b -> b) -> a -> a
+  -- following removed for exploding the search space
 
-  gmapQl :: forall r r'. (r -> r' -> r) -> r -> (forall d. Data d => d -> r') -> a -> r
+  -- gmapT :: (forall b. Data b => b -> b) -> a -> a
 
-  -- removed for exploding the search space
+  -- gmapQl :: forall r r'. (r -> r' -> r) -> r -> (forall d. Data d => d -> r') -> a -> r
+
   -- gmapQr :: forall r r'. (r' -> r -> r) -> r -> (forall d. Data d => d -> r') -> a -> r
 
-  gmapQ :: (forall d. Data d => d -> u) -> a -> [u]
+  -- gmapQ :: (forall d. Data d => d -> u) -> a -> [u]
 
-  -- removed for exploding the search space
   -- gmapQi :: forall u. Data.Int.Int -> (forall d. Data d => d -> u) -> a -> u
 
-  gmapM :: forall m. Control.Monad.Monad m => (forall d. Data d => d -> m d) -> a -> m a
+  -- gmapM :: forall m. Control.Monad.Monad m => (forall d. Data d => d -> m d) -> a -> m a
 
-  gmapMp :: forall m. Control.Monad.MonadPlus m => (forall d. Data d => d -> m d) -> a -> m a
+  -- gmapMp :: forall m. Control.Monad.MonadPlus m => (forall d. Data d => d -> m d) -> a -> m a
 
-  gmapMo :: forall m. Control.Monad.MonadPlus m => (forall d. Data d => d -> m d) -> a -> m a
+  -- gmapMo :: forall m. Control.Monad.MonadPlus m => (forall d. Data d => d -> m d) -> a -> m a
 
 
 instance Data Data.Bool.Bool
