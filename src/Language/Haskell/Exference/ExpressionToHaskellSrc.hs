@@ -113,6 +113,15 @@ convertInternal q p (E.ExpApply e1 pe) = recurseApply e1 [pe]
           | i==length pes
           , q<2 ->
             Tuple Boxed <$> mapM (convertInternal q 0) pes
+        Just T.Cons
+          | q<2
+          , [p1, p2] <- pes -> do
+              q1 <- convertInternal q 1 p1
+              q2 <- convertInternal q 2 p2
+              return $ parens (p>=2) $ InfixApp
+                q1
+                (QVarOp $ UnQual $ Symbol ":")
+                q2            
         Just (T.QualifiedName _ ('(':opR))
           | q<2
           , [p1, p2] <- pes -> do
