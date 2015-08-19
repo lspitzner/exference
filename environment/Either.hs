@@ -5,7 +5,8 @@ module Data.Either where
 data Either a b = Left a
                 | Right b
 
-either :: (a->c) -> (b->c) -> Either a b -> c
+-- replacable by pattern-matching; causes larger search-space
+-- either :: (a->c) -> (b->c) -> Either a b -> c
 partitionEithers :: [Either a b] -> ([a], [b]) 
 
 instance Bifunctor Either

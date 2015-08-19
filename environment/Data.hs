@@ -35,11 +35,13 @@ class Typeable a => Data a where
 
   gmapQl :: forall r r'. (r -> r' -> r) -> r -> (forall d. Data d => d -> r') -> a -> r
 
-  gmapQr :: forall r r'. (r' -> r -> r) -> r -> (forall d. Data d => d -> r') -> a -> r
+  -- removed for exploding the search space
+  -- gmapQr :: forall r r'. (r' -> r -> r) -> r -> (forall d. Data d => d -> r') -> a -> r
 
   gmapQ :: (forall d. Data d => d -> u) -> a -> [u]
 
-  gmapQi :: forall u. Data.Int.Int -> (forall d. Data d => d -> u) -> a -> u
+  -- removed for exploding the search space
+  -- gmapQi :: forall u. Data.Int.Int -> (forall d. Data d => d -> u) -> a -> u
 
   gmapM :: forall m. Control.Monad.Monad m => (forall d. Data d => d -> m d) -> a -> m a
 
