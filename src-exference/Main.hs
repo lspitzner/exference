@@ -25,6 +25,7 @@ import Language.Haskell.Exference.SimpleDict
 import Language.Haskell.Exference.Core.Types
 import Language.Haskell.Exference.Core.TypeUtils
 import Language.Haskell.Exference.Core.Expression
+import Language.Haskell.Exference.Core.ExpressionSimplify
 import Language.Haskell.Exference.Core.ExferenceStats
 import Language.Haskell.Exference.Core.SearchTree
 
@@ -250,7 +251,7 @@ main = runO $ do
                         then lift $ putStrLn "[no results]"
                         else forM_ rs
                           $ \(e, constrs, ExferenceStats n d m) -> do
-                            hsE <- convert qualification $ simplifyEta $ simplifyLets $ e
+                            hsE <- convert qualification $ simplifyExpression e
                             lift $ putStrLn $ prettyPrint hsE
                             when (not $ null constrs) $ do
                               constrStrs <- mapM (showHsConstraint tVarIndex)
@@ -269,7 +270,7 @@ main = runO $ do
                                                   $ input {input_maxSteps = 8192}
                           let showf (total,processed,expression,_)
                                 = ( printf "%d (+%d):" processed (total-processed)
-                                  , showExpressionPure qNameIndex $ simplifyEta $ simplifyLets $ expression
+                                  , showExpressionPure qNameIndex $ simplifyExpression expression
                                   )
                           let
                             helper :: String -> Tree (String, String) -> [String]
@@ -319,7 +320,7 @@ main = runO $ do
                       case r :: [ExferenceOutputElement] of
                         [] -> lift $ putStrLn "[no results]"
                         rs -> rs `forM_` \(e, constrs, ExferenceStats n d m) -> do
-                            hsE <- convert qualification $ simplifyEta $ simplifyLets $ e
+                            hsE <- convert qualification $ simplifyExpression e
                             lift $ putStrLn $ prettyPrint hsE
                             when (not $ null constrs) $ do
                               constrStrs <- mapM (showHsConstraint tVarIndex)

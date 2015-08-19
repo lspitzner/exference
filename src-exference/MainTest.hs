@@ -26,6 +26,7 @@ import Language.Haskell.Exference.Core.FunctionBinding
 import Language.Haskell.Exference.Core.Types
 import Language.Haskell.Exference.Core.TypeUtils
 import Language.Haskell.Exference.Core.Expression
+import Language.Haskell.Exference.Core.ExpressionSimplify
 import Language.Haskell.Exference.Core.ExferenceStats
 import Language.Haskell.Exference.Core.SearchTree
 
@@ -69,20 +70,25 @@ checkData :: [(String, Bool, Bool, String, [String], [String])]
 checkData =
   [ (,,,,,) "showmap"    False False "(Text.Show.Show b) => (a -> b) -> [a] -> [String]"
                                      ["\\b -> Data.Functor.fmap (\\g -> Text.Show.show (b g))"
+                                     ,"\\b -> Data.Functor.fmap (((.) Text.Show.show) b)"
                                      ,"\\b -> (\\c -> ((Control.Monad.>>=) c) (\\g -> Control.Applicative.pure (Text.Show.show (b g))))"]
                                      []
   , (,,,,,) "ffbind"     False False "(a -> t -> b) -> (t -> a) -> (t -> b)"
                                      ["\\b -> (\\c -> (\\d -> (b (c d)) d))"]
                                      []
   , (,,,,,) "join"       False False "(Monad m) => m (m a) -> m a"
-                                     ["\\b -> ((Control.Monad.>>=) b) (\\f -> f)"]
+                                     ["\\b -> ((Control.Monad.>>=) b) (\\f -> f)"
+                                     ,"\\b -> ((Control.Monad.>>=) b) id"
+                                     ]
                                      ["join"]
   , (,,,,,) "fjoin"      False False "(t -> (t -> a)) -> t -> a"
                                      ["\\b -> (\\c -> (b c) c)"]
                                      []
   , (,,,,,) "zipThingy"  False False "[a] -> b -> [(a, b)]"
                                      ["\\b -> (\\c -> ((Data.Functor.fmap (\\g -> ((,) g) c)) b)"
-                                     ,"\\b -> (\\c -> (Data.List.zip b) (Control.Applicative.pure c))"]
+                                     ,"\\b -> (\\c -> (Data.List.zip b) (Control.Applicative.pure c))"
+                                     ,"\\b -> ((.) (Data.List.zip b)) Control.Applicative.pure"
+                                     ]
                                      []
   , (,,,,,) "pmatch"     False True  "Data.Maybe.Maybe a -> a -> a"
                                      ["\\b -> (\\c -> ((Data.Maybe.maybe c) (\\h -> h)) b)"
@@ -167,6 +173,7 @@ checkData =
                                      []
   , (,,,,,) "joinBlub"   False False "Monad m => [Decl] -> (Decl -> m [FunctionBinding]) -> m [FunctionBinding]"
                                      ["\\b -> (\\c -> ((Control.Monad.>>=) ((Data.Traversable.traverse c) b)) (\\i -> Control.Applicative.pure (Control.Monad.join i)))"
+                                     ,"\\b -> (\\c -> ((Control.Monad.>>=) ((Data.Traversable.traverse c) b)) (((.) Control.Applicative.pure) Control.Monad.join))"
                                      ,"\\b -> (\\c -> ((Control.Monad.>>=) ((Data.Traversable.mapM c) b)) (\\i -> Control.Applicative.pure (((Control.Monad.>>=) i) (\\q -> q))))"
                                      ,"\\b -> (\\c -> (Data.Functor.fmap (\\g -> ((Control.Monad.>>=) g) (\\k -> k))) ((Data.Traversable.mapM c) b))"
                                      ,"\\b -> (\\c -> ((Control.Monad.>>=) ((Data.Traversable.mapM c) b)) (\\l -> Control.Applicative.pure (((Control.Monad.>>=) l) (\\q -> q))))"
@@ -176,10 +183,13 @@ checkData =
   , (,,,,,) "liftA2"     False False "Applicative f => (a -> b -> c) -> f a -> f b -> f c"
                                      ["\\b -> (\\c -> (Control.Applicative.<*>) (((Control.Applicative.<*>) (Control.Applicative.pure b)) c))"
                                      ,"\\b -> (\\c -> (\\d -> ((Control.Applicative.<*>) ((Data.Functor.fmap (\\j -> (\\k -> (b k) j))) d)) c))"
-                                     ,"\\b -> (\\c -> (Control.Applicative.<*>) ((Data.Functor.fmap b) c))"]
+                                     ,"\\b -> (\\c -> (Control.Applicative.<*>) ((Data.Functor.fmap b) c))"
+                                     ,"\\b -> ((.) (Control.Applicative.<*>)) (Data.Functor.fmap b)"
+                                     ]
                                      ["liftA2", "liftA3"]
   , (,,,,,) "runEitherT" False False "Monad m => [D] -> (D -> Control.Monad.Trans.Either.EitherT e m [FB]) -> ([FB] -> [FB]) -> m [Data.Either.Either e [FB]]"
                                      ["\\b -> (\\c -> (\\d -> (Data.Traversable.traverse (\\h -> Control.Monad.Trans.Either.runEitherT (((Control.Monad.>>=) (c h)) (\\n -> Control.Applicative.pure (d n))))) b))"
+                                     ,"\\b -> (\\c -> (\\d -> (Data.Traversable.traverse (((.) Control.Monad.Trans.Either.runEitherT) (((.) (Data.Functor.fmap d)) c))) b))"
                                      ,"\\b -> (\\c -> (\\d -> (Data.Traversable.traverse (\\h -> Control.Monad.Trans.Either.runEitherT ((Data.Functor.fmap d) (c h)))) b))"
                                      ,"\\b -> (\\c -> (\\d -> (Data.Traversable.mapM (\\h -> Control.Monad.Trans.Either.runEitherT ((Data.Functor.fmap d) (c h)))) b))"]
                                      []
@@ -190,6 +200,7 @@ checkData =
                                      []
   , (,,,,,) "fmapmap"    False False "Monad m => T -> [N] -> (CT -> N -> FB) -> (SC -> T -> m CT) -> SC -> m [FB]"
                                      ["\\b -> (\\c -> (\\d -> (\\e -> (\\f -> ((Control.Monad.>>=) ((e f) b)) (\\l -> (Data.Traversable.traverse (\\p -> Control.Applicative.pure ((d l) p))) c)))))"
+                                     ,"\\b -> (\\c -> (\\d -> (\\e -> (\\f -> ((Control.Monad.>>=) ((e f) b)) (\\l -> (Data.Traversable.traverse (((.) Control.Applicative.pure) (d l))) c)))))"
                                      ,"\\b -> (\\c -> (\\d -> (\\e -> (\\f -> ((>>=) ((e f) b)) (\\l -> (Data.Traversable.traverse (\\p -> pure ((d l) p))) c)))))"
                                      ,"\\b -> (\\c -> (\\d -> (\\e -> (\\f -> ((Control.Monad.>>=) ((e f) b)) (\\l -> (Data.Traversable.mapM (\\p -> Control.Applicative.pure ((d l) p))) c)))))"
                                      ,"\\b -> (\\c -> (\\d -> (\\e -> (\\f -> (Data.Traversable.mapM (\\j -> (Data.Functor.fmap (\\n -> (d n) j)) ((e f) b))) c))))"]
@@ -338,13 +349,13 @@ checkExpectedResults heuristics env = mapMultiRWST (return . runIdentity)
                -> MultiRWST r w s Identity (Maybe (Int, ExferenceStats))
         getExp _ [] = return $ Nothing
         getExp n ((e, _, s):r) = do
-          eStr <- showExpression $ simplifyEta $ simplifyLets $ e
+          eStr <- showExpression $ simplifyExpression e
           if eStr `elem` expected
             then return $ Just (n,s)
             else getExp (n+1) r
     r <- case findExpressions input of
         []       -> return $ Nothing
-        xs@((e, _, stats):_) -> [ Just ( (simplifyEta $ simplifyLets $ e, stats)
+        xs@((e, _, stats):_) -> [ Just ( (simplifyExpression e, stats)
                                        , rs
                                        )
                                 | rs <- getExp 0 xs
@@ -577,7 +588,7 @@ printCheckExpectedResults h env = do
       return (Nothing, Nothing)
     helper (name, e, Just ((first,stats), Nothing)) = do
       lift $ putStrLn $ printf "%-12s: expected solution not found!" name
-      firstStr <- showExpression first
+      let firstStr = showExpressionPure qNameIndex first
       lift $ putStrLn $ "  first solution:       " ++ firstStr
       lift $ putStrLn $ "  first solution stats: " ++ show stats
       lift $ putStrLn $ "  expected solutions:   " ++ intercalate ", " e

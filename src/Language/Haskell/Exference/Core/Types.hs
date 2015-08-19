@@ -35,6 +35,8 @@ module Language.Haskell.Exference.Core.Types
   , lookupQNameId
   , TypeVarIndex
   , showHsType
+  , specialQName_id
+  , specialQName_compose
   )
 where
 
@@ -100,12 +102,18 @@ data QNameIndex = QNameIndex
 
 type TypeVarIndex = M.Map Name Int
 
+specialQName_id = (-16)
+specialQName_compose = (-17)
+
 lookupQNameId :: MonadMultiState QNameIndex m
               => QNameId
               -> m (Maybe QualifiedName)
-lookupQNameId qid = do
-  QNameIndex _ _ indB <- mGet
-  return $ M.lookup qid indB
+lookupQNameId qid
+  | qid == specialQName_id      = return $ Just $ QualifiedName [] "id"
+  | qid == specialQName_compose = return $ Just $ QualifiedName [] "(.)"
+  | otherwise                   = do
+      QNameIndex _ _ indB <- mGet
+      return $ M.lookup qid indB
 
 data HsTypeClass = HsTypeClass
   { tclass_name :: QNameId

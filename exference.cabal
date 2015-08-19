@@ -1,5 +1,5 @@
 Name:          exference
-Version:       1.4.2.0
+Version:       1.5.0.0
 Cabal-Version: >= 1.8
 Build-Type:    Simple
 
@@ -84,6 +84,7 @@ Library
                    Language.Haskell.Exference.Core.TypeUtils
                    Language.Haskell.Exference.Core.ExferenceStats
                    Language.Haskell.Exference.Core.Expression
+                   Language.Haskell.Exference.Core.ExpressionSimplify
                    Language.Haskell.Exference.Core.FunctionBinding
                    Language.Haskell.Exference.Core.SearchTree
   exposed-modules: Language.Haskell.Exference
