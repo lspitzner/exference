@@ -335,7 +335,10 @@ constraintApplySubsts' ss c
       in (any fst applied, HsConstraint cl $ snd <$> applied)
 
 showVar :: TVarId -> String
-showVar i = if i<26 then [chr (ord 'a' + i)] else "t"++show (i-26)
+showVar i
+  | i<12      = ["hole", "x", "y", "z", "a", "b", "c", "d", "e", "u", "v", "w"] !! i
+  | i>100     = "f" ++ show (i-100)
+  | otherwise = "t" ++ show (i-11)
 
 -- parseType :: _ => String -> m (Maybe (HsType, String))
 -- parseType s = either (const Nothing) Just

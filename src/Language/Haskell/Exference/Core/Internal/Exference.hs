@@ -361,7 +361,9 @@ stateStep2 multiPM allowConstrs qNameIndex h s
     arrowStep :: HsType -> [VarBinding] -> SearchNodeBuilder ()
     arrowStep g ts
       | (TypeArrow t1 t2) <- g = do
-          nextId <- builderAllocVar
+          nextId <- case t1 of
+            TypeArrow {} -> builderAllocVarF
+            _            -> builderAllocVar
           arrowStep t2 ((VarBinding nextId t1):ts)
       | otherwise = do
           nextId <- builderAllocHole
