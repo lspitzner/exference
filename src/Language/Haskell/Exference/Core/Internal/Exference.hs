@@ -1,4 +1,3 @@
--- {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE PatternGuards #-}
@@ -68,26 +67,6 @@ import Debug.Trace
 import Prelude hiding ( sum )
 
 
-
-{-
--- the heuristic input factor constant thingies:
-factorGoalVar, factorGoalCons, factorGoalArrow, factorGoalApp,
- factorStepEnvGood, factorStepProvidedGood, factorStepProvidedBad,
- factorStepEnvBad, factorVarUsage, factorFunctionGoalTransform,
- factorUnusedVar :: Float
-
-factorGoalVar               =  4.0
-factorGoalCons              =  0.55
-factorGoalArrow             =  5.0
-factorGoalApp               =  1.9
-factorStepProvidedGood      =  0.2
-factorStepProvidedBad       =  5.0
-factorStepEnvGood           =  6.0
-factorStepEnvBad            = 22.0
-factorVarUsage              =  8.0
-factorFunctionGoalTransform =  0.0
-factorUnusedVar             = 20.0
--}
 
 data ExferenceHeuristicsConfig = ExferenceHeuristicsConfig
   { heuristics_goalVar                :: Float
@@ -160,6 +139,20 @@ type FindExpressionsState = ( Int    -- number of steps already performed
                             , RatedNodes -- pqueue
                             )
 
+-- Entry-point and main function of the algorithm.
+-- Takes input, produces list of outputs. Output is basically a
+-- [[Solution]], plus some statistics and stuff.
+-- Nested list to allow executing n steps even when no solutions are found
+-- (i.e. you take 1000, and get only []'s).
+--
+-- Basic implementation idea: We traverse a search tree. A step (`stateStep`
+-- function) evaluates one node, and returns
+-- a) new search nodes b) potential solutions.
+-- findExpressions does the following stuff:
+--   - determine what searchnode to use next (using a priority queue)
+--   - call stateStep repeatedly
+--   - convert stuff
+--   - consider some special abort conditions
 findExpressions :: ExferenceInput
                 -> [ExferenceChunkElement]
 findExpressions (ExferenceInput rawType
@@ -185,8 +178,6 @@ findExpressions (ExferenceInput rawType
                     | (steps, compl, e, constrs, fsize) <- stuples
                     ]
   ]
-  -- fmap (\(steps, compl, e) -> (e, ExferenceStats steps compl))
-  --   <$> resultTuples
   where
     t = forallify rawType
     rootSearchNode = SearchNode
@@ -222,11 +213,13 @@ findExpressions (ExferenceInput rawType
     helper (n, worst, bindingUsages, st, states)
       | Q.null states || n > maxSteps = []
       | ((_,s), restNodes) <- Q.deleteFindMax states =
+                     -- actual work happens in stateStep
         let rNodes = stateStep multiPM
                                (allowConstraints && n<allowConstraintsStopStep)
                                qNameIndex
                                heuristics
                                s
+            -- distinguish "finished"/"unfinished" sub-SearchNodes
             (potentialSolutions, futures) = partition (Seq.null . node_goals) rNodes                                                      
             newBindingUsages = case node_lastStepBinding s of
               Nothing -> bindingUsages
@@ -237,9 +230,14 @@ findExpressions (ExferenceInput rawType
                   , remainingConstraints <- maybeToList
                                           $ filterUnresolved contxt
                                           $ node_constraintGoals solution
+                    -- if allowConstraints, unresolved constraints are allowed;
+                    -- otherwise we discard this solution.
                   , allowConstraints || null remainingConstraints
                   , let unusedVarCount = getUnusedVarCount
                                            (node_varUses solution)
+                    -- similarly:
+                    -- if allowUnused, there may be unused variables in the
+                    -- output. Otherwise the solution is discarded.
                   , allowUnused || unusedVarCount==0
                   , let e = -- trace (showNodeDevelopment solution) $ 
                             node_expression solution
@@ -330,6 +328,8 @@ rateUsage h s = IntMap.foldr f 0.0 $ node_varUses s
 getUnusedVarCount :: VarUsageMap -> Int
 getUnusedVarCount m = length $ filter (==0) $ IntMap.elems m
 
+-- just redirects to stateStep2; purpose is debugging. i should use the
+-- `| False -> debugging stuff` trick instead maybe.
 stateStep :: Bool
           -> Bool
           -> QNameIndex
@@ -344,6 +344,13 @@ stateStep multiPM allowConstrs qNameIndex h s
               --                      ++ " " ++ show (rateScopes $ node_providedScopes s)
               --                      ++ " " ++ show (node_expression s)) $
 
+-- Take one SearchNode, return some amount of sub-SearchNodes. Some of the
+-- returned SearchNodes may in fact be (potential) solutions that do not
+-- require further evaluation.
+--
+-- Basic implementation idea:
+-- Take the first goal for this SearchNode. Its type determines what the next
+-- step is (and which sub-function to use).
 stateStep2 :: Bool
            -> Bool
            -> QNameIndex
@@ -358,13 +365,16 @@ stateStep2 multiPM allowConstrs qNameIndex h s
   where
     ((VarBinding var goalType, scopeId) Seq.:< gr) = Seq.viewl $ node_goals s
     s' = s { node_goals = gr }
+    -- if type is TypeArrow, transform to lambda expression.
     arrowStep :: HsType -> [VarBinding] -> SearchNodeBuilder ()
     arrowStep g ts
+      -- descend until no more TypeArrows, accumulating what is seen.
       | (TypeArrow t1 t2) <- g = do
           nextId <- case t1 of
             TypeArrow {} -> builderAllocVarF
             _            -> builderAllocVar
           arrowStep t2 ((VarBinding nextId t1):ts)
+      -- finally, do the goal/expression transformation.
       | otherwise = do
           nextId <- builderAllocHole
           newScopeId <- builderAddScope scopeId
@@ -373,11 +383,17 @@ stateStep2 multiPM allowConstrs qNameIndex h s
           builderAddDepth (heuristics_functionGoalTransform h)
           builderSetReason "function goal transform"
           builderSetLastStepBinding Nothing
+          -- for each parameter introduced in the lambda-expression above,
+          -- it may be possible to pattern-match. and pattern-matching
+          -- may cause duplication of the goals (e.g. for the different cases
+          -- in the pattern match).
           mapM_ builderAppendGoal =<< ( addScopePatternMatch multiPM g nextId newScopeId
                                       $ map splitBinding
                                       $ reverse
                                       $ ts
                                       )
+    -- if type is TypeForall, fix the forall-variables, i.e. invent a fresh
+    -- set of constants that replace the relevant forall-variables.
     forallStep :: [TVarId] -> [HsConstraint] -> HsType -> SearchNodeBuilder ()
     forallStep vs cs t = do
       dataIds <- mapM (const builderAllocNVar) vs
@@ -388,6 +404,10 @@ stateStep2 multiPM allowConstrs qNameIndex h s
       builderPrependGoal (VarBinding var (applySubsts substs t), scopeId)
       builderAddGivenConstraints $ constraintApplySubsts substs <$> cs
       return ()
+    -- try to resolve the goal by looking at the parameters in scope, i.e.
+    -- the parameters accumulated by building the expression so far.
+    -- e.g. for (\x -> (_ :: Int)), the goal can be filled by `x` if
+    -- `x :: Int`.
     byProvided = do
       (provId, provT, provPs, forallTypes, constraints) <- scopeGetAllBindings (node_providedScopes s) scopeId
       let incF = incVarIds (+(1+node_maxTVarId s))
@@ -404,6 +424,7 @@ stateStep2 multiPM allowConstrs qNameIndex h s
         (heuristics_stepProvidedBad h)
         ("inserting given value " ++ show provId ++ "::" ++ show provT)
         (unify goalType provType)
+    -- try to resolve the goal by looking at functions from the environment.
     byFunctionSimple = do
       (funcR, funcId, funcRating, funcConstrs, funcParams) <- V.toList $ node_functions s
       let offset = 1+node_maxTVarId s
@@ -418,6 +439,7 @@ stateStep2 multiPM allowConstrs qNameIndex h s
         (heuristics_stepEnvBad h + funcRating)
         ("applying function " ++ show funcId)
         (unifyOffset goalType (HsTypeOffset funcR offset))
+    -- common code for byProvided and byFunctionSimple
     byGenericUnify :: Either QNameId TVarId
                    -> HsType
                    -> [HsConstraint]
@@ -435,87 +457,95 @@ stateStep2 multiPM allowConstrs qNameIndex h s
                    depthModNoMatch
                    reasonPart
                    unifyResult
-      | coreExp <- either ExpName ExpVar applier
-      , bTrace <- case applier of
-          Left  x -> Just (show x)
-          Right _ -> Nothing
-      = case
-          -- (\r -> case r of Nothing -> r; Just jr -> traceShow (goalType, provided, jr) r) $
-          unifyResult of
-        Nothing -> case dependencies of
-          [] -> [] -- we can't (randomly) partially apply a non-function
-          (d:ds) -> return $ modifyNodeBy s' $ do
-            vResult <- builderAllocVar
-            vParam  <- builderAllocHole
-            builderFillExprHole var $ ExpLet
-                                        vResult
-                                        (ExpApply coreExp $ ExpHole vParam)
-                                        (ExpHole var)
-            builderPrependGoal (VarBinding vParam d, scopeId)
-            newScopeId <- builderAddScope scopeId
-            builderAddConstraintGoals provConstrs
-            case applier of
-                Left _ -> return ()
-                Right i -> builderAddVarUsage i
-            builderFixMaxTVarId $ maximum $ map largestId dependencies
-            builderAddDepth depthModNoMatch
-            builderSetReason $ "randomly trying to apply function "
-                              ++ showExpressionPure qNameIndex coreExp
-            mapM_ builderAppendGoal =<< addScopePatternMatch
-              multiPM
-              goalType
-              var
-              newScopeId
-              (let (r,ps,fs,cs) = splitArrowResultParams provided
-                in [(vResult, r, ds++ps, fs, cs)])
-        Just (leftSS, rightSS) -> do
-          let allSS = IntMap.union leftSS rightSS
-          let substs = case applier of
-                Left _  -> leftSS
-                Right _ -> allSS
-              contxt = node_queryClassEnv s
-              constrs1 = map (constraintApplySubsts' substs)
-                       $ node_constraintGoals s
-              constrs2 = map (constraintApplySubsts rightSS)
-                       $ provConstrs
-          newConstraints <- if allowConstrs
-            then [map snd constrs1 ++ constrs2]
-            else if any fst constrs1
-              then maybeToList $ isPossible contxt (map snd constrs1 ++ constrs2)
-              else (map snd constrs1 ++) <$> maybeToList (isPossible contxt constrs2)
-          return $ modifyNodeBy s' $ do
-            let paramN = length dependencies
-            vars <- replicateM paramN builderAllocHole
-            let newGoals = mkGoals scopeId $ zipWith VarBinding vars dependencies
-            case applier of
-              Left _  ->
-                forM_ newGoals (builderAppendGoal . goalApplySubst rightSS)
-              Right _ -> 
-                forM_ newGoals builderAppendGoal
-            builderApplySubst substs
-            builderFillExprHole var $ case paramN of
-              0 -> coreExp
-              _ -> foldl ExpApply coreExp (map ExpHole vars)
-            case applier of
+      = case unifyResult of
+          Nothing                -> noUnify
+          Just (leftSS, rightSS) -> byUnified leftSS rightSS
+     where
+      coreExp = either ExpName ExpVar applier
+      bTrace  = case applier of
+        Left  x -> Just (show x)
+        Right _ -> Nothing
+      noUnify = case dependencies of
+        [] -> [] -- we can't (randomly) partially apply a non-function
+        (d:ds) -> return $ modifyNodeBy s' $ do
+          vResult <- builderAllocVar
+          vParam  <- builderAllocHole
+          builderFillExprHole var $ ExpLet
+                                      vResult
+                                      (ExpApply coreExp $ ExpHole vParam)
+                                      (ExpHole var)
+          builderPrependGoal (VarBinding vParam d, scopeId)
+          newScopeId <- builderAddScope scopeId
+          builderAddConstraintGoals provConstrs
+          case applier of
               Left _ -> return ()
               Right i -> builderAddVarUsage i
-            builderSetConstraints newConstraints
-            builderFixMaxTVarId $ maximum
-                                $ largestSubstsId leftSS
-                                  : map largestId dependencies
-            builderAddDepth depthModMatch
-            let substsTxt   = show (IntMap.union leftSS rightSS)
-                              ++ " unifies "
-                              ++ show goalType
-                              ++ " and "
-                              ++ show provided
-            let provableTxt = "constraints (" ++ show (map snd constrs1++constrs2)
-                                              ++ ") are provable"
-            builderSetReason $ reasonPart ++ ", because " ++ substsTxt
-                              ++ " and because " ++ provableTxt
-            builderSetLastStepBinding bTrace
+          builderFixMaxTVarId $ maximum $ map largestId dependencies
+          builderAddDepth depthModNoMatch
+          builderSetReason $ "randomly trying to apply function "
+                            ++ showExpressionPure qNameIndex coreExp
+          mapM_ builderAppendGoal =<< addScopePatternMatch
+            multiPM
+            goalType
+            var
+            newScopeId
+            (let (r,ps,fs,cs) = splitArrowResultParams provided
+              in [(vResult, r, ds++ps, fs, cs)])
+      byUnified leftSS rightSS = do
+        let allSS = IntMap.union leftSS rightSS
+        let substs = case applier of
+              Left _  -> leftSS
+              Right _ -> allSS
+            contxt = node_queryClassEnv s
+            constrs1 = map (constraintApplySubsts' substs)
+                     $ node_constraintGoals s
+            constrs2 = map (constraintApplySubsts rightSS)
+                     $ provConstrs
+        newConstraints <- if allowConstrs
+          then [map snd constrs1 ++ constrs2]
+          else if any fst constrs1
+            then maybeToList $ isPossible contxt (map snd constrs1 ++ constrs2)
+            else (map snd constrs1 ++) <$> maybeToList (isPossible contxt constrs2)
+        return $ modifyNodeBy s' $ do
+          let paramN = length dependencies
+          vars <- replicateM paramN builderAllocHole
+          let newGoals = mkGoals scopeId $ zipWith VarBinding vars dependencies
+          case applier of
+            Left _  ->
+              forM_ newGoals (builderAppendGoal . goalApplySubst rightSS)
+            Right _ -> 
+              forM_ newGoals builderAppendGoal
+          builderApplySubst substs
+          builderFillExprHole var $ case paramN of
+            0 -> coreExp
+            _ -> foldl ExpApply coreExp (map ExpHole vars)
+          case applier of
+            Left _ -> return ()
+            Right i -> builderAddVarUsage i
+          builderSetConstraints newConstraints
+          builderFixMaxTVarId $ maximum
+                              $ largestSubstsId leftSS
+                                : map largestId dependencies
+          builderAddDepth depthModMatch
+          let substsTxt   = show (IntMap.union leftSS rightSS)
+                            ++ " unifies "
+                            ++ show goalType
+                            ++ " and "
+                            ++ show provided
+          let provableTxt = "constraints (" ++ show (map snd constrs1++constrs2)
+                                            ++ ") are provable"
+          builderSetReason $ reasonPart ++ ", because " ++ substsTxt
+                            ++ " and because " ++ provableTxt
+          builderSetLastStepBinding bTrace
 
 {-# INLINE addScopePatternMatch #-}
+-- Insert pattern-matching on newly introduced VarPBindings where
+-- possible/necessary. Note that this also effectively transforms a goal
+-- (into potentially multiple goals), as goal id + HsType + ScopeId = TGoal.
+-- So the input describes one single TGoal.
+-- TGoals are duplicated when the pattern-matching involves more than one case,
+-- as the goals for different cases are distinct because their scopes are
+-- modified when new bindings are added by the pattern-matching.
 addScopePatternMatch :: Bool -- should p-m on anything but newtypes?
                      -> HsType -- the current goal (should be returned in one
                                --  form or another)
