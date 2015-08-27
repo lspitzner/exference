@@ -15,7 +15,6 @@ module Language.Haskell.Exference.Core.Internal.ExferenceNodeBuilder
   , builderDeconss
   , builderGetTVarOffset
   , builderAllocVar
-  , builderAllocVarF
   , builderAllocHole
   , builderAllocNVar
   , builderFixMaxTVarId
@@ -38,9 +37,9 @@ import Language.Haskell.Exference.Core.FunctionBinding
 import Control.Monad.State.CPS ( State
                                 , StateT( StateT )
                                 , execState
-                               -- , modify
-                               -- , get
-                               -- , put
+                                -- , modify
+                                -- , get
+                                -- , put
                                 )
 import Control.Applicative
 import qualified Data.Map as M
@@ -159,17 +158,6 @@ builderAllocVar = SearchNodeBuilder $ do
   s <- get
   let vid = node_nextVarId s
   put $ s { node_nextVarId = vid+1
-          , node_varUses = IntMap.insert vid 0 $ node_varUses s }
-  return vid
-
-{-# INLINE builderAllocVarF #-}
-builderAllocVarF :: SearchNodeBuilder TVarId
-builderAllocVarF = SearchNodeBuilder $ do
-  s <- get
-  let nid = node_nextVarId s
-      vid = 100+nid -- this will break if more than 100 vars are used.
-                    -- sufficiently unlikely.
-  put $ s { node_nextVarId = nid+1
           , node_varUses = IntMap.insert vid 0 $ node_varUses s }
   return vid
 

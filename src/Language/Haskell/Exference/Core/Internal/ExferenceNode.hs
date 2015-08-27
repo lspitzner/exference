@@ -50,7 +50,9 @@ import Control.Arrow ( first, second, (***) )
 import Control.DeepSeq.Generics
 import GHC.Generics
 
-import Control.Monad.Trans.MultiState
+import Control.Monad.Trans.MultiRWS
+import Control.Monad.Trans.MultiState ( runMultiStateTNil )
+import Data.HList.ContainsType
 
 import Debug.Hood.Observe
 
@@ -237,11 +239,13 @@ instance NFData SearchNode   where rnf = genericRnf
 
 showSearchNode' :: QNameIndex -> SearchNode -> String
 showSearchNode' ind sn = runIdentity
-                       $ runMultiStateTNil
+                       $ runMultiRWSTNil
                        $ withMultiStateA ind
                        $ showSearchNode sn
 
-showSearchNode :: MonadMultiState QNameIndex m => SearchNode -> m String
+showSearchNode :: ( ContainsType QNameIndex s, Monad m, Functor m )
+               => SearchNode
+               -> MultiRWST r w s m String
 showSearchNode
   (SearchNode sgoals
               scgoals

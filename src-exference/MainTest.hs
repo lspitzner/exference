@@ -69,63 +69,63 @@ import Debug.Trace
 checkData :: [(String, Bool, Bool, String, [String], [String])]
 checkData =
   [ (,,,,,) "showmap"    False False "(Text.Show.Show b) => (a -> b) -> [a] -> [String]"
-                                     ["\\b -> Data.Functor.fmap (\\g -> Text.Show.show (b g))"
-                                     ,"\\b -> Data.Functor.fmap (((.) Text.Show.show) b)"
-                                     ,"\\b -> (\\c -> ((Control.Monad.>>=) c) (\\g -> Control.Applicative.pure (Text.Show.show (b g))))"]
+                                     ["\\f1 -> Data.Functor.fmap (\\g -> Text.Show.show (f1 g))"
+                                     ,"\\f1 -> Data.Functor.fmap (((.) Text.Show.show) f1)"
+                                     ,"\\f1 -> (\\c -> ((Control.Monad.>>=) c) (\\g -> Control.Applicative.pure (Text.Show.show (f1 g))))"]
                                      []
   , (,,,,,) "ffbind"     False False "(a -> t -> b) -> (t -> a) -> (t -> b)"
-                                     ["\\b -> (\\c -> (\\d -> (b (c d)) d))"]
+                                     ["\\f1 -> (\\f2 -> (\\c -> (f1 (f2 c)) c))"]
                                      []
   , (,,,,,) "join"       False False "(Monad m) => m (m a) -> m a"
-                                     ["\\b -> ((Control.Monad.>>=) b) (\\f -> f)"
-                                     ,"\\b -> ((Control.Monad.>>=) b) id"
+                                     ["\\a -> ((Control.Monad.>>=) a) (\\f -> f)"
+                                     ,"\\a -> ((Control.Monad.>>=) a) id"
                                      ]
                                      ["join"]
   , (,,,,,) "fjoin"      False False "(t -> (t -> a)) -> t -> a"
-                                     ["\\b -> (\\c -> (b c) c)"]
+                                     ["\\f1 -> (\\b -> (f1 b) b)"]
                                      []
   , (,,,,,) "zipThingy"  False False "[a] -> b -> [(a, b)]"
-                                     ["\\b -> (\\c -> ((Data.Functor.fmap (\\g -> ((,) g) c)) b)"
-                                     ,"\\b -> (\\c -> (Data.List.zip b) (Control.Applicative.pure c))"
-                                     ,"\\b -> ((.) (Data.List.zip b)) Control.Applicative.pure"
+                                     ["\\as -> (\\b -> ((Data.Functor.fmap (\\g -> ((,) g) b)) as)"
+                                     ,"\\as -> (\\b -> (Data.List.zip as) (Control.Applicative.pure b))"
+                                     ,"\\as -> ((.) (Data.List.zip as)) Control.Applicative.pure"
                                      ]
                                      []
   , (,,,,,) "pmatch"     False True  "Data.Maybe.Maybe a -> a -> a"
-                                     ["\\b -> (\\c -> ((Data.Maybe.maybe c) (\\h -> h)) b)"
-                                     ,"\\b -> (\\c -> case b of { Data.Maybe.Just e -> e; Data.Maybe.Nothing  -> c })"]
+                                     ["\\m1 -> (\\b -> ((Data.Maybe.maybe b) (\\h -> h)) m1)"
+                                     ,"\\m1 -> (\\b -> case m1 of { Data.Maybe.Just d -> d; Data.Maybe.Nothing  -> b })"]
                                      []
   --, (,,,,,) "pmatch2"    False True  "Tuple2 (Either a b) c -> Tuple2 (Maybe (Tuple2 a c)) (Maybe (Tuple2 b c))"
   --                                  []
   --                                   []
   , (,,,,,) "stateRun"   True  False "Control.Monad.State.State a b -> a -> b"
-                                     ["\\b -> (\\c -> let (Control.Monad.State.State e) = b in let ((,) h i) = e c in h)"]
+                                     ["\\s1 -> (\\b -> let (Control.Monad.State.State f4) = s1 in let ((,) g h) = f4 b in g)"]
                                      []
   , (,,,,,) "fst"        True  False "(a, b) -> a"
-                                     ["\\b -> let ((,) d e) = b in d"]
+                                     ["\\a -> let ((,) c d) = a in c"]
                                      []
   --, (,,,,,) "ffst"       True False  "(a -> Tuple b c) -> a -> b"
   , (,,,,,) "snd"        True  False "(a, b) -> b"
-                                     ["\\b -> let ((,) d e) = b in e"]
+                                     ["\\a -> let ((,) c d) = a in d"]
                                      []
   , (,,,,,) "quad"       False False "a -> ((a, a), (a, a))"
-                                     ["\\b -> ((,) (((,) b) b)) (((,) b) b)"]
+                                     ["\\a -> ((,) (((,) a) a)) (((,) a) a)"]
                                      []
   -- , (,,,,,) "fswap"     False False  "(a -> Tuple b c) -> a -> Tuple c b"
   , (,,,,,) "liftBlub"   False False "Monad m => m a -> m b -> (a -> b -> m c) -> m c"
-                                     ["\\b -> (\\c -> (\\d -> ((Control.Monad.>>=) b) (\\h -> ((Control.Monad.>>=) c) (d h))))"
-                                     ,"\\b -> (\\c -> (\\d -> ((Control.Monad.>>=) c) (\\h -> ((Control.Monad.>>=) b) (\\l -> (d l) h))))"]
+                                     ["\\a -> (\\b -> (\\f3 -> ((Control.Monad.>>=) a) (\\g -> ((Control.Monad.>>=) b) (f3 g))))"
+                                     ,"\\a -> (\\b -> (\\f3 -> ((Control.Monad.>>=) b) (\\g -> ((Control.Monad.>>=) a) (\\k -> (f3 k) g))))"]
                                      []
   , (,,,,,) "stateBind"  False False "Control.Monad.State.State s a -> (a -> Control.Monad.State.State s b) -> Control.Monad.State.State s b"
-                                     ["\\b -> (\\c -> let (Control.Monad.State.State e) = b in Control.Monad.State.State (\\g -> let ((,) k l) = e g in let (Control.Monad.State.State o) = c k in o l))"]
+                                     ["\\s1 -> (\\f2 -> let (Control.Monad.State.State f4) = s1 in Control.Monad.State.State (\\f -> let ((,) j k) = f4 f in let (Control.Monad.State.State f14) = f2 j in f14 k))"]
                                      []
   , (,,,,,) "dbMaybe"    False False "Data.Maybe.Maybe a -> Data.Maybe.Maybe (a, a)"
-                                     ["Data.Functor.fmap (\\f -> ((,) f) f)"
+                                     ["Data.Functor.fmap (\\e -> ((,) e) e)"
                                      ,"\\b -> ((Control.Applicative.liftA2 (\\g -> (\\h -> ((,) h) g))) b) b"
                                      ,"\\b -> ((Control.Monad.>>=) b) (\\f -> Control.Applicative.pure (((,) f) f))"]
                                      []
   , (,,,,,) "tupleShow"  False False "(Text.Show.Show a, Text.Show.Show b) => (a, b) -> String"
                                      ["Text.Show.show"
-                                     ,"\\b -> let ((,) d e) = b in Text.Show.show (((,) d) e)"]
+                                     ,"\\a -> let ((,) c d) = a in Text.Show.show (((,) c) d)"]
                                      []
   , (,,,,,) "FloatToInt" False False "Float -> Int"
                                      [ "Prelude.round"
@@ -140,83 +140,86 @@ checkData =
                                      ,"Data.Functor.fmap Prelude.ceiling"
                                      ,"Data.Functor.fmap Prelude.truncate"
                                      ,"\\b -> ((>>=) b) (\\f -> Control.Applicative.pure (Prelude.truncate f))" -- this is kind of ugly
+                                     ,"((.) (Data.Functor.fmap Data.Char.ord)) Text.Show.show" -- this is not the solution we really want .. :/
                                      ]
                                      []
   , (,,,,,) "longApp"    False False "a -> b -> c -> (a -> b -> d) -> (a -> c -> e) -> (b -> c -> f) -> (d -> e -> f -> g) -> g"
-                                     ["\\b -> (\\c -> (\\d -> (\\e -> (\\f -> (\\g -> (\\h -> ((h ((e b) c)) ((f b) d)) ((g c) d)))))))"]
+                                     ["\\a -> (\\b -> (\\c -> (\\f4 -> (\\f5 -> (\\f6 -> (\\f7 -> ((f7 ((f4 a) b)) ((f5 a) c)) ((f6 b) c)))))))"]
                                      []
   , (,,,,,) "liftSBlub"  False False "(Monad m, Monad n) => ([a] -> b -> c) -> m [n a] -> m (n b) -> m (n c)"
-                                     ["\\b -> Control.Applicative.liftA2 (\\i -> (\\j -> ((Control.Monad.>>=) (Data.Traversable.sequenceA i)) (\\o -> ((Control.Monad.>>=) j) (\\s -> Control.Applicative.pure ((b o) s)))))"
-                                     ,"\\b -> (\\c -> (\\d -> ((Control.Applicative.liftA2 (\\i -> (\\j -> ((Control.Monad.>>=) (Data.Traversable.sequenceA j)) (\\o -> ((Control.Monad.>>=) i) (\\s -> Control.Applicative.pure ((b o) s)))))) d) c))"
-                                     ,"\\b -> (\\c -> (\\d -> ((Control.Monad.>>=) c) (\\h -> (Data.Functor.fmap (\\l -> ((Control.Monad.>>=) (Data.Traversable.sequenceA h)) (\\q -> (Data.Functor.fmap (b q)) l))) d)))"
-                                     ,"\\b -> (\\c -> (\\d -> ((Control.Monad.>>=) d) (\\h -> (Data.Functor.fmap (\\l -> ((Control.Monad.>>=) (Data.Traversable.sequenceA l)) (\\q -> (Data.Functor.fmap (b q)) h))) c)))"
-                                     ,"\\b -> (\\c -> (\\d -> ((Control.Monad.>>=) d) (\\h -> (Data.Functor.fmap (\\l -> ((Control.Monad.>>=) h) (\\p -> (Data.Functor.fmap (\\t -> (b t) p)) ((Data.Traversable.mapM (\\z -> z)) l)))) c)))"
-                                     ,"\\b -> (\\c -> (\\d -> ((Control.Monad.>>=) d) (\\h -> ((Control.Monad.>>=) c) (\\l -> Control.Applicative.pure (((Control.Monad.>>=) h) (\\q -> (Data.Functor.fmap (\\u -> (b u) q)) ((Data.Traversable.mapM (\\t0 -> t0)) l)))))))"
-                                     ,"\\b -> (\\c -> (\\d -> ((Control.Monad.>>=) c) (\\h -> ((Control.Monad.>>=) d) (\\l -> Control.Applicative.pure (((Control.Monad.>>=) l) (\\q -> (Data.Functor.fmap (\\u -> (b u) q)) ((Data.Traversable.mapM (\\t0 -> t0)) h)))))))"
-                                     ,"\\b -> (\\c -> (\\d -> ((Control.Monad.>>=) c) (\\h -> ((Control.Monad.>>=) d) (\\l -> Control.Applicative.pure (((Control.Monad.>>=) l) (\\q -> (Data.Functor.fmap (\\u -> (b u) q)) (sequence h)))))))"
-                                     ,"\\b -> (\\c -> (\\d -> ((Control.Monad.>>=) d) (\\h -> ((Control.Monad.>>=) c) (\\l -> Control.Applicative.pure (((Control.Monad.>>=) h) (\\q -> (Data.Functor.fmap (\\u -> (b u) q)) (sequence l)))))))"
-                                     ,"\\b -> (\\c -> (\\d -> ((Control.Monad.>>=) d) (\\h -> (Data.Functor.fmap (\\l -> ((Control.Monad.>>=) ((Data.Traversable.mapM (\\t -> t)) l)) (\\r -> (Data.Functor.fmap (b r)) h))) c)))"]
+                                     ["\\f1 -> Control.Applicative.liftA2 (\\i -> (\\j -> ((Control.Monad.>>=) (Data.Traversable.sequenceA i)) (\\o -> ((Control.Monad.>>=) j) (\\s -> Control.Applicative.pure ((f1 o) s)))))"
+                                     ,"\\f1 -> (\\b -> (\\c -> ((Control.Applicative.liftA2 (\\i -> (\\j -> ((Control.Monad.>>=) (Data.Traversable.sequenceA j)) (\\o -> ((Control.Monad.>>=) i) (\\s -> Control.Applicative.pure ((f1 o) s)))))) c) b))"
+                                     ,"\\f1 -> (\\b -> (\\c -> ((Control.Monad.>>=) b) (\\gs -> (Data.Functor.fmap (\\k -> ((Control.Monad.>>=) (Data.Traversable.sequenceA gs)) (\\p -> (Data.Functor.fmap (f1 p)) k))) c)))"
+                                     ,"\\f1 -> (\\b -> (\\c -> ((Control.Monad.>>=) c) (\\gs -> (Data.Functor.fmap (\\k -> ((Control.Monad.>>=) (Data.Traversable.sequenceA k)) (\\p -> (Data.Functor.fmap (f1 p)) gs))) b)))"
+                                     ,"\\f1 -> (\\b -> (\\c -> ((Control.Monad.>>=) c) (\\gs -> (Data.Functor.fmap (\\k -> ((Control.Monad.>>=) gs) (\\p -> (Data.Functor.fmap (\\t -> (f1 t) p)) ((Data.Traversable.mapM (\\z -> z)) k)))) b)))"
+                                     ,"\\f1 -> (\\b -> (\\c -> ((Control.Monad.>>=) c) (\\gs -> ((Control.Monad.>>=) b) (\\k -> Control.Applicative.pure (((Control.Monad.>>=) gs) (\\p -> (Data.Functor.fmap (\\u -> (f1 u) p)) ((Data.Traversable.mapM (\\t0 -> t0)) k)))))))"
+                                     ,"\\f1 -> (\\b -> (\\c -> ((Control.Monad.>>=) b) (\\gs -> ((Control.Monad.>>=) c) (\\k -> Control.Applicative.pure (((Control.Monad.>>=) k) (\\p -> (Data.Functor.fmap (\\u -> (f1 u) p)) ((Data.Traversable.mapM (\\t0 -> t0)) gs)))))))"
+                                     ,"\\f1 -> (\\b -> (\\c -> ((Control.Monad.>>=) b) (\\gs -> ((Control.Monad.>>=) c) (\\k -> Control.Applicative.pure (((Control.Monad.>>=) k) (\\p -> (Data.Functor.fmap (\\u -> (f1 u) p)) (sequence gs)))))))"
+                                     ,"\\f1 -> (\\b -> (\\c -> ((Control.Monad.>>=) c) (\\gs -> ((Control.Monad.>>=) b) (\\k -> Control.Applicative.pure (((Control.Monad.>>=) gs) (\\p -> (Data.Functor.fmap (\\u -> (f1 u) p)) (sequence k)))))))"
+                                     ,"\\f1 -> (\\b -> (\\c -> ((Control.Monad.>>=) c) (\\gs -> (Data.Functor.fmap (\\k -> ((Control.Monad.>>=) ((Data.Traversable.mapM (\\t -> t)) k)) (\\r -> (Data.Functor.fmap (f1 r)) gs))) b)))"]
                                      []
   , (,,,,,) "liftSBlubS" False False "Monad m => ([a] -> b -> c) -> m [Data.Maybe.Maybe a] -> m (Data.Maybe.Maybe b) -> m (Data.Maybe.Maybe c)"
-                                     ["\\b -> Control.Applicative.liftA2 (\\i -> (\\j -> ((Control.Monad.>>=) j) (\\n -> (Data.Functor.fmap (\\r -> (b r) n)) (Data.Traversable.sequenceA i))))"
-                                     ,"\\b -> (\\c -> (\\d -> ((Control.Applicative.liftA2 (\\i -> (\\j -> ((Control.Monad.>>=) i) (\\n -> (Data.Functor.fmap (\\r -> (b r) n)) (Data.Traversable.sequenceA j))))) d) c))"
-                                     ,"\\b -> (\\c -> (\\d -> ((Control.Monad.>>=) c) (\\h -> (Data.Functor.fmap (\\l -> ((Control.Monad.>>=) (Data.Traversable.sequenceA h)) (\\q -> (Data.Functor.fmap (b q)) l))) d)))"
-                                     ,"\\b -> (\\c -> (\\d -> ((Control.Monad.>>=) d) (\\h -> (Data.Functor.fmap (\\l -> ((Control.Monad.>>=) (Data.Traversable.sequenceA l)) (\\q -> (Data.Functor.fmap (b q)) h))) c)))"
-                                     ,"\\b -> (\\c -> (\\d -> ((Control.Monad.>>=) c) (\\h -> (Data.Functor.fmap (\\l -> ((Control.Monad.>>=) (Prelude.sequence h)) (\\q -> (Data.Functor.fmap (b q)) l))) d)))"
-                                     ,"\\b -> (\\c -> (\\d -> ((Control.Monad.>>=) d) (\\h -> (Data.Functor.fmap (\\l -> ((Control.Monad.>>=) h) (\\p -> (Data.Functor.fmap (\\t -> (b t) p)) ((Data.Traversable.mapM (\\z -> z)) l)))) c)))"
-                                     ,"\\b -> (\\c -> (\\d -> ((Control.Monad.>>=) d) (\\h -> ((Control.Monad.>>=) c) (\\l -> Control.Applicative.pure (((Control.Monad.>>=) h) (\\q -> (Data.Functor.fmap (\\u -> (b u) q)) ((Data.Traversable.mapM (\\t0 -> t0)) l)))))))"
-                                     ,"\\b -> (\\c -> (\\d -> ((Control.Monad.>>=) c) (\\h -> ((Control.Monad.>>=) d) (\\l -> Control.Applicative.pure (((Control.Monad.>>=) l) (\\q -> (Data.Functor.fmap (\\u -> (b u) q)) ((Data.Traversable.mapM (\\t0 -> t0)) h)))))))"
-                                     ,"\\b -> (\\c -> (\\d -> ((Control.Monad.>>=) c) (\\h -> ((Control.Monad.>>=) d) (\\l -> Control.Applicative.pure (((Control.Monad.>>=) l) (\\q -> (Data.Functor.fmap (\\u -> (b u) q)) (sequence h)))))))"
-                                     ,"\\b -> (\\c -> (\\d -> ((Control.Monad.>>=) d) (\\h -> ((Control.Monad.>>=) c) (\\l -> Control.Applicative.pure (((Control.Monad.>>=) h) (\\q -> (Data.Functor.fmap (\\u -> (b u) q)) (sequence l)))))))"
-                                     ,"\\b -> (\\c -> (\\d -> ((Control.Monad.>>=) d) (\\h -> (Data.Functor.fmap (\\l -> ((Control.Monad.>>=) ((Data.Traversable.mapM (\\t -> t)) l)) (\\r -> (Data.Functor.fmap (b r)) h))) c)))"
-                                     ,"\\b -> (\\c -> (\\d -> ((Control.Monad.>>=) d) (Data.Traversable.mapM (\\l -> (Data.Functor.fmap (\\p -> (b (fold ((Data.Traversable.mapM (\\w -> w)) p))) l)) c))))"]
+                                     ["\\f1 -> Control.Applicative.liftA2 (\\i -> (\\j -> ((Control.Monad.>>=) j) (\\n -> (Data.Functor.fmap (\\r -> (f1 r) n)) (Data.Traversable.sequenceA i))))"
+                                     ,"\\f1 -> (\\b -> (\\c -> ((Control.Applicative.liftA2 (\\i -> (\\j -> ((Control.Monad.>>=) i) (\\n -> (Data.Functor.fmap (\\r -> (f1 r) n)) (Data.Traversable.sequenceA j))))) c) b))"
+                                     ,"\\f1 -> (\\b -> (\\c -> ((Control.Monad.>>=) b) (\\m7 -> (Data.Functor.fmap (\\ks -> ((Control.Monad.>>=) (Data.Traversable.sequenceA m7)) (\\p -> (Data.Functor.fmap (f1 p)) ks))) c)))"
+                                     ,"\\f1 -> (\\b -> (\\c -> ((Control.Monad.>>=) c) (\\m7 -> (Data.Functor.fmap (\\ks -> ((Control.Monad.>>=) (Data.Traversable.sequenceA ks)) (\\p -> (Data.Functor.fmap (f1 p)) m7))) b)))"
+                                     ,"\\f1 -> (\\b -> (\\c -> ((Control.Monad.>>=) b) (\\m7 -> (Data.Functor.fmap (\\ks -> ((Control.Monad.>>=) (Prelude.sequence m7)) (\\p -> (Data.Functor.fmap (f1 p)) ks))) c)))"
+                                     ,"\\f1 -> (\\b -> (\\c -> ((Control.Monad.>>=) c) (\\m7 -> (Data.Functor.fmap (\\ks -> ((Control.Monad.>>=) m7) (\\p -> (Data.Functor.fmap (\\t -> (f1 t) p)) ((Data.Traversable.mapM (\\z -> z)) ks)))) b)))"
+                                     ,"\\f1 -> (\\b -> (\\c -> ((Control.Monad.>>=) c) (\\m7 -> ((Control.Monad.>>=) b) (\\ks -> Control.Applicative.pure (((Control.Monad.>>=) m7) (\\p -> (Data.Functor.fmap (\\u -> (f1 u) p)) ((Data.Traversable.mapM (\\t0 -> t0)) ks)))))))"
+                                     ,"\\f1 -> (\\b -> (\\c -> ((Control.Monad.>>=) b) (\\m7 -> ((Control.Monad.>>=) c) (\\ks -> Control.Applicative.pure (((Control.Monad.>>=) ks) (\\p -> (Data.Functor.fmap (\\u -> (f1 u) p)) ((Data.Traversable.mapM (\\t0 -> t0)) m7)))))))"
+                                     ,"\\f1 -> (\\b -> (\\c -> ((Control.Monad.>>=) b) (\\m7 -> ((Control.Monad.>>=) c) (\\ks -> Control.Applicative.pure (((Control.Monad.>>=) ks) (\\p -> (Data.Functor.fmap (\\u -> (f1 u) p)) (sequence m7)))))))"
+                                     ,"\\f1 -> (\\b -> (\\c -> ((Control.Monad.>>=) c) (\\m7 -> ((Control.Monad.>>=) b) (\\ks -> Control.Applicative.pure (((Control.Monad.>>=) m7) (\\p -> (Data.Functor.fmap (\\u -> (f1 u) p)) (sequence ks)))))))"
+                                     ,"\\f1 -> (\\b -> (\\c -> ((Control.Monad.>>=) c) (\\m7 -> (Data.Functor.fmap (\\ks -> ((Control.Monad.>>=) ((Data.Traversable.mapM (\\t -> t)) ks)) (\\r -> (Data.Functor.fmap (f1 r)) m7))) b)))"
+                                     ,"\\f1 -> (\\b -> (\\c -> ((Control.Monad.>>=) c) (Data.Traversable.mapM (\\ks -> (Data.Functor.fmap (\\p -> (f1 (fold ((Data.Traversable.mapM (\\w -> w)) p))) ks)) b))))"]
                                      []
   , (,,,,,) "joinBlub"   False False "Monad m => [Decl] -> (Decl -> m [FunctionBinding]) -> m [FunctionBinding]"
-                                     ["\\b -> (\\c -> ((Control.Monad.>>=) ((Data.Traversable.traverse c) b)) (\\i -> Control.Applicative.pure (Control.Monad.join i)))"
-                                     ,"\\b -> (\\c -> ((Control.Monad.>>=) ((Data.Traversable.traverse c) b)) (((.) Control.Applicative.pure) Control.Monad.join))"
-                                     ,"\\b -> (\\c -> ((Control.Monad.>>=) ((Data.Traversable.mapM c) b)) (\\i -> Control.Applicative.pure (((Control.Monad.>>=) i) (\\q -> q))))"
-                                     ,"\\b -> (\\c -> (Data.Functor.fmap (\\g -> ((Control.Monad.>>=) g) (\\k -> k))) ((Data.Traversable.mapM c) b))"
-                                     ,"\\b -> (\\c -> ((Control.Monad.>>=) ((Data.Traversable.mapM c) b)) (\\l -> Control.Applicative.pure (((Control.Monad.>>=) l) (\\q -> q))))"
-                                     ,"\\b -> (\\c -> ((Control.Monad.>>=) ((Data.Traversable.mapM c) b)) (\\l -> Control.Applicative.pure (concat l)))"
-                                     ,"\\b -> (\\c -> ((Control.Monad.>>=) ((Data.Traversable.mapM c) b)) (\\i -> (Data.Traversable.mapM (\\p -> p)) (((Control.Monad.>>=) i) (Data.Functor.fmap Control.Applicative.pure))))"]
+                                     ["\\as -> (\\f2 -> ((Control.Monad.>>=) ((Data.Traversable.traverse f2) as)) (\\i -> Control.Applicative.pure (Control.Monad.join i)))"
+                                     ,"\\as -> (\\f2 -> ((Control.Monad.>>=) ((Data.Traversable.traverse f2) as)) (((.) Control.Applicative.pure) Control.Monad.join))"
+                                     ,"\\as -> (\\f2 -> ((Control.Monad.>>=) ((Data.Traversable.mapM f2) as)) (\\i -> Control.Applicative.pure (((Control.Monad.>>=) i) (\\p -> p))))"
+                                     ,"\\as -> (\\f2 -> (Data.Functor.fmap (\\g -> ((Control.Monad.>>=) g) (\\k -> k))) ((Data.Traversable.mapM f2) as))"
+                                     ,"\\as -> (\\f2 -> ((Control.Monad.>>=) ((Data.Traversable.mapM f2) as)) (\\l -> Control.Applicative.pure (((Control.Monad.>>=) l) (\\p -> p))))"
+                                     ,"\\as -> (\\f2 -> ((Control.Monad.>>=) ((Data.Traversable.mapM f2) as)) (\\l -> Control.Applicative.pure (concat l)))"
+                                     ,"\\as -> (\\f2 -> ((Control.Monad.>>=) ((Data.Traversable.mapM f2) as)) (\\i -> (Data.Traversable.mapM (\\p -> p)) (((Control.Monad.>>=) i) (Data.Functor.fmap Control.Applicative.pure))))"]
                                      []
   , (,,,,,) "liftA2"     False False "Applicative f => (a -> b -> c) -> f a -> f b -> f c"
-                                     ["\\b -> (\\c -> (Control.Applicative.<*>) (((Control.Applicative.<*>) (Control.Applicative.pure b)) c))"
-                                     ,"\\b -> (\\c -> (\\d -> ((Control.Applicative.<*>) ((Data.Functor.fmap (\\j -> (\\k -> (b k) j))) d)) c))"
-                                     ,"\\b -> (\\c -> (Control.Applicative.<*>) ((Data.Functor.fmap b) c))"
-                                     ,"\\b -> ((.) (Control.Applicative.<*>)) (Data.Functor.fmap b)"
+                                     ["\\f1 -> (\\f2 -> (Control.Applicative.<*>) (((Control.Applicative.<*>) (Control.Applicative.pure f1)) f2))"
+                                     ,"\\f1 -> (\\f2 -> (\\d -> ((Control.Applicative.<*>) ((Data.Functor.fmap (\\j -> (\\k -> (f1 k) j))) d)) f2))"
+                                     ,"\\f1 -> (\\f2 -> (Control.Applicative.<*>) ((Data.Functor.fmap f1) f2))"
+                                     ,"\\f1 -> ((.) (Control.Applicative.<*>)) (Data.Functor.fmap f1)"
                                      ]
                                      ["liftA2", "liftA3"]
   , (,,,,,) "runEitherT" False False "Monad m => [D] -> (D -> Control.Monad.Trans.Either.EitherT e m [FB]) -> ([FB] -> [FB]) -> m [Data.Either.Either e [FB]]"
-                                     ["\\b -> (\\c -> (\\d -> (Data.Traversable.traverse (\\h -> Control.Monad.Trans.Either.runEitherT (((Control.Monad.>>=) (c h)) (\\n -> Control.Applicative.pure (d n))))) b))"
-                                     ,"\\b -> (\\c -> (\\d -> (Data.Traversable.traverse (((.) Control.Monad.Trans.Either.runEitherT) (((.) (Data.Functor.fmap d)) c))) b))"
-                                     ,"\\b -> (\\c -> (\\d -> (Data.Traversable.traverse (\\h -> Control.Monad.Trans.Either.runEitherT ((Data.Functor.fmap d) (c h)))) b))"
-                                     ,"\\b -> (\\c -> (\\d -> (Data.Traversable.mapM (\\h -> Control.Monad.Trans.Either.runEitherT ((Data.Functor.fmap d) (c h)))) b))"]
+                                     ["\\as -> (\\f2 -> (\\f3 -> (Data.Traversable.traverse (\\h -> Control.Monad.Trans.Either.runEitherT (((Control.Monad.>>=) (f2 h)) (\\n -> Control.Applicative.pure (f3 n))))) as))"
+                                     ,"\\as -> (\\f2 -> (\\f3 -> (Data.Traversable.traverse (((.) Control.Monad.Trans.Either.runEitherT) (((.) (Data.Functor.fmap f3)) f2))) as))"
+                                     ,"\\as -> (\\f2 -> (\\f3 -> (Data.Traversable.traverse (\\h -> Control.Monad.Trans.Either.runEitherT ((Data.Functor.fmap f3) (f2 h)))) as))"
+                                     ,"\\as -> (\\f2 -> (\\f3 -> (Data.Traversable.mapM (\\h -> Control.Monad.Trans.Either.runEitherT ((Data.Functor.fmap f3) (f2 h)))) as))"]
                                      []
   , (,,,,,) "constr"     False False "(Monad m, Ord e) => ((e -> Data.Either.Either e TC) -> A -> Control.Monad.Trans.Either.EitherT e m C) -> Data.Either.Either e TC -> Data.Map.Map e (Data.Either.Either e TC) -> [A] -> Control.Monad.Trans.Either.EitherT e m [C]"
-                                     ["\\b -> (\\c -> (\\d -> Data.Traversable.traverse (b (\\m -> (Data.Maybe.fromMaybe c) ((Data.Map.lookup m) d)))))"
-                                     ,"\\b -> (\\c -> (\\d -> Data.Traversable.mapM (b (\\m -> (Data.Maybe.fromMaybe c) ((Data.Map.lookup m) d)))))"
-                                     ,"\\b -> (\\c -> (\\d -> Data.Traversable.mapM (b (\\m -> ((Data.Maybe.maybe c) (\\r -> r)) ((Data.Map.lookup m) d)))))"]
+                                     ["\\f1 -> (\\e2 -> (\\m3 -> Data.Traversable.traverse (f1 (\\l -> (Data.Maybe.fromMaybe e2) ((Data.Map.lookup l) m3)))))"
+                                     ,"\\f1 -> (\\e2 -> (\\m3 -> Data.Traversable.mapM (f1 (\\l -> (Data.Maybe.fromMaybe e2) ((Data.Map.lookup l) m3)))))"
+                                     ,"\\f1 -> (\\e2 -> (\\m3 -> Data.Traversable.mapM (f1 (\\l -> ((Data.Maybe.maybe e2) (\\q -> q)) ((Data.Map.lookup l) m3)))))"]
                                      []
   , (,,,,,) "fmapmap"    False False "Monad m => T -> [N] -> (CT -> N -> FB) -> (SC -> T -> m CT) -> SC -> m [FB]"
-                                     ["\\b -> (\\c -> (\\d -> (\\e -> (\\f -> ((Control.Monad.>>=) ((e f) b)) (\\l -> (Data.Traversable.traverse (\\p -> Control.Applicative.pure ((d l) p))) c)))))"
-                                     ,"\\b -> (\\c -> (\\d -> (\\e -> (\\f -> ((Control.Monad.>>=) ((e f) b)) (\\l -> (Data.Traversable.traverse (((.) Control.Applicative.pure) (d l))) c)))))"
-                                     ,"\\b -> (\\c -> (\\d -> (\\e -> (\\f -> ((>>=) ((e f) b)) (\\l -> (Data.Traversable.traverse (\\p -> pure ((d l) p))) c)))))"
-                                     ,"\\b -> (\\c -> (\\d -> (\\e -> (\\f -> ((Control.Monad.>>=) ((e f) b)) (\\l -> (Data.Traversable.mapM (\\p -> Control.Applicative.pure ((d l) p))) c)))))"
-                                     ,"\\b -> (\\c -> (\\d -> (\\e -> (\\f -> (Data.Traversable.mapM (\\j -> (Data.Functor.fmap (\\n -> (d n) j)) ((e f) b))) c))))"]
+                                     ["\\t1 -> (\\bs -> (\\f3 -> (\\f4 -> (\\s5 -> ((Control.Monad.>>=) ((f4 s5) t1)) (\\c11 -> (Data.Traversable.traverse (((.) Control.Applicative.pure) (f3 c11))) bs)))))"
+                                     ,"\\t1 -> (\\bs -> (\\f3 -> (\\f4 -> (\\s5 -> ((Control.Monad.>>=) ((f4 s5) t1)) (\\c11 -> (Data.Traversable.traverse (\\p -> Control.Applicative.pure ((f3 c11) p))) bs)))))"
+                                     ,"\\t1 -> (\\bs -> (\\f3 -> (\\f4 -> (\\s5 -> ((Control.Monad.>>=) ((f4 s5) t1)) (\\c11 -> (Data.Traversable.traverse (((.) Control.Applicative.pure) (f3 c11))) bs)))))"
+                                     ,"\\t1 -> (\\bs -> (\\f3 -> (\\f4 -> (\\s5 -> ((>>=) ((f4 s5) t1)) (\\c11 -> (Data.Traversable.traverse (\\p -> pure ((f3 c11) p))) bs)))))"
+                                     ,"\\t1 -> (\\bs -> (\\f3 -> (\\f4 -> (\\s5 -> ((Control.Monad.>>=) ((f4 s5) t1)) (\\c11 -> (Data.Traversable.mapM (\\p -> Control.Applicative.pure ((f3 c11) p))) bs)))))"
+                                     ,"\\t1 -> (\\bs -> (\\f3 -> (\\f4 -> (\\s5 -> (Data.Traversable.mapM (\\j -> (Data.Functor.fmap (\\n -> (f3 n) j)) ((f4 s5) t1))) bs))))"
+                                     ]
                                      []
   , (,,,,,) "fmapmap2"   False False "Monad m => T -> SC -> (T -> m [FB] -> m [FB]) -> [N] -> (SC -> T -> m CT) -> (CT -> N -> FB) -> m [FB]"
-                                     ["\\b -> (\\c -> (\\d -> (\\e -> (\\f -> (\\g -> (d b) ((Data.Traversable.traverse (\\m -> ((Control.Monad.>>=) ((f c) b)) (\\s -> Control.Applicative.pure ((g s) m)))) e))))))"
-                                     ,"\\b -> (\\c -> (\\d -> (\\e -> (\\f -> (\\g -> (d b) ((Data.Traversable.traverse (\\m -> (Data.Functor.fmap (\\q -> (g q) m)) ((f c) b))) e))))))"
-                                     ,"\\b -> (\\c -> (\\d -> (\\e -> (\\f -> (\\g -> (d b) ((Data.Traversable.mapM (\\m -> (Data.Functor.fmap (\\s -> (g s) m)) ((f c) b))) e))))))"
-                                     ,"\\b -> (\\c -> (\\d -> (\\e -> (\\f -> (\\g -> (d b) ((Data.Traversable.mapM (\\m -> (Data.Functor.fmap (\\q -> (g q) m)) ((f c) b))) e))))))"
-                                     ,"\\b -> (\\c -> (\\d -> (\\e -> (\\f -> (\\g -> (d b) ((Data.Traversable.mapM (\\m -> ((Control.Monad.>>=) ((f c) b)) (\\s -> Control.Applicative.pure ((g s) m)))) e))))))"]
+                                     ["\\t1 -> (\\s2 -> (\\f3 -> (\\ds -> (\\f5 -> (\\f6 -> (f3 t1) ((Data.Traversable.traverse (\\n12 -> ((Control.Monad.>>=) ((f5 s2) t1)) (\\s -> Control.Applicative.pure ((f6 s) n12)))) ds))))))"
+                                     ,"\\t1 -> (\\s2 -> (\\f3 -> (\\ds -> (\\f5 -> (\\f6 -> (f3 t1) ((Data.Traversable.traverse (\\n12 -> (Data.Functor.fmap (\\c16 -> (f6 c16) n12)) ((f5 s2) t1))) ds))))))"
+                                     ,"\\t1 -> (\\s2 -> (\\f3 -> (\\ds -> (\\f5 -> (\\f6 -> (f3 t1) ((Data.Traversable.mapM (\\n12 -> (Data.Functor.fmap (\\s -> (f6 s) n12)) ((f5 s2) t1))) ds))))))"
+                                     ,"\\t1 -> (\\s2 -> (\\f3 -> (\\ds -> (\\f5 -> (\\f6 -> (f3 t1) ((Data.Traversable.mapM (\\n12 -> (Data.Functor.fmap (\\c16 -> (f6 c16) n12)) ((f5 s2) t1))) ds))))))"
+                                     ,"\\t1 -> (\\s2 -> (\\f3 -> (\\ds -> (\\f5 -> (\\f6 -> (f3 t1) ((Data.Traversable.mapM (\\n12 -> ((Control.Monad.>>=) ((f5 s2) t1)) (\\s -> Control.Applicative.pure ((f6 s) n12)))) ds))))))"]
                                      []
   , (,,,,,) "contRet"    False False "a -> Control.Monad.Trans.Cont.Cont r a"
-                                     ["\\b -> Control.Monad.Trans.Cont.Cont (\\e -> e b)"]
+                                     ["\\a -> Control.Monad.Trans.Cont.Cont (\\f4 -> f4 a)"]
                                      []
   , (,,,,,) "contBind"   False False "Control.Monad.Trans.Cont.Cont r a -> (a -> Control.Monad.Trans.Cont.Cont r b) -> Control.Monad.Trans.Cont.Cont r b"
-                                     ["\\b -> (\\c -> let (Control.Monad.Trans.Cont.Cont e) = b in Control.Monad.Trans.Cont.Cont (\\g -> e (\\j -> let (Control.Monad.Trans.Cont.Cont n) = c j in n g)))"]
+                                     ["\\c1 -> (\\f2 -> let (Control.Monad.Trans.Cont.Cont f4) = c1 in Control.Monad.Trans.Cont.Cont (\\f6 -> f4 (\\i -> let (Control.Monad.Trans.Cont.Cont f13) = f2 i in f13 f6)))"]
                                      []
   , (,,,,,) "ap"         False False "Monad m => m (a->b) -> m a -> m b"
                                      ["(Control.Applicative.<*>)"]
@@ -553,9 +556,9 @@ printCheckExpectedResults :: forall r w s
                           -> EnvDictionary
                           -> MultiRWST r w s IO ()
 printCheckExpectedResults h env = do
+    xs <- checkExpectedResults h env
     qNameIndex <- mGet
     case () of { () -> do
-    xs <- checkExpectedResults h env
     stats <- mapM helper xs
     lift $ putStrLn $ "total:     " ++ show (length stats)
     lift $ putStrLn $ "solutions: " ++ (show

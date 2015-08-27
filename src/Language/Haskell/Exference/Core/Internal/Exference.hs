@@ -2,6 +2,7 @@
 {-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE PatternGuards #-}
 {-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE MonadComprehensions #-}
 
 
 module Language.Haskell.Exference.Core.Internal.Exference
@@ -48,7 +49,7 @@ import Data.List ( partition, sortBy, groupBy )
 import Data.Ord ( comparing )
 import Data.Function ( on )
 import Data.Monoid ( mempty, First(First), getFirst, mconcat )
-import Data.Foldable ( foldMap, sum )
+import Data.Foldable ( foldMap, sum, asum )
 import Control.Monad.Morph ( lift )
 import Data.Typeable ( Typeable )
 
@@ -143,7 +144,7 @@ type FindExpressionsState = ( Int    -- number of steps already performed
 -- Takes input, produces list of outputs. Output is basically a
 -- [[Solution]], plus some statistics and stuff.
 -- Nested list to allow executing n steps even when no solutions are found
--- (i.e. you take 1000, and get only []'s).
+-- (e.g. you take 1000, and get only []'s).
 --
 -- Basic implementation idea: We traverse a search tree. A step (`stateStep`
 -- function) evaluates one node, and returns
@@ -259,15 +260,15 @@ findExpressions (ExferenceInput rawType
               -- this cutoff is somewhat arbitrary, and can, theoretically,
               -- distort the order of the results (i.e.: lead to results being
               -- omitted).
-            filteredNew = if n+qsize > maxSteps
-              then case memLimit of
-                Nothing -> ratedNew
-                Just mmax ->
-                  let
-                    cutoff = worst * fromIntegral mmax / fromIntegral qsize
-                  in
-                    filter ((>cutoff) . fst) ratedNew
-              else ratedNew
+            filteredNew = fromMaybe id mFunc ratedNew
+             where
+              mFunc = [ filter ((>cutoff) . fst)
+                      | n+qsize > maxSteps
+                      , mmax <- memLimit
+                      , let cutoff = worst * fromIntegral mmax
+                                           / fromIntegral qsize
+                      ]
+                    
             newNodes = foldr (uncurry Q.insert) restNodes filteredNew
             newSearchTreeBuilder =
 #if BUILD_SEARCH_TREE
@@ -370,16 +371,16 @@ stateStep2 multiPM allowConstrs qNameIndex h s
     arrowStep g ts
       -- descend until no more TypeArrows, accumulating what is seen.
       | (TypeArrow t1 t2) <- g = do
-          nextId <- case t1 of
-            TypeArrow {} -> builderAllocVarF
-            _            -> builderAllocVar
+          nextId <- builderAllocVar
           arrowStep t2 ((VarBinding nextId t1):ts)
       -- finally, do the goal/expression transformation.
       | otherwise = do
           nextId <- builderAllocHole
           newScopeId <- builderAddScope scopeId
           builderFillExprHole var
-            $ foldr ExpLambda (ExpHole nextId) $ reverse $ map (\(VarBinding v _) -> v) ts
+            $ foldr (\(VarBinding v ty) e -> ExpLambda v ty e) (ExpHole nextId)
+            $ reverse
+            $ ts
           builderAddDepth (heuristics_functionGoalTransform h)
           builderSetReason "function goal transform"
           builderSetLastStepBinding Nothing
@@ -416,7 +417,7 @@ stateStep2 multiPM allowConstrs qNameIndex h s
       let provConstrs = S.toList $           qClassEnv_constraints (node_queryClassEnv s)
                                    `S.union` S.fromList (constraintApplySubsts ss <$> constraints)
       byGenericUnify
-        (Right provId)
+        (Right (provId, foldr TypeArrow provT provPs))
         (provType)
         (provConstrs)
         (applySubsts ss <$> provPs)
@@ -440,7 +441,7 @@ stateStep2 multiPM allowConstrs qNameIndex h s
         ("applying function " ++ show funcId)
         (unifyOffset goalType (HsTypeOffset funcR offset))
     -- common code for byProvided and byFunctionSimple
-    byGenericUnify :: Either QNameId TVarId
+    byGenericUnify :: Either QNameId (TVarId, HsType)
                    -> HsType
                    -> [HsConstraint]
                    -> [HsType]
@@ -461,7 +462,7 @@ stateStep2 multiPM allowConstrs qNameIndex h s
           Nothing                -> noUnify
           Just (leftSS, rightSS) -> byUnified leftSS rightSS
      where
-      coreExp = either ExpName ExpVar applier
+      coreExp = either ExpName (uncurry ExpVar) applier
       bTrace  = case applier of
         Left  x -> Just (show x)
         Right _ -> Nothing
@@ -472,14 +473,15 @@ stateStep2 multiPM allowConstrs qNameIndex h s
           vParam  <- builderAllocHole
           builderFillExprHole var $ ExpLet
                                       vResult
+                                      provided
                                       (ExpApply coreExp $ ExpHole vParam)
                                       (ExpHole var)
           builderPrependGoal (VarBinding vParam d, scopeId)
           newScopeId <- builderAddScope scopeId
           builderAddConstraintGoals provConstrs
           case applier of
-              Left _ -> return ()
-              Right i -> builderAddVarUsage i
+              Left _      -> return ()
+              Right (i,_) -> builderAddVarUsage i
           builderFixMaxTVarId $ maximum $ map largestId dependencies
           builderAddDepth depthModNoMatch
           builderSetReason $ "randomly trying to apply function "
@@ -517,11 +519,11 @@ stateStep2 multiPM allowConstrs qNameIndex h s
               forM_ newGoals builderAppendGoal
           builderApplySubst substs
           builderFillExprHole var $ case paramN of
-            0 -> coreExp
+            0 -> coreExp -- TODO: this case is superfluous, isnt it..
             _ -> foldl ExpApply coreExp (map ExpHole vars)
           case applier of
-            Left _ -> return ()
-            Right i -> builderAddVarUsage i
+            Left _       -> return ()
+            Right (i, _) -> builderAddVarUsage i
           builderSetConstraints newConstraints
           builderFixMaxTVarId $ maximum
                               $ largestSubstsId leftSS
@@ -558,37 +560,51 @@ addScopePatternMatch multiPM goalType vid sid bindings = case bindings of
   (b@(v,vtResult,vtParams,_,_):bindingRest) -> do
     offset <- builderGetTVarOffset
     let incF = incVarIds (+offset)
+    let expVar = ExpVar v (foldr TypeArrow vtResult vtParams)
     builderAddPBinding sid b
     let defaultHandleRest = addScopePatternMatch multiPM goalType vid sid bindingRest
     case vtResult of
       TypeVar {}    -> defaultHandleRest -- dont pattern-match on variables, even if it unifies
-      TypeArrow {}  -> error $ "addScopePatternMatch: TypeArrow: " ++ show vtResult  -- should never happen, given a pbinding..
-      TypeForall {} -> error
-                       $ "addScopePatternMatch: TypeForall (RankNTypes not yet implemented)" -- todo when we do RankNTypes
-                       ++ show vtResult
+      TypeArrow {}  ->
+        error $ "addScopePatternMatch: TypeArrow: " ++ show vtResult  -- should never happen, given a pbinding..
+      TypeForall {} ->
+        error $ "addScopePatternMatch: TypeForall (RankNTypes not yet implemented)" -- todo when we do RankNTypes
+                ++ show vtResult
       _ | not $ null vtParams -> defaultHandleRest
         | otherwise -> do -- SearchNodeBuilder
         deconss <- builderDeconss
-        fromMaybe defaultHandleRest $ getFirst
-                                    $ foldMap First
+        fromMaybe defaultHandleRest $ asum
                                     $ deconss <&> \decons -> case decons of
           (matchParam, [(matchId, matchRs)], False) -> let
             resultTypes = map incF matchRs
+            unifyResult = unifyRightOffset vtResult
+                                           (HsTypeOffset matchParam offset)
             -- inputType = incF matchParam
-            in unifyRightOffset vtResult (HsTypeOffset matchParam offset) <&> \substs -> do -- SearchNodeBuilder
+            in unifyResult <&> \substs -> do -- SearchNodeBuilder
               vars <- replicateM (length matchRs) builderAllocVar
               builderAddVarUsage v
               builderSetReason $ "pattern matching on " ++ showVar v
               let newProvTypes = map (applySubsts substs) resultTypes
-                  newBinds = zipWith (\x y -> splitBinding (VarBinding x y)) vars newProvTypes
-                  expr = ExpLetMatch matchId vars (ExpVar v) (ExpHole vid)
+                  newBinds = zipWith (\x y -> splitBinding (VarBinding x y))
+                                     vars
+                                     newProvTypes
+                  expr = ExpLetMatch matchId
+                                     (zip vars matchRs)
+                                     expVar
+                                     (ExpHole vid)
               builderFillExprHole vid expr
               when (not $ null matchRs)
                    (builderFixMaxTVarId $ maximum $ map largestId newProvTypes)
-              addScopePatternMatch multiPM goalType vid sid $ reverse newBinds ++ bindingRest
+              addScopePatternMatch multiPM
+                                   goalType
+                                   vid
+                                   sid
+                                   (reverse newBinds ++ bindingRest)
           (matchParam, matchers@(_:_), False) | multiPM -> let
+            unifyResult = unifyRightOffset vtResult
+                                           (HsTypeOffset matchParam offset)
             -- inputType = incF matchParam
-            in unifyRightOffset vtResult (HsTypeOffset matchParam offset) <&> \substs -> do -- SearchNodeBuilder
+            in unifyResult <&> \substs -> do -- SearchNodeBuilder
               mData <- matchers `forM` \(matchId, matchRs) -> do -- SearchNodeBuilder
                 newSid <- builderAddScope sid
                 let resultTypes = map incF matchRs
@@ -599,9 +615,10 @@ addScopePatternMatch multiPM goalType vid sid bindings = case bindings of
                     newBinds = zipWith (\x y -> splitBinding (VarBinding x y)) vars newProvTypes
                 when (not $ null matchRs)
                      (builderFixMaxTVarId $ maximum $ map largestId newProvTypes)
-                return ((matchId, vars, ExpHole newVid), (newVid, reverse newBinds, newSid))
+                return ( (matchId, zip vars newProvTypes, ExpHole newVid)
+                       , (newVid, reverse newBinds, newSid) )
               builderSetReason $ "pattern matching on " ++ showVar v
-              builderFillExprHole vid $ ExpCaseMatch (ExpVar v) (map fst mData)
+              builderFillExprHole vid $ ExpCaseMatch expVar (map fst mData)
               concat <$> map snd mData `forM` \(newVid, newBinds, newSid) ->
                 addScopePatternMatch multiPM goalType newVid newSid (newBinds++bindingRest)
           _ -> Nothing -- TODO: decons for recursive data types

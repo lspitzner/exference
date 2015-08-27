@@ -1,6 +1,8 @@
 {-# LANGUAGE PatternGuards #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE MonadComprehensions #-}
+{-# LANGUAGE GADTs #-}
 
 module Language.Haskell.Exference.ExpressionToHaskellSrc
   ( convert
@@ -21,6 +23,11 @@ import Control.Monad ( forM )
 
 import Control.Applicative
 
+import qualified Data.Map as M
+import Data.Map ( Map )
+
+import Data.HList.ContainsType
+
 
 
 -- TODO:
@@ -30,41 +37,58 @@ import Control.Applicative
 -- level 0 = no qualication
 -- level 1 = qualification for anything but infix operators
 -- level 2 = full qualification (prevents infix operators)
-convert :: ( MonadMultiState T.QNameIndex m
-           , Functor m
+convert :: ( m ~ MultiRWST r w s m2
+           , Functor m2
+           , Monad m2
+           , ContainsType T.QNameIndex s
            )
         => Int
         -> E.Expression
         -> m Exp
-convert q e = h e []
+convert q e = withMultiStateA (M.empty :: Map T.TVarId T.HsType)
+            $ do
+                E.collectVarTypes e
+                h e []
   where
-    h (E.ExpLambda i e1) is = h e1 (i:is)
+    h (E.ExpLambda i ty e1) is = h e1 ((i, ty):is)
     h rhsExp [] = convertExp q rhsExp
-    h rhsExp is =
-        Lambda noLoc params <$> convertExp q rhsExp
-      where
-        params = map (PVar . Ident . T.showVar) $ reverse is
+    h rhsExp is = [ Lambda noLoc (map (PVar . Ident) params) cr
+                  | cr <- convertExp q rhsExp
+                  , params <- mapM (T.showTypedVar . fst)
+                                   (reverse is)
+                  ]
 
-convertToFunc :: ( MonadMultiState T.QNameIndex m
-                 , Functor m
+convertToFunc :: ( ContainsType T.QNameIndex s
+                 , Functor m2
+                 , Monad m2
+                 , m ~ MultiRWST r w s m2
                  )
               => Int
               -> String
               -> E.Expression
               -> m Decl
-convertToFunc q ident e = h e []
+convertToFunc q ident e = withMultiStateA (M.empty :: Map T.TVarId T.HsType)
+                        $ do
+                            E.collectVarTypes e
+                            h e []
   where
-    h (E.ExpLambda i e1) is = h e1 (i:is)
-    h rhsExp is = do
-      rhs' <- UnGuardedRhs <$> convertExp q rhsExp
-      let params = map (PVar . Ident . T.showVar) $ reverse is
-      return $ FunBind [Match noLoc (Ident ident) params Nothing rhs' (BDecls[])]
+    h (E.ExpLambda i ty e1) is = h e1 ((i, ty):is)
+    h rhsExp is = [ FunBind [Match noLoc
+                                   (Ident ident)
+                                   (map (PVar . Ident) params)
+                                   Nothing
+                                   rhs'
+                                   (BDecls [])]
+                  | rhs' <- UnGuardedRhs <$> convertExp q rhsExp
+                  , params <- mapM (T.showTypedVar . fst) (reverse is)
+                  ]
 
 -- qualification level -> internal-expression -> haskell-src-expression
 -- level 0 = no qualication
 -- level 1 = qualification for anything but infix operators
 -- level 2 = full qualification (prevents infix operators)
-convertExp :: ( MonadMultiState T.QNameIndex m 
+convertExp :: ( MonadMultiState T.QNameIndex m
+              , MonadMultiState (Map T.TVarId T.HsType) m
               , Functor m
               )
            => Int
@@ -82,21 +106,22 @@ parens False e = e
 -- level 2 = full qualification (prevents infix operators)
 convertInternal :: forall m
                  . ( MonadMultiState T.QNameIndex m
+                   , MonadMultiState (Map T.TVarId T.HsType) m
                    , Functor m
                    )
                 => Int
                 -> Int
                 -> E.Expression
                 -> m Exp
-convertInternal _ _ (E.ExpVar i) = return $ Var
-                                          $ UnQual
-                                          $ Ident
-                                          $ T.showVar i
+convertInternal _ _ (E.ExpVar i _) = Var . UnQual . Ident
+                                    <$> T.showTypedVar i
 convertInternal q _ (E.ExpName qn) = Con . UnQual . Ident
                                      <$> convertName q qn
-convertInternal q p (E.ExpLambda i e) =
-  parens (p>=1) . (Lambda noLoc [PVar $ Ident $ T.showVar i])
-  <$> convertInternal q 0 e
+convertInternal q p (E.ExpLambda i _ e) =
+  [ parens (p>=1) $ Lambda noLoc [PVar $ Ident $ vname] ce
+  | ce <- convertInternal q 0 e
+  , vname <- T.showTypedVar i
+  ]
 convertInternal q p (E.ExpApply e1 pe) = recurseApply e1 [pe]
   where
     defaultApply :: E.Expression -> [E.Expression] -> m Exp
@@ -137,10 +162,11 @@ convertInternal _ _ (E.ExpHole i) = return $ Var
                                            $ UnQual
                                            $ Ident
                                            $ "_"++T.showVar i
-convertInternal q p (E.ExpLet i bindE inE) = do
+convertInternal q p (E.ExpLet i _ bindE inE) = do
   rhs <- convertInternal q 0 bindE
+  varName <- T.showTypedVar i
   let convBind = PatBind noLoc
-                   (PVar $ Ident $ T.showVar i)
+                   (PVar $ Ident $ varName)
                    (UnGuardedRhs $ rhs)
                    (BDecls [])
   e <- convertInternal q 0 inE
@@ -148,10 +174,10 @@ convertInternal q p (E.ExpLet i bindE inE) = do
 convertInternal q p (E.ExpLetMatch n ids bindE inE) = do
   rhs <- convertInternal q 0 bindE
   name <- convertName q n
+  varNames <- mapM (T.showTypedVar . fst) ids
   let convBind = PatBind noLoc
                    (PParen $ PApp (UnQual $ Ident $ name)
-                                      (map (PVar . Ident . T.showVar)
-                                           ids))
+                                  (map (PVar . Ident) varNames))
                    (UnGuardedRhs $ rhs)
                    (BDecls [])
   e <- convertInternal q 0 inE
@@ -161,9 +187,10 @@ convertInternal q p (E.ExpCaseMatch bindE alts) = do
   as <- alts `forM` \(c, vars, expr) -> do
     rhs <- convertInternal q 0 expr
     name <- convertName q c
+    varNames <- mapM (T.showTypedVar . fst) vars
     return $ Alt noLoc
         (PApp (UnQual $ Ident $ name)
-              (map (PVar . Ident . T.showVar) vars))
+              (map (PVar . Ident) varNames))
         (UnGuardedRhs $ rhs)
         (BDecls [])
   return $ parens (p>=2) $ Case e as

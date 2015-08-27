@@ -28,11 +28,13 @@ module Language.Haskell.Exference.Core.Types
   -- , typeParser
   , containsVar
   , showVar
+  , showTypedVar
   , mkQueryClassEnv
   , addQueryClassEnv
   , freeVars
   , showHsConstraint
   , lookupQNameId
+  , forceLookupQNameId
   , TypeVarIndex
   , showHsType
   , specialQName_id
@@ -63,10 +65,12 @@ import Language.Haskell.Exts.Syntax ( Name (..) )
 import Control.DeepSeq.Generics
 import GHC.Generics
 import Data.Data ( Data )
+import Data.Char ( toLower )
 import Data.Typeable ( Typeable )
 import Control.Monad.Trans.MultiState
 
 import Debug.Hood.Observe
+import Debug.Trace
 
 
 
@@ -102,6 +106,7 @@ data QNameIndex = QNameIndex
 
 type TypeVarIndex = M.Map Name Int
 
+specialQName_id, specialQName_compose :: TVarId
 specialQName_id = (-16)
 specialQName_compose = (-17)
 
@@ -114,6 +119,13 @@ lookupQNameId qid
   | otherwise                   = do
       QNameIndex _ _ indB <- mGet
       return $ M.lookup qid indB
+
+forceLookupQNameId :: MonadMultiState QNameIndex m
+                   => QNameId
+                   -> m QualifiedName
+forceLookupQNameId nid = [ fromMaybe (error $ "badQNameId: " ++ show nid) m
+                         | m <- lookupQNameId nid
+                         ]
 
 data HsTypeClass = HsTypeClass
   { tclass_name :: QNameId
@@ -335,10 +347,36 @@ constraintApplySubsts' ss c
       in (any fst applied, HsConstraint cl $ snd <$> applied)
 
 showVar :: TVarId -> String
-showVar i
-  | i<12      = ["hole", "x", "y", "z", "a", "b", "c", "d", "e", "u", "v", "w"] !! i
-  | i>100     = "f" ++ show (i-100)
-  | otherwise = "t" ++ show (i-11)
+showVar 0 = "v0"
+showVar i | i<27      = [chr (ord 'a' + i - 1)]
+          | otherwise = "t"++show (i-27)
+
+showTypedVar :: forall m
+              . ( MonadMultiState QNameIndex m
+                , MonadMultiState (M.Map TVarId HsType) m )
+             => TVarId
+             -> m String
+showTypedVar i = do
+  m <- mGet
+  case M.lookup i m of
+    Nothing -> error "missing collectVarTypes before showTypedVar"
+    Just t -> h t
+ where
+  -- h t | traceShow (i, t) False = undefined
+  h TypeVar{}          = return $ showVar i
+  h TypeConstant{}     = return $ showVar i
+  h (TypeCons qNameId) = do
+    mqname <- lookupQNameId qNameId
+    return $ case mqname of
+      Nothing                      -> showVar i
+      Just (QualifiedName _ (c:_)) -> toLower c : show i
+      Just QualifiedName{}         -> showVar i
+      Just ListCon                 -> showVar i ++ "s"
+      Just TupleCon{}              -> showVar i
+      Just Cons                    -> showVar i
+  h TypeArrow{}        = return $ "f" ++ show i
+  h (TypeApp t _)      = h t
+  h (TypeForall _ _ t) = h t
 
 -- parseType :: _ => String -> m (Maybe (HsType, String))
 -- parseType s = either (const Nothing) Just
