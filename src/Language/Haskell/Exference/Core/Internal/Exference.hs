@@ -364,8 +364,10 @@ stateStep2 multiPM allowConstrs qNameIndex h s
   | (TypeForall is cs t) <- goalType = [ modifyNodeBy s' $ forallStep is cs t ]
   | otherwise = byProvided ++ byFunctionSimple
   where
+
     ((VarBinding var goalType, scopeId) Seq.:< gr) = Seq.viewl $ node_goals s
     s' = s { node_goals = gr }
+
     -- if type is TypeArrow, transform to lambda expression.
     arrowStep :: HsType -> [VarBinding] -> SearchNodeBuilder ()
     arrowStep g ts
@@ -393,6 +395,7 @@ stateStep2 multiPM allowConstrs qNameIndex h s
                                       $ reverse
                                       $ ts
                                       )
+
     -- if type is TypeForall, fix the forall-variables, i.e. invent a fresh
     -- set of constants that replace the relevant forall-variables.
     forallStep :: [TVarId] -> [HsConstraint] -> HsType -> SearchNodeBuilder ()
@@ -409,6 +412,7 @@ stateStep2 multiPM allowConstrs qNameIndex h s
     -- the parameters accumulated by building the expression so far.
     -- e.g. for (\x -> (_ :: Int)), the goal can be filled by `x` if
     -- `x :: Int`.
+
     byProvided = do
       (provId, provT, provPs, forallTypes, constraints) <- scopeGetAllBindings (node_providedScopes s) scopeId
       let incF = incVarIds (+(1+node_maxTVarId s))
@@ -425,6 +429,7 @@ stateStep2 multiPM allowConstrs qNameIndex h s
         (heuristics_stepProvidedBad h)
         ("inserting given value " ++ show provId ++ "::" ++ show provT)
         (unify goalType provType)
+
     -- try to resolve the goal by looking at functions from the environment.
     byFunctionSimple = do
       (funcR, funcId, funcRating, funcConstrs, funcParams) <- V.toList $ node_functions s
@@ -440,6 +445,7 @@ stateStep2 multiPM allowConstrs qNameIndex h s
         (heuristics_stepEnvBad h + funcRating)
         ("applying function " ++ show funcId)
         (unifyOffset goalType (HsTypeOffset funcR offset))
+
     -- common code for byProvided and byFunctionSimple
     byGenericUnify :: Either QNameId (TVarId, HsType)
                    -> HsType
@@ -539,6 +545,7 @@ stateStep2 multiPM allowConstrs qNameIndex h s
           builderSetReason $ reasonPart ++ ", because " ++ substsTxt
                             ++ " and because " ++ provableTxt
           builderSetLastStepBinding bTrace
+
 
 {-# INLINE addScopePatternMatch #-}
 -- Insert pattern-matching on newly introduced VarPBindings where

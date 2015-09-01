@@ -10,7 +10,7 @@ module Language.Haskell.Exference.Core.Types
   , QualifiedName(..)
   , HsType (..)
   , HsTypeOffset (..)
-  , Subst
+  , Subst (..)
   , Substs
   , HsTypeClass (..)
   , HsInstance (..)
@@ -76,7 +76,7 @@ import Debug.Trace
 
 type TVarId = Int
 type QNameId = Int
-type Subst  = (TVarId, HsType)
+data Subst  = Subst {-# UNPACK #-} !TVarId !HsType
 type Substs = IntMap.IntMap HsType
 
 data QualifiedName
@@ -90,12 +90,12 @@ data HsType = TypeVar      {-# UNPACK #-} !TVarId
             | TypeConstant {-# UNPACK #-} !TVarId
               -- like TypeCons, for exference-internal purposes.
             | TypeCons     {-# UNPACK #-} !QNameId
-            | TypeArrow    HsType HsType
-            | TypeApp      HsType HsType
-            | TypeForall   [TVarId] [HsConstraint] HsType
+            | TypeArrow    !HsType !HsType
+            | TypeApp      !HsType !HsType
+            | TypeForall   [TVarId] [HsConstraint] !HsType
   deriving (Ord, Eq, Generic, Data, Typeable)
 
-data HsTypeOffset = HsTypeOffset HsType !Int
+data HsTypeOffset = HsTypeOffset !HsType {-# UNPACK #-} !Int
 
 data QNameIndex = QNameIndex
   { qNameIndex_nextId :: QNameId
@@ -407,12 +407,12 @@ showTypedVar i = do
 --         (spaces *> return left)
 
 applySubst :: Subst -> HsType -> HsType
-applySubst (i, t) v@(TypeVar j) = if i==j then t else v
+applySubst (Subst i t) v@(TypeVar j) = if i==j then t else v
 applySubst _ c@(TypeConstant _) = c
 applySubst _ c@(TypeCons _)     = c
 applySubst s (TypeArrow t1 t2)  = TypeArrow (applySubst s t1) (applySubst s t2)
 applySubst s (TypeApp t1 t2)    = TypeApp (applySubst s t1) (applySubst s t2)
-applySubst s@(i,_) f@(TypeForall js cs t) = if elem i js
+applySubst s@(Subst i _) f@(TypeForall js cs t) = if elem i js
   then f
   else TypeForall js (constraintApplySubst s <$> cs) (applySubst s t)
 
