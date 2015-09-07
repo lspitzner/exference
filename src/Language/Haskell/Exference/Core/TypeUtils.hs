@@ -194,7 +194,7 @@ inflateInstances is = S.toList $ S.unions $ map (S.fromList . f) is
       = let 
           g :: HsConstraint -> HsInstance
           g (HsConstraint ctclass cparams) =
-            HsInstance iconstrs ctclass $ map (applySubsts substs) cparams
+            HsInstance iconstrs ctclass $ map (snd . applySubsts substs) cparams
         in i : concatMap (f.g) tconstrs
 
 splitArrowResultParams :: HsType -> (HsType, [HsType], [TVarId], [HsConstraint])

@@ -131,6 +131,7 @@ Library
     parsec,
     directory,
     bifunctors,
+    safe,
     multistate >= 0.6.2
 
 

@@ -38,6 +38,14 @@ occursIn i (TypeArrow t1 t2)   = occursIn i t1 || occursIn i t2
 occursIn i (TypeApp t1 t2)     = occursIn i t1 || occursIn i t2
 occursIn i (TypeForall js _ t) = not (i `elem` js) && occursIn i t
 
+-- Maybe (Either (Either Subst Subst) [TypeEq])
+data StepResult
+  = StepFailed
+  | StepClear
+  | StepNewEqs ![TypeEq]
+  | StepLeftSubst {-# UNPACK #-} !Subst
+  | StepRightSubst {-# UNPACK #-} !Subst
+
 -- unification of types.
 -- returns two substitutions: one for variables in the first type,
 -- one for variables in the second. In the symmetric case,
@@ -52,7 +60,21 @@ unify ut1 ut2 = unify' $ UniState2 [TypeEq ut1 ut2] IntMap.empty IntMap.empty
   where
     unify' :: UniState2 -> Maybe (Substs, Substs)
     unify' (UniState2 [] l r)      = Just (l, r)
-    unify' (UniState2 (x:xr) l r) = uniStep x >>= (
+    unify' (UniState2 (x:xr) l r) = case uniStep x of
+      StepFailed                       -> Nothing
+      StepClear                        -> unify' $ UniState2 xr l r
+      StepNewEqs eqs                   -> unify' $ UniState2 (eqs++xr) l r
+      StepLeftSubst  subst@(Subst i t) ->
+        unify' $ let f = applySubst subst in UniState2
+          [ TypeEq (f a) b | TypeEq a b <- xr ]
+          (IntMap.insert i t $ IntMap.map f l)
+          r
+      StepRightSubst subst@(Subst i t) ->
+        unify' $ let f = applySubst subst in UniState2
+          [ TypeEq a (f b) | TypeEq a b <- xr ]
+          l
+          (IntMap.insert i t $ IntMap.map f r)
+      {-
       \ms -> unify' $ case ms of
         Left (Left subst@(Subst i t)) -> let f = applySubst subst in UniState2
           [ TypeEq (f a) b | TypeEq a b <- xr ]
@@ -64,27 +86,26 @@ unify ut1 ut2 = unify' $ UniState2 [TypeEq ut1 ut2] IntMap.empty IntMap.empty
           (IntMap.insert i t $ IntMap.map f r)
         Right eqs -> UniState2 (eqs++xr) l r
       ) -- up here is the same control flow again, with the deconsing and the growing of the tail... maybe make your own hof for now? oh wait you also modify the tail
-    uniStep :: TypeEq -> Maybe (Either (Either Subst Subst) [TypeEq])
+      -}
+    uniStep :: TypeEq -> StepResult
     -- uniStep (TypeEq (TypeVar i1) (TypeVar i2)) | i1==i2 = Just (Right [])
-    uniStep (TypeEq t1 (TypeVar i2)) = [ Left $ Right $ Subst i2 t1
-                                       | not $ occursIn i2 t1
-                                       ]
-    uniStep (TypeEq (TypeVar i1) t2) = [ Left $ Left $ Subst i1 t2
-                                       | not $ occursIn i1 t2
-                                       ]
-    uniStep (TypeEq (TypeConstant i1) (TypeConstant i2)) = [Right [] | i1 == i2]
-    uniStep (TypeEq (TypeCons s1) (TypeCons s2)) = [Right [] | s1 == s2]
-    uniStep (TypeEq (TypeArrow t1 t2) (TypeArrow t3 t4)) = Just $ Right [TypeEq t1 t3, TypeEq t2 t4]
-    uniStep (TypeEq (TypeApp t1 t2) (TypeApp t3 t4)) = Just $ Right [TypeEq t1 t3, TypeEq t2 t4]
+    uniStep (TypeEq t1 (TypeVar i2)) = if occursIn i2 t1
+      then StepFailed
+      else StepRightSubst $ Subst i2 t1
+    uniStep (TypeEq (TypeVar i1) t2) = if occursIn i1 t2
+      then StepFailed
+      else StepLeftSubst $ Subst i1 t2
+    uniStep (TypeEq (TypeConstant i1) (TypeConstant i2)) | i1 == i2 = StepClear
+    uniStep (TypeEq (TypeCons s1) (TypeCons s2)) | s1 == s2 = StepClear
+    uniStep (TypeEq (TypeArrow t1 t2) (TypeArrow t3 t4)) = StepNewEqs [TypeEq t1 t3, TypeEq t2 t4]
+    uniStep (TypeEq (TypeApp t1 t2) (TypeApp t3 t4)) = StepNewEqs [TypeEq t1 t3, TypeEq t2 t4]
     -- TODO TypeForall unification
     -- THIS IS WRONG; WE IGNORE FORALLS FOR THE MOMENT
-    -- (this probably does not ever happen anymore, as foralls are treated
-    --  previously.) sounds like TypeForall shouldn't be in the type used here or something.
     -- uniStep (TypeEq (TypeForall _ _ t1) (t2)) = uniStep $ TypeEq t1 t2
     -- uniStep (TypeEq (t1) (TypeForall _ _ t2)) = uniStep $ TypeEq t1 t2
     uniStep (TypeEq TypeForall{} _) = error "this probably does not ever happen anymore, as foralls are treated previously."
     uniStep (TypeEq _ TypeForall{}) = error "this probably does not ever happen anymore, as foralls are treated previously."
-    uniStep _ = Nothing
+    uniStep _ = StepFailed
 
 
 {-# INLINE unifyOffset #-}                   -- left, rightOffset

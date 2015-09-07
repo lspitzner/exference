@@ -21,7 +21,6 @@ module Language.Haskell.Exference.Core.Types
                   , qClassEnv_inflatedConstraints
                   , qClassEnv_varConstraints )
   , constraintApplySubsts
-  , constraintApplySubsts'
   , inflateHsConstraints
   , applySubst
   , applySubsts
@@ -49,7 +48,9 @@ import Data.List ( intercalate, intersperse )
 import Data.Foldable ( fold, foldMap )
 import Control.Applicative ( (<$>), (<*>), (*>), (<*) )
 import Data.Maybe ( maybeToList, fromMaybe )
-import Control.Monad ( liftM )
+import Data.Monoid ( Any(..) )
+import Control.Monad ( liftM, liftM2 )
+import Control.Arrow ( first )
 
 import qualified Data.Set as S
 import qualified Data.IntSet as IntSet
@@ -68,6 +69,7 @@ import Data.Data ( Data )
 import Data.Char ( toLower )
 import Data.Typeable ( Typeable )
 import Control.Monad.Trans.MultiState
+import Safe
 
 import Debug.Hood.Observe
 import Debug.Trace
@@ -306,17 +308,13 @@ inflateHsConstraints = inflate (S.fromList . f)
   where
     f :: HsConstraint -> [HsConstraint]
     f (HsConstraint (HsTypeClass _ ids constrs) ps) =
-      map (constraintApplySubsts $ IntMap.fromList $ zip ids ps) constrs
+      map (snd . constraintApplySubsts (IntMap.fromList $ zip ids ps)) constrs
 
 -- uses f to find new elements. adds these new elements, and recursively
 -- tried to find even more elements. will not terminate if there are cycles
 -- in the application of f
 inflate :: (Ord a, Show a) => (a -> S.Set a) -> S.Set a -> S.Set a
-inflate f = fold . S.fromList . iterateWhileNonempty (foldMap f)
-  where
-    iterateWhileNonempty g x = if S.null x
-      then []
-      else x : iterateWhileNonempty g (g x)
+inflate f = fold . takeWhile (not . S.null) . iterate (foldMap f)
 
 constraintApplySubst :: Subst -> HsConstraint -> HsConstraint
 constraintApplySubst s (HsConstraint c ps) =
@@ -329,22 +327,14 @@ constraintApplySubst s (HsConstraint c ps) =
 --   let applied = map (applySubst' s) ps
 --   in (any fst applied, HsConstraint c $ snd <$> applied)
 
-{-# INLINE constraintApplySubsts #-}
-constraintApplySubsts :: Substs -> HsConstraint -> HsConstraint
-constraintApplySubsts ss c
-  | IntMap.null ss = c
-  | HsConstraint cl ps <- c = HsConstraint cl
-                            $ map (applySubsts ss) ps
-
 -- returns if any change was necessary,
 -- plus the (potentially changed) constraint
-{-# INLINE constraintApplySubsts' #-}
-constraintApplySubsts' :: Substs -> HsConstraint -> (Bool, HsConstraint)
-constraintApplySubsts' ss c
-  | IntMap.null ss = (False, c)
+{-# INLINE constraintApplySubsts #-}
+constraintApplySubsts :: Substs -> HsConstraint -> (Any, HsConstraint)
+constraintApplySubsts ss c
+  | IntMap.null ss = return c
   | HsConstraint cl ps <- c =
-      let applied = map (applySubsts' ss) ps
-      in (any fst applied, HsConstraint cl $ snd <$> applied)
+    HsConstraint cl <$> mapM (applySubsts ss) ps
 
 showVar :: TVarId -> String
 showVar 0 = "v0"
@@ -358,9 +348,8 @@ showTypedVar :: forall m
              -> m String
 showTypedVar i = do
   m <- mGet
-  case M.lookup i m of
-    Nothing -> error "missing collectVarTypes before showTypedVar"
-    Just t -> h t
+  fromJustNote "missing collectVarTypes before showTypedVar"
+    $ h <$> M.lookup i m
  where
   -- h t | traceShow (i, t) False = undefined
   h TypeVar{}          = return $ showVar i
@@ -416,53 +405,16 @@ applySubst s@(Subst i _) f@(TypeForall js cs t) = if elem i js
   then f
   else TypeForall js (constraintApplySubst s <$> cs) (applySubst s t)
 
--- applySubst' :: Subst -> HsType -> (Bool, HsType)
--- applySubst' (i, t) v@(TypeVar j) = if i==j then (True, t) else (False, v)
--- applySubst' _ c@(TypeConstant _) = (False, c)
--- applySubst' _ c@(TypeCons _)     = (False, c)
--- applySubst' s (TypeArrow t1 t2)  =
---   let (b1, t1') = applySubst' s t1
---       (b2, t2') = applySubst' s t2
---   in (b1||b2, TypeArrow t1' t2')
--- applySubst' s (TypeApp t1 t2)    =
---   let (b1, t1') = applySubst' s t1
---       (b2, t2') = applySubst' s t2
---   in (b1||b2, TypeApp t1' t2')
--- applySubst' s@(i,_) f@(TypeForall js cs t) = if elem i js
---   then (False, f)
---   else
---     let applied = constraintApplySubst' s <$> cs
---         (b, t') = applySubst' s t
---     in (b || any fst applied, TypeForall js (snd <$> applied) t')
-
-applySubsts :: Substs -> HsType -> HsType
-applySubsts s v@(TypeVar i)      = fromMaybe v $ IntMap.lookup i s
-applySubsts _ c@(TypeConstant _) = c
-applySubsts _ c@(TypeCons _)     = c
-applySubsts s (TypeArrow t1 t2)  = TypeArrow (applySubsts s t1) (applySubsts s t2)
-applySubsts s (TypeApp t1 t2)    = TypeApp (applySubsts s t1) (applySubsts s t2)
-applySubsts s (TypeForall js cs t) = TypeForall
-                                       js
-                                       (constraintApplySubsts s <$> cs)
-                                       (applySubsts (foldr IntMap.delete s js) t)
-
-applySubsts' :: Substs -> HsType -> (Bool, HsType)
-applySubsts' s v@(TypeVar i)      = fromMaybe (False, v)
-                                  $ (,) True <$> IntMap.lookup i s
-applySubsts' _ c@(TypeConstant _) = (False, c)
-applySubsts' _ c@(TypeCons _)     = (False, c)
-applySubsts' s (TypeArrow t1 t2)  =
-  let (b1, t1') = applySubsts' s t1
-      (b2, t2') = applySubsts' s t2
-  in (b1||b2, TypeArrow t1' t2')
-applySubsts' s (TypeApp t1 t2)    =
-  let (b1, t1') = applySubsts' s t1
-      (b2, t2') = applySubsts' s t2
-  in (b1||b2, TypeApp t1' t2')
-applySubsts' s (TypeForall js cs t) =
-  let applied = constraintApplySubsts' s <$> cs
-      (b, t') = applySubsts' (foldr IntMap.delete s js) t
-  in (b || any fst applied, TypeForall js (snd <$> applied) t')
+applySubsts :: Substs -> HsType -> (Any, HsType)
+applySubsts s v@(TypeVar i)      = fromMaybe (return v)
+                                  $ (,) (Any True) <$> IntMap.lookup i s
+applySubsts _ c@(TypeConstant _) = return c
+applySubsts _ c@(TypeCons _)     = return c
+applySubsts s (TypeArrow t1 t2)  = liftM2 TypeArrow (applySubsts s t1) (applySubsts s t2)
+applySubsts s (TypeApp t1 t2)    = liftM2 TypeApp   (applySubsts s t1) (applySubsts s t2)
+applySubsts s (TypeForall js cs t) = liftM2 (TypeForall js) 
+  (sequence $ constraintApplySubsts s <$> cs)
+  (applySubsts (foldr IntMap.delete s js) t)
 
 freeVars :: HsType -> S.Set TVarId
 freeVars (TypeVar i)         = S.singleton i
@@ -471,3 +423,7 @@ freeVars (TypeCons _)        = S.empty
 freeVars (TypeArrow t1 t2)   = S.union (freeVars t1) (freeVars t2)
 freeVars (TypeApp t1 t2)     = S.union (freeVars t1) (freeVars t2)
 freeVars (TypeForall is _ t) = foldr S.delete (freeVars t) is
+
+instance Monoid w => Monad ((,) w) where
+  return = (,) mempty
+  (w,x) >>= f = first (mappend w) (f x)

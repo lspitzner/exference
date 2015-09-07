@@ -65,18 +65,20 @@ type VarPBinding = (TVarId, HsType, [HsType], [TVarId], [HsConstraint])
 
 
 varBindingApplySubsts :: Substs -> VarBinding -> VarBinding
-varBindingApplySubsts substs (VarBinding v t) = VarBinding v (applySubsts substs t)
+varBindingApplySubsts substs (VarBinding v t) =
+  VarBinding v (snd $ applySubsts substs t)
 
 varPBindingApplySubsts :: Substs -> VarPBinding -> VarPBinding
 varPBindingApplySubsts ss (v,rt,pt,fvs,cs) =
   let
     relevantSS = foldr IntMap.delete ss fvs
     (newResult, params, newForalls, newCs) = splitArrowResultParams
+                                           $ snd
                                            $ applySubsts relevantSS rt
   in
   ( v
   , newResult
-  , map (applySubsts relevantSS) pt ++ params
+  , map (snd . applySubsts relevantSS) pt ++ params
   , newForalls ++ fvs
   , cs ++ newCs
   )

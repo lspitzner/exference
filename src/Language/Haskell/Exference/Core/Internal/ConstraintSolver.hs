@@ -1,3 +1,5 @@
+{-# LANGUAGE MonadComprehensions #-}
+
 module Language.Haskell.Exference.Core.Internal.ConstraintSolver
   ( isPossible
   , filterUnresolved
@@ -11,8 +13,9 @@ import Language.Haskell.Exference.Core.TypeUtils
 import Language.Haskell.Exference.Core.Internal.Unify
 
 import qualified Data.Set as S
-import Control.Monad ( mplus, guard, msum )
+import Control.Monad ( mplus, guard )
 import Control.Applicative ( (<|>), (<$>), liftA2 )
+import Data.Foldable ( asum )
 import Control.Monad ( join )
 import Data.Maybe ( fromMaybe )
 
@@ -27,65 +30,35 @@ import Debug.Trace
 -- otherwise Just a list of open constraints (that could neither be
 -- solved nor refuted).
 isPossible :: QueryClassEnv -> [HsConstraint] -> Maybe [HsConstraint]
-isPossible _qClassEnv [] = Just []
-isPossible qClassEnv (c:constraints) =
-  if constraintContainsVariables c
-    then (c:) <$> rest
-    else do
-      cs' <- possibleFromGiven <|> possibleFromInstance
-      cs  <- rest
-      return $ cs' ++ cs
-  where
-    rest = isPossible qClassEnv constraints
-    (HsConstraint cclass cparams) = c
-    possibleFromGiven :: Maybe [HsConstraint]
-    possibleFromGiven =
-      if S.member c $ qClassEnv_inflatedConstraints qClassEnv
-        then Just []
-        else Nothing
-    possibleFromInstance :: Maybe [HsConstraint]
-    possibleFromInstance = msum $ f <$> is
-      where
-        is = fromMaybe [] $ IntMap.lookup (tclass_name cclass)
-                                          ( sClassEnv_instances
-                                          $ qClassEnv_env qClassEnv )
-        f (HsInstance instConstrs _iclass instParams) = do
-          substs <- unifyRightEqs $ zipWith TypeEq cparams instParams
-          isPossible
-            qClassEnv
-            (map (constraintApplySubsts substs) instConstrs)
+isPossible = checkPossibleGeneric (Just . pure) (const Nothing)
 
 -- returns Nothing if any of the constraints contains variables
 -- (as variables cannot be proven).
 -- Otherwise returns the list of constraints that cannot be proven,
 -- and removing all those that can be proven.
 filterUnresolved :: QueryClassEnv -> [HsConstraint] -> Maybe [HsConstraint]
-filterUnresolved _qClassEnv [] = Just []
-filterUnresolved qClassEnv (c:constraints) =
-  if constraintContainsVariables c
-    then Nothing
-    else do
-      let cs' = case possibleFromGiven <|> possibleFromInstance of
-            Nothing -> [c]
-            Just x  -> x
-      cs  <- rest
-      return $ cs' ++ cs
-  where
-    rest = filterUnresolved qClassEnv constraints
+filterUnresolved = checkPossibleGeneric (const Nothing) (Just . pure)
+
+checkPossibleGeneric :: (HsConstraint -> Maybe [HsConstraint])
+                     -> (HsConstraint -> Maybe [HsConstraint])
+                     -> QueryClassEnv
+                     -> [HsConstraint]
+                     -> Maybe [HsConstraint]
+checkPossibleGeneric containsVarsResult otherwiseResult qClassEnv = fmap concat . traverse g where
+  g c = if constraintContainsVariables c
+    then containsVarsResult c
+    else possibleFromGiven c <|> possibleFromInstance c <|> otherwiseResult c
+  possibleFromGiven :: HsConstraint -> Maybe [HsConstraint]
+  possibleFromGiven c = [ [] | S.member c $ qClassEnv_inflatedConstraints qClassEnv ]
+  possibleFromInstance :: HsConstraint -> Maybe [HsConstraint]
+  possibleFromInstance c = asum $ f <$> is where
     (HsConstraint cclass cparams) = c
-    possibleFromGiven :: Maybe [HsConstraint]
-    possibleFromGiven =
-      if S.member c $ qClassEnv_inflatedConstraints qClassEnv
-        then Just []
-        else Nothing
-    possibleFromInstance :: Maybe [HsConstraint]
-    possibleFromInstance = msum $ f <$> is
-      where
-        is = fromMaybe [] $ IntMap.lookup (tclass_name cclass)
-                                          ( sClassEnv_instances
-                                          $ qClassEnv_env qClassEnv )
-        f (HsInstance instConstrs _iclass instParams) = do
-          substs <- unifyRightEqs $ zipWith TypeEq cparams instParams
-          filterUnresolved
-            qClassEnv
-            (map (constraintApplySubsts substs) instConstrs)
+    is = IntMap.findWithDefault []
+                                (tclass_name cclass)
+                                ( sClassEnv_instances
+                                  $ qClassEnv_env qClassEnv )
+    f (HsInstance instConstrs _iclass instParams) = do
+      substs <- unifyRightEqs $ zipWith TypeEq cparams instParams
+      checkPossibleGeneric containsVarsResult otherwiseResult
+        qClassEnv
+        (map (snd . constraintApplySubsts substs) instConstrs)

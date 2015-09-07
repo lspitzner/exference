@@ -78,7 +78,7 @@ applyTypeDecls m = go
                                 , let pAffected = take i rs'
                                 , let pUnchanged = drop i rs'
                                 , let substs = IntMap.fromList $ zip vs pAffected
-                                , let substituted = applySubsts substs t
+                                , let substituted = snd $ applySubsts substs t
                                 ]
     _                        -> Left $ "wrong number of parameters for type declaration " ++ show qnId
   goApp rs l               = foldl1 TypeApp `liftM` mapM go (l:rs)
