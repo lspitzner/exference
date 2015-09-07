@@ -95,9 +95,9 @@ simplifyCompose (ExpLet i ty bindExp inExp)
 simplifyCompose (ExpCaseMatch bindExp alts)
                                  = ExpCaseMatch
                                      (simplifyCompose bindExp)
-                                     ( [ (c, vars, simplifyCompose expr)
-                                       | (c, vars, expr) <- alts
-                                       ] )
+                                     [ (c, vars, simplifyCompose expr)
+                                     | (c, vars, expr) <- alts
+                                     ]
 
 simplifyCompose' :: Int -> HsType -> [Expression] -> Expression -> Expression
 simplifyCompose' i ty [] e@ExpVar{} = ExpLambda i ty e

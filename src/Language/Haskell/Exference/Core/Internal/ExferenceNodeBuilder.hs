@@ -63,6 +63,19 @@ put = \x -> StateT $ \_ c -> c () x
 newtype SearchNodeBuilder a = SearchNodeBuilder (State SearchNode a)
   deriving (Functor, Applicative, Monad)
 
+{-
+instance Monad SearchNodeBuilder where
+  {-# INLINE return #-}
+  return !x = pure x
+  {-# INLINE (>>=) #-}
+  SearchNodeBuilder !s >>= f = SearchNodeBuilder $ do
+    x <- s
+    let SearchNodeBuilder !x' = f x
+    x'
+  {-# INLINE (>>) #-}
+  SearchNodeBuilder !s1 >> (SearchNodeBuilder !s2) = SearchNodeBuilder $ s1 >> s2
+-}
+
 {-# INLINE modifyNodeBy #-}
 modifyNodeBy :: SearchNode -> SearchNodeBuilder a -> SearchNode
 modifyNodeBy n (SearchNodeBuilder b) = execState b n
@@ -204,7 +217,7 @@ builderApplySubst :: Substs -> SearchNodeBuilder ()
 builderApplySubst substs | IntMap.null substs = return ()
                          | otherwise = SearchNodeBuilder
                                      $ modify $ \s ->
-  let !newGoals = fmap (goalApplySubst substs) $ node_goals s
+  let !newGoals = goalApplySubst substs <$> node_goals s
       !newScopes = scopesApplySubsts substs $ node_providedScopes s
   in s { node_goals = newGoals, node_providedScopes = newScopes }
 

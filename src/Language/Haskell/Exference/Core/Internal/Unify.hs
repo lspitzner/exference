@@ -36,7 +36,7 @@ occursIn _ (TypeConstant _)    = False
 occursIn _ (TypeCons _)        = False
 occursIn i (TypeArrow t1 t2)   = occursIn i t1 || occursIn i t2
 occursIn i (TypeApp t1 t2)     = occursIn i t1 || occursIn i t2
-occursIn i (TypeForall js _ t) = not (i `elem` js) && occursIn i t
+occursIn i (TypeForall js _ t) = (i `notElem` js) && occursIn i t
 
 -- Maybe (Either (Either Subst Subst) [TypeEq])
 data StepResult

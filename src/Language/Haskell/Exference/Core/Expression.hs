@@ -20,10 +20,9 @@ import Language.Haskell.Exference.Core.TypeUtils
 import Data.List ( intercalate )
 import Data.Function ( on )
 import Data.Maybe ( fromMaybe )
-import Control.Monad ( forM, forM_ )
+import Control.Monad ( forM, forM_, liftM )
 import Data.Functor.Identity ( runIdentity )
 import Data.Functor ( (<$>) )
-import Control.Monad ( liftM )
 
 import Control.DeepSeq.Generics
 import GHC.Generics
@@ -186,7 +185,7 @@ showExpression e = withMultiStateA (M.empty :: Map TVarId HsType)
     ]
   h d (ExpCaseMatch bindExp alts) =
     [ showParen (d>2)
-    $ showString ("case ")
+    $ showString "case "
     . bindShows
     . showString " of { "
     . ( \s -> intercalate "; "

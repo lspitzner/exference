@@ -47,8 +47,8 @@ getDecls :: ( ContainsType QNameIndex s
          -> [HsTypeClass]
          -> TypeDeclMap
          -> [Module]
-         -> MultiRWST r w s m [(Either String HsFunctionDecl)]
-getDecls ds tcs tDeclMap modules = fmap (>>= (either (return.Left) (map Right)))
+         -> MultiRWST r w s m [Either String HsFunctionDecl]
+getDecls ds tcs tDeclMap modules = fmap (>>= either (return.Left) (map Right))
                                 $ sequence
                                 $ do
   Module _loc mn _pragma _warning _mexp _imp decls <- modules
@@ -121,9 +121,9 @@ getDataConss tcs ds tDeclMap modules = sequence $ do
     rTypeM = do
       rId <- getOrCreateQNameId $ convertModuleName moduleName name
       ps  <- mapM pTransform params
-      return $ (forallify . foldl TypeApp (TypeCons $ rId)) ps
+      return $ (forallify . foldl TypeApp (TypeCons rId)) ps
     pTransform :: MonadMultiState ConvData m => TyVarBind -> EitherT String m HsType
-    pTransform (KindedVar _ _) = left $ "KindedVar"
+    pTransform (KindedVar _ _) = left "KindedVar"
     pTransform (UnkindedVar n) = TypeVar <$> getVar n
   --let
   --  tTransform (UnBangedTy t) = convertTypeInternal t
@@ -137,10 +137,10 @@ getDataConss tcs ds tDeclMap modules = sequence $ do
     typeM (QualConDecl _loc cbindings ccntxt conDecl) = do
       case cntxt of
         [] -> right ()
-        _  -> left $ "context in data type"
+        _  -> left "context in data type"
       case (cbindings, ccntxt) of
         ([],[]) -> right ()
-        _       -> left $ "constraint or existential type for constructor"
+        _       -> left "constraint or existential type for constructor"
       (cname,tys) <- case conDecl of
         ConDecl c t -> right (c, t)
         x           -> left $ "unknown ConDecl: " ++ show x

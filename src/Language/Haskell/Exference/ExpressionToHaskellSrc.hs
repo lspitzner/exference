@@ -94,7 +94,7 @@ convertExp :: ( MonadMultiState T.QNameIndex m
            => Int
            -> E.Expression
            -> m Exp
-convertExp q e = convertInternal q 0 e
+convertExp q = convertInternal q 0
 
 parens :: Bool -> Exp -> Exp
 parens True e = Paren e

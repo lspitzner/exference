@@ -21,8 +21,6 @@ import Language.Haskell.Exference.TypeDeclsFromHaskellSrc
 import Language.Haskell.Exference.Core.Types
 import Language.Haskell.Exference.Core.TypeUtils
 
-import Language.Haskell.Exference.TypeFromHaskellSrc
-
 import qualified Data.Map.Strict as M
 import qualified Data.Map.Lazy as LazyMap
 import Control.Monad.State.Strict
@@ -34,7 +32,7 @@ import Control.Applicative ( (<$>), (<*>), Applicative )
 import Data.Maybe ( fromMaybe )
 import Data.Either ( lefts, rights )
 import Data.List ( find )
-import Data.Traversable ( traverse )
+import Data.Traversable ( traverse, for )
 
 import Control.Monad.Trans.MultiRWS
 import Data.HList.ContainsType
@@ -94,25 +92,25 @@ getTypeClasses ds tDeclMap ms = do
         qnid <- getOrCreateQNameId $ convertModuleName moduleName name
         return (qnid, (moduleName, context, vars))
   (secondMap :: M.Map QNameId (Either String ([TempAsst], [TVarId])))
-    <- flip traverse rawMap
-      $ \(moduleName, assts, vars) -> withMultiStateA (ConvData 0 M.empty) $ runEitherT
-        [ (tempAssts, vars')
-        | vars' <- mapM tyVarTransform vars
-        , let convF (ClassA qname types) =
-                [ (qnid, ctypes)
-                | qnid <- getOrCreateQNameId (convertQName (Just moduleName)
-                                                           ds
-                                                           qname)
-                , ctypes <- types `forM` convertTypeInternal []
-                                                             (Just moduleName)
+    <- rawMap `for` \(moduleName, assts, vars) ->
+          withMultiStateA (ConvData 0 M.empty) $ runEitherT
+          [ (tempAssts, vars')
+          | vars' <- mapM tyVarTransform vars
+          , let convF (ClassA qname types) =
+                  [ (qnid, ctypes)
+                  | qnid <- getOrCreateQNameId (convertQName (Just moduleName)
                                                              ds
-                                                             tDeclMap
-                ]
-              convF (ParenA c)           = convF c
-              convF c                    = left
-                                         $ "unknown HsConstraint: " ++ show c
-        , tempAssts <- mapM convF assts
-        ]
+                                                             qname)
+                  , ctypes <- types `forM` convertTypeInternal []
+                                                               (Just moduleName)
+                                                               ds
+                                                               tDeclMap
+                  ]
+                convF (ParenA c)           = convF c
+                convF c                    = left
+                                           $ "unknown HsConstraint: " ++ show c
+          , tempAssts <- mapM convF assts
+          ]
   unknown <- unknownTypeClass
   let
     helper :: QNameId

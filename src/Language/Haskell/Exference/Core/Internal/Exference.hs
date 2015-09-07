@@ -45,7 +45,7 @@ import Control.Arrow ( first, second, (***) )
 import Control.Monad ( when, unless, guard, mzero, replicateM
                      , replicateM_, forM, join, forM_ )
 import Control.Applicative ( (<$>), (<*>) )
-import Data.List ( partition, sortBy, groupBy )
+import Data.List ( partition, sortBy, groupBy, unfoldr )
 import Data.Ord ( comparing )
 import Data.Function ( on )
 import Data.Monoid ( mempty, First(First), getFirst, mconcat, Any(..) )
@@ -66,8 +66,6 @@ import Debug.Hood.Observe
 import Debug.Trace
 
 import Prelude hiding ( sum )
-
-import Data.List ( unfoldr )
 
 
 
@@ -376,7 +374,7 @@ stateStep2 multiPM allowConstrs qNameIndex h s
       -- descend until no more TypeArrows, accumulating what is seen.
       | TypeArrow t1 t2 <- g = do
           nextId <- builderAllocVar
-          arrowStep t2 ((VarBinding nextId t1):ts)
+          arrowStep t2 (VarBinding nextId t1 : ts)
       -- finally, do the goal/expression transformation.
       | otherwise = do
           nextId <- builderAllocHole

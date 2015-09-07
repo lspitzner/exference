@@ -119,9 +119,9 @@ convertTypeNoDeclInternal tcs defModuleName ds ty = helper ty
                           <$> TU.getOrCreateQNameId T.ListCon
                           <*> helper t
   helper (TyParen t)      = helper t
-  helper (TyInfix _ _ _)  = left "infix operator"
-  helper (TyKind _ _)     = left "kind annotation"
-  helper (TyPromoted _)   = left "promoted type"
+  helper TyInfix{}        = left "infix operator"
+  helper TyKind{}         = left "kind annotation"
+  helper TyPromoted{}     = left "promoted type"
   helper (TyForall maybeTVars cs t) =
     T.TypeForall
       <$> case maybeTVars of
@@ -180,7 +180,7 @@ parseQualifiedName s = case s of
     (final, []) -> T.QualifiedName (reverse ns) $ if isOperator
                      then "(" ++ final ++ ")"
                      else final
-    (part, (_:rest)) -> helper rest (part:ns) isOperator
+    (part, _:rest) -> helper rest (part:ns) isOperator
 
 convertConstraint :: ( MonadMultiState T.QNameIndex m
                      , MonadMultiState ConvData m

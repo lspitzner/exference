@@ -34,7 +34,7 @@ import Control.DeepSeq
 import System.Process
 
 import Control.Applicative ( (<$>), (<*>), (<*) )
-import Control.Arrow ( second, (***) )
+import Control.Arrow ( first, second, (***) )
 import Control.Monad ( when, forM_, guard, forM, mplus, mzero )
 import Data.List ( sortBy, find, isSuffixOf )
 import Data.Ord ( comparing )
@@ -54,7 +54,6 @@ import Language.Haskell.Exts.Extension ( Language (..)
                                        , Extension (..)
                                        , KnownExtension (..) )
 
-import Control.Arrow ( first )
 import Text.ParserCombinators.Parsec
 import Text.ParserCombinators.Parsec.Char
 import Control.Monad.Trans.MultiRWS
@@ -73,12 +72,12 @@ builtInDeclsM :: ( ContainsType QNameIndex s
 builtInDeclsM = do
   cons <- getOrCreateQNameId Cons
   listCon <- getOrCreateQNameId ListCon
-  let consType = (cons, (TypeArrow
+  let consType = (cons, TypeArrow
             (TypeVar 0)
             (TypeArrow (TypeApp (TypeCons listCon)
                                 (TypeVar 0))
                        (TypeApp (TypeCons listCon)
-                                (TypeVar 0)))))
+                                (TypeVar 0))))
   tupleConss <- mapM (\(a,b) -> [(x,y) | x <- getOrCreateQNameId a
                                        , y <- unsafeReadType0 b])
     [ (,) (TupleCon 0) "Unit"

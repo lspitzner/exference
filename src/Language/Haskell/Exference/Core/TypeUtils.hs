@@ -36,34 +36,23 @@ import qualified Data.IntMap.Strict as IntMap
 import Data.Char ( ord, chr, isLower, isUpper )
 import Control.Applicative ( (<$>), (<*>), (*>), (<*) )
 import Data.Maybe ( maybeToList, fromMaybe )
+import Text.Printf ( printf )
 
 import Control.Monad.State.Strict
 import Control.DeepSeq.Generics
 import GHC.Generics
 
-import Debug.Hood.Observe
-import Debug.Trace
-
 import Language.Haskell.Exference.Core.Types
 -- import Language.Haskell.Exference.Core.Internal.Unify
-import qualified Data.Set as S
-import qualified Data.Map.Strict as M
 import Data.List ( intercalate, find )
-import Debug.Trace
-import Data.Maybe ( fromMaybe )
-import Control.Applicative ( (<$>) )
 import Control.Monad ( mplus, guard )
 import Control.Monad.Identity ( Identity(runIdentity) )
-
-import Control.DeepSeq.Generics
-import GHC.Generics
 
 import Control.Monad.Trans.MultiState ( MonadMultiState(..) )
 import Control.Monad.Trans.MultiRWS
 
-import Language.Haskell.Exference.Core.Types
-
-import Text.Printf ( printf )
+import Debug.Hood.Observe
+import Debug.Trace
 
 
 

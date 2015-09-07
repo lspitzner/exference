@@ -43,7 +43,7 @@ where
 
 
 
-import Data.Char ( ord, chr, isLower, isUpper )
+import Data.Char ( ord, chr, isLower, isUpper, toLower )
 import Data.List ( intercalate, intersperse )
 import Data.Foldable ( fold, foldMap )
 import Control.Applicative ( (<$>), (<*>), (*>), (<*) )
@@ -66,7 +66,6 @@ import Language.Haskell.Exts.Syntax ( Name (..) )
 import Control.DeepSeq.Generics
 import GHC.Generics
 import Data.Data ( Data )
-import Data.Char ( toLower )
 import Data.Typeable ( Typeable )
 import Control.Monad.Trans.MultiState
 import Safe
@@ -109,8 +108,8 @@ data QNameIndex = QNameIndex
 type TypeVarIndex = M.Map Name Int
 
 specialQName_id, specialQName_compose :: TVarId
-specialQName_id = (-16)
-specialQName_compose = (-17)
+specialQName_id      = -16
+specialQName_compose = -17
 
 lookupQNameId :: MonadMultiState QNameIndex m
               => QNameId
@@ -401,7 +400,7 @@ applySubst _ c@(TypeConstant _) = c
 applySubst _ c@(TypeCons _)     = c
 applySubst s (TypeArrow t1 t2)  = TypeArrow (applySubst s t1) (applySubst s t2)
 applySubst s (TypeApp t1 t2)    = TypeApp (applySubst s t1) (applySubst s t2)
-applySubst s@(Subst i _) f@(TypeForall js cs t) = if elem i js
+applySubst s@(Subst i _) f@(TypeForall js cs t) = if i `elem` js
   then f
   else TypeForall js (constraintApplySubst s <$> cs) (applySubst s t)
 

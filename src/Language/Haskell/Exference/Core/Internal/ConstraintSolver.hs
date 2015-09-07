@@ -13,10 +13,9 @@ import Language.Haskell.Exference.Core.TypeUtils
 import Language.Haskell.Exference.Core.Internal.Unify
 
 import qualified Data.Set as S
-import Control.Monad ( mplus, guard )
+import Control.Monad ( mplus, guard, join )
 import Control.Applicative ( (<|>), (<$>), liftA2 )
 import Data.Foldable ( asum )
-import Control.Monad ( join )
 import Data.Maybe ( fromMaybe )
 
 import qualified Data.Map.Strict as M
