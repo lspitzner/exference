@@ -48,6 +48,8 @@ import Data.List ( intercalate, find )
 import Control.Monad ( mplus, guard )
 import Control.Monad.Identity ( Identity(runIdentity) )
 
+import Control.Lens.Wrapped  ( ala )
+
 import Control.Monad.Trans.MultiState ( MonadMultiState(..) )
 import Control.Monad.Trans.MultiRWS
 
@@ -174,17 +176,17 @@ unknownTypeClass = do
   return $ HsTypeClass qid [] []
 
 inflateInstances :: [HsInstance] -> [HsInstance]
-inflateInstances is = S.toList $ S.unions $ map (S.fromList . f) is
+inflateInstances = ala S.fromList id . concat . takeWhile (not . null) . iterate (concatMap f)
   where
     f :: HsInstance -> [HsInstance]
-    f i@(HsInstance iconstrs tclass iparams)
+    f (HsInstance iconstrs tclass iparams)
       | (HsTypeClass _ tparams tconstrs) <- tclass
       , substs <- IntMap.fromList $ zip tparams iparams
       = let 
           g :: HsConstraint -> HsInstance
           g (HsConstraint ctclass cparams) =
             HsInstance iconstrs ctclass $ map (snd . applySubsts substs) cparams
-        in i : concatMap (f.g) tconstrs
+        in map g tconstrs
 
 splitArrowResultParams :: HsType -> (HsType, [HsType], [TVarId], [HsConstraint])
 splitArrowResultParams t

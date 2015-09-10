@@ -132,6 +132,7 @@ Library
     directory,
     bifunctors,
     safe,
+    lens >= 4.12 && < 4.13,
     multistate >= 0.6.2
 
 
