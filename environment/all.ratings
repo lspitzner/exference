@@ -47,6 +47,9 @@ Prelude.fromIntegral      = 20.0
 
 Data.Maybe.maybe          =  6.0
 Data.Maybe.fromMaybe      =  6.0
+Data.Maybe.catMaybes      =  6.0
+Data.Maybe.mapMaybe       =  6.0
+Data.Maybe.maybeToList    =  6.0
 Data.Map.lookup           = -2.0
 
 Control.Monad.(>>=)       = -4.0

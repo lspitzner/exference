@@ -7,6 +7,9 @@ data Maybe a = Just a
 
 maybe :: b -> (a -> b) -> Maybe a -> b
 fromMaybe :: a -> Maybe a -> a
+catMaybes :: [Maybe a] -> [a]
+mapMaybe :: (a -> Maybe b) -> [a] -> [b]
+maybeToList :: Maybe a -> [a]
 
 instance Control.Monad.Monad Maybe
 instance Data.Functor.Functor Maybe
