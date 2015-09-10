@@ -17,6 +17,7 @@ import Control.Monad ( mplus, guard, join )
 import Control.Applicative ( (<|>), (<$>), liftA2 )
 import Data.Foldable ( asum )
 import Data.Maybe ( fromMaybe )
+import Data.Traversable ( traverse )
 
 import qualified Data.Map.Strict as M
 import qualified Data.IntMap.Strict as IntMap
@@ -29,14 +30,14 @@ import Debug.Trace
 -- otherwise Just a list of open constraints (that could neither be
 -- solved nor refuted).
 isPossible :: QueryClassEnv -> [HsConstraint] -> Maybe [HsConstraint]
-isPossible = checkPossibleGeneric (Just . pure) (const Nothing)
+isPossible = checkPossibleGeneric (Just . return) (const Nothing)
 
 -- returns Nothing if any of the constraints contains variables
 -- (as variables cannot be proven).
 -- Otherwise returns the list of constraints that cannot be proven,
 -- and removing all those that can be proven.
 filterUnresolved :: QueryClassEnv -> [HsConstraint] -> Maybe [HsConstraint]
-filterUnresolved = checkPossibleGeneric (const Nothing) (Just . pure)
+filterUnresolved = checkPossibleGeneric (const Nothing) (Just . return)
 
 checkPossibleGeneric :: (HsConstraint -> Maybe [HsConstraint])
                      -> (HsConstraint -> Maybe [HsConstraint])

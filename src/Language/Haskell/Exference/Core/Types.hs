@@ -48,7 +48,7 @@ import Data.List ( intercalate, intersperse )
 import Data.Foldable ( fold, foldMap )
 import Control.Applicative ( (<$>), (<*>), (*>), (<*) )
 import Data.Maybe ( maybeToList, fromMaybe )
-import Data.Monoid ( Any(..) )
+import Data.Monoid ( Monoid(..), Any(..) )
 import Control.Monad ( liftM, liftM2 )
 import Control.Arrow ( first )
 
