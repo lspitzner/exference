@@ -594,7 +594,8 @@ printCheckExpectedResults h env = do
       let firstStr = showExpressionPure qNameIndex first
       lift $ putStrLn $ "  first solution:       " ++ firstStr
       lift $ putStrLn $ "  first solution stats: " ++ show stats
-      lift $ putStrLn $ "  expected solutions:   " ++ intercalate ", " e
+      lift $ putStrLn $ "  expected solutions:   " ++ intercalate
+                     "\n                      or " e
       lift $ putStrLn $ "  " ++ show firstStr
       return (Just stats, Nothing)
     helper (name, _, Just (_, Just (0, stats))) = do
@@ -603,7 +604,8 @@ printCheckExpectedResults h env = do
     helper (name, e, Just ((first, fstats), Just (n, stats))) = do
       lift $ putStrLn $ printf "%-12s: expected solution not first, but %d!" name n
       lift $ putStrLn $ "  first solution:     " ++ showExpressionPure qNameIndex first
-      lift $ putStrLn $ "  expected solutions: " ++ intercalate " OR " e
+      lift $ putStrLn $ "  expected solutions:   " ++ intercalate
+                      "\n                     or " e
       lift $ putStrLn $ "  first solution stats:    " ++ show fstats
       lift $ putStrLn $ "  expected solution stats: " ++ show stats
       lift $ putStrLn $ "  " ++ show (showExpressionPure qNameIndex first)
