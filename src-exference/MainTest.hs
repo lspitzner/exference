@@ -300,7 +300,7 @@ checkInput :: ( m ~ MultiRWST r w s m0
 checkInput heuristics (bindings, deconss, sEnv) typeStr allowUnused patternM hidden = do
   tDeclMap <- mAsk
   ty <- unsafeReadType (sClassEnv_tclasses sEnv) exampleDataTypes tDeclMap typeStr
-  filteredBindings <- filterBindingsSimple ("fix":hidden) bindings
+  filteredBindings <- filterBindingsSimple ("fix":"forever":"iterateM_":hidden) bindings
   qNameIndex <- mGet
   return $ ExferenceInput
     ty

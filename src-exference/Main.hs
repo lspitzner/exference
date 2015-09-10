@@ -218,7 +218,7 @@ main = runO $ do
                            ++ intercalate ", " (nub $ show <$> unresolvedIdents)
                   putStrLn $ "(this may be harmless, but no instances will be connected to these.)"
                 qNameIndex <- mGet
-                let hidden = if AllowFix `elem` flags then [] else ["fix"]
+                let hidden = if AllowFix `elem` flags then [] else ["fix", "forever", "iterateM_"]
                 let filteredBindings = runIdentity
                                      $ runMultiRWSTNil
                                      $ withMultiStateA qNameIndex

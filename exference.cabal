@@ -1,5 +1,5 @@
 Name:          exference
-Version:       1.5.0.2
+Version:       1.5.0.3
 Cabal-Version: >= 1.8
 Build-Type:    Simple
 
@@ -14,8 +14,9 @@ data-files:
   environment/Comonad.hs
   environment/Complex.hs
   environment/Cont.hs
-  environment/ControlMonadTransClass.hs
   environment/ControlMonadIOClass.hs
+  environment/ControlMonadTransClass.hs
+  environment/DataFunction.hs
   environment/Data.hs
   environment/Either.hs
   environment/EitherT.hs
@@ -29,6 +30,7 @@ data-files:
   environment/Map.hs
   environment/Maybe.hs
   environment/Monad.hs
+  environment/MonadLoops.hs
   environment/Monoid.hs
   environment/Ord.hs
   environment/Prelude.hs
@@ -41,12 +43,12 @@ data-files:
   environment/Storable.hs
   environment/String.hs
   environment/SystemIO.hs
+  environment/Text.hs
   environment/Traversable.hs
   environment/Typeable.hs
   environment/Void.hs
   environment/Word.hs
-  environment/Text.hs
-  environment/DataFunction.hs
+
 
 
 
