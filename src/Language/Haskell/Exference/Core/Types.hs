@@ -2,6 +2,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE PatternGuards #-}
 {-# LANGUAGE MonadComprehensions #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
 module Language.Haskell.Exference.Core.Types
   ( TVarId
@@ -38,6 +39,9 @@ module Language.Haskell.Exference.Core.Types
   , showHsType
   , specialQName_id
   , specialQName_compose
+#if !MIN_VERSION_base(4,8,0)
+  , Alt (..)
+#endif
   )
 where
 
@@ -49,7 +53,8 @@ import Data.Foldable ( fold, foldMap )
 import Control.Applicative ( (<$>), (<*>), (*>), (<*) )
 import Data.Maybe ( maybeToList, fromMaybe )
 import Data.Monoid ( Monoid(..), Any(..) )
-import Control.Monad ( liftM, liftM2 )
+import Control.Monad ( liftM, liftM2, MonadPlus )
+import Control.Applicative ( Applicative, Alternative, empty, (<|>) )
 import Control.Arrow ( first )
 
 import qualified Data.Set as S
@@ -58,7 +63,7 @@ import qualified Data.Map.Strict as M
 import qualified Data.IntMap.Strict as IntMap
 import qualified Data.List as L
 
-import Text.ParserCombinators.Parsec hiding (State)
+import Text.ParserCombinators.Parsec hiding (State, (<|>))
 import Text.ParserCombinators.Parsec.Char
 
 import Language.Haskell.Exts.Syntax ( Name (..) )
@@ -74,6 +79,16 @@ import Debug.Hood.Observe
 import Debug.Trace
 
 
+
+#if !MIN_VERSION_base(4,8,0)
+newtype Alt f a = Alt {getAlt :: f a}
+  deriving (Generic, Generic1, Read, Show, Eq, Ord, Num, Enum,
+            Monad, MonadPlus, Applicative, Alternative, Functor)
+
+instance forall f a . Alternative f => Monoid (Alt f a) where
+        mempty = Alt empty
+        (Alt x) `mappend` (Alt y) = Alt (x <|> y)
+#endif
 
 type TVarId = Int
 type QNameId = Int

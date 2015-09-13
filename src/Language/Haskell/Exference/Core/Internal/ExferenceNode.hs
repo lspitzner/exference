@@ -1,8 +1,10 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE PatternGuards #-}
+{-# LANGUAGE TemplateHaskell #-}
 
 module Language.Haskell.Exference.Core.Internal.ExferenceNode
   ( SearchNode (..)
+  , HasSearchNode (..) -- SearchNode lenses
   , TGoal
   , Scopes (..)
   , Scope (..)
@@ -49,6 +51,7 @@ import Control.Arrow ( first, second, (***) )
 
 import Control.DeepSeq.Generics
 import GHC.Generics
+import Control.Lens.TH ( makeClassy )
 
 import Control.Monad.Trans.MultiRWS
 import Control.Monad.Trans.MultiState ( runMultiStateTNil )
@@ -160,23 +163,23 @@ mkGoals :: ScopeId
 mkGoals sid vbinds = [(b,sid)|b<-vbinds]
 
 data SearchNode = SearchNode
-  { node_goals           :: Seq TGoal
-  , node_constraintGoals :: [HsConstraint]
-  , node_providedScopes  :: Scopes
-  , node_varUses         :: VarUsageMap
-  , node_functions       :: (V.Vector FunctionBinding)
-  , node_deconss         :: [DeconstructorBinding]
-  , node_queryClassEnv   :: QueryClassEnv
-  , node_expression      :: Expression
-  , node_nextVarId       :: {-# UNPACK #-} !TVarId
-  , node_maxTVarId       :: {-# UNPACK #-} !TVarId
-  , node_nextNVarId      :: {-# UNPACK #-} !TVarId -- id used when resolving rankN-types
-  , node_depth           :: {-# UNPACK #-} !Float
+  { _node_goals           :: Seq TGoal
+  , _node_constraintGoals :: [HsConstraint]
+  , _node_providedScopes  :: Scopes
+  , _node_varUses         :: VarUsageMap
+  , _node_functions       :: (V.Vector FunctionBinding)
+  , _node_deconss         :: [DeconstructorBinding]
+  , _node_queryClassEnv   :: QueryClassEnv
+  , _node_expression      :: Expression
+  , _node_nextVarId       :: {-# UNPACK #-} !TVarId
+  , _node_maxTVarId       :: {-# UNPACK #-} !TVarId
+  , _node_nextNVarId      :: {-# UNPACK #-} !TVarId -- id used when resolving rankN-types
+  , _node_depth           :: {-# UNPACK #-} !Float
 #if LINK_NODES
-  , node_previousNode    :: Maybe SearchNode
+  , _node_previousNode    :: Maybe SearchNode
 #endif
-  , node_lastStepReason  :: String
-  , node_lastStepBinding :: (Maybe String)
+  , _node_lastStepReason  :: String
+  , _node_lastStepBinding :: (Maybe String)
   }
   deriving Generic
 
@@ -325,3 +328,5 @@ showNodeDevelopment _ = return "[showNodeDevelopment: exference-core was not com
 
 splitBinding :: VarBinding -> VarPBinding
 splitBinding (VarBinding v t) = let (rt,pts,fvs,cs) = splitArrowResultParams t in (v,rt,pts,fvs,cs)
+
+makeClassy ''SearchNode

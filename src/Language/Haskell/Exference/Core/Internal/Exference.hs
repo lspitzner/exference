@@ -40,18 +40,24 @@ import Control.DeepSeq.Generics
 import System.Mem.StableName ( StableName, makeStableName )
 import System.IO.Unsafe ( unsafePerformIO )
 
-import Data.Maybe ( maybeToList, listToMaybe, fromMaybe, catMaybes )
+import Data.Maybe ( maybeToList, listToMaybe, fromMaybe, catMaybes, mapMaybe )
 import Control.Arrow ( first, second, (***) )
 import Control.Monad ( when, unless, guard, mzero, replicateM
                      , replicateM_, forM, join, forM_ )
-import Control.Applicative ( (<$>), (<*>) )
+import Control.Applicative ( (<$>), (<*>), (*>) )
 import Data.List ( partition, sortBy, groupBy, unfoldr )
+import Data.Foldable ( traverse_ )
 import Data.Ord ( comparing )
 import Data.Function ( on )
-import Data.Monoid ( mempty, First(First), getFirst, mconcat, Any(..) )
+import Data.Functor ( ($>) )
+import Data.Monoid ( mempty, First(First), getFirst, mconcat, Any(..), Endo(..) )
+#if MIN_VERSION_base(4,8,0)
+import Data.Monoid ( Alt(..) )
+#endif
 import Data.Foldable ( foldMap, sum, asum )
 import Control.Monad.Morph ( lift )
 import Data.Typeable ( Typeable )
+import Control.Lens
 
 -- import Control.Concurrent.Chan
 import Control.Concurrent ( forkIO )
@@ -219,22 +225,22 @@ findExpressions (ExferenceInput rawType
       buildSearchTree newSearchTreeBuilder initNodeName,
       [ (n, d, e, remainingConstraints, Q.size newNodes)
         | solution <- potentialSolutions
-        , let contxt = node_queryClassEnv solution
+        , let contxt = view node_queryClassEnv solution
         , remainingConstraints <- maybeToList
                                 $ filterUnresolved contxt
-                                $ node_constraintGoals solution
+                                $ view node_constraintGoals solution
           -- if allowConstraints, unresolved constraints are allowed;
           -- otherwise we discard this solution.
         , allowConstraints || null remainingConstraints
         , let unusedVarCount = getUnusedVarCount
-                                 (node_varUses solution)
+                                 (view node_varUses solution)
           -- similarly:
           -- if allowUnused, there may be unused variables in the
           -- output. Otherwise the solution is discarded.
         , allowUnused || unusedVarCount==0
         , let e = -- trace (showNodeDevelopment solution) $ 
-                  node_expression solution
-        , let d = node_depth solution
+                  view node_expression solution
+        , let d = view node_depth solution
                 + ( heuristics_unusedVar heuristics
                   * fromIntegral unusedVarCount
                   )
@@ -253,8 +259,8 @@ findExpressions (ExferenceInput rawType
                            heuristics
                            s
         -- distinguish "finished"/"unfinished" sub-SearchNodes
-        (potentialSolutions, futures) = partition (Seq.null . node_goals) rNodes                                                      
-        newBindingUsages = fromMaybe id (incBindingUsage <$> node_lastStepBinding s) bindingUsages
+        (potentialSolutions, futures) = partition (Seq.null . view node_goals) rNodes
+        newBindingUsages = fromMaybe id (incBindingUsage <$> view node_lastStepBinding s) bindingUsages
         f :: Float -> Float
         f x | x > 900 = 0.0
             | otherwise = let k = 1.111e-3*x
@@ -280,7 +286,7 @@ findExpressions (ExferenceInput rawType
           ((++) [ unsafePerformIO $ do
               n1 <- makeStableName $! ns
               n2 <- makeStableName $! s
-              return (n1,n2,node_expression ns)
+              return (n1,n2,view node_expression ns)
             | ns<-rNodes] &&&
           (:) (unsafePerformIO (makeStableName $! s)))
 #endif
@@ -294,8 +300,8 @@ findExpressions (ExferenceInput rawType
         in Just (transformSolutions potentialSolutions newState, newState)
 
 rateNode :: ExferenceHeuristicsConfig -> SearchNode -> Float
-rateNode h s = 0.0 - rateGoals h (node_goals s) - node_depth s + rateUsage h s
- -- + 0.6 * rateScopes (node_providedScopes s)
+rateNode h s = 0.0 - rateGoals h (view node_goals s) - view node_depth s + rateUsage h s
+ -- + 0.6 * rateScopes (view node_providedScopes s)
 
 rateGoals :: ExferenceHeuristicsConfig -> Seq.Seq TGoal -> Float
 rateGoals h = sum . fmap rateGoal
@@ -319,7 +325,7 @@ rateScopes (Scopes _ sMap) = M.foldr' f 0.0 sMap
 -}
 
 rateUsage :: ExferenceHeuristicsConfig -> SearchNode -> Float
-rateUsage h s = IntMap.foldr f 0.0 $ node_varUses s
+rateUsage h s = IntMap.foldr f 0.0 $ view node_varUses s
   where
     f :: Int -> Float -> Float
     f 0 x = x - heuristics_tempUnusedVarPenalty h
@@ -341,9 +347,9 @@ stateStep multiPM allowConstrs qNameIndex h s
   = stateStep2 multiPM allowConstrs qNameIndex h
               -- $ (\_ -> trace (showSearchNode' qNameIndex s ++ " " ++ show (rateNode h s)) s)
               $ s
-              -- trace (show (node_depth s) ++ " " ++ show (rateGoals $ node_goals s)
-              --                            ++ " " ++ show (rateScopes $ node_providedScopes s)
-              --                            ++ " " ++ show (node_expression s)) $
+              -- trace (show (view node_depth s) ++ " " ++ show (rateGoals $ view node_goals s)
+              --                            ++ " " ++ show (rateScopes $ view node_providedScopes s)
+              --                            ++ " " ++ show (view node_expression s)) $
 
 -- Take one SearchNode, return some amount of sub-SearchNodes. Some of the
 -- returned SearchNodes may in fact be (potential) solutions that do not
@@ -359,14 +365,14 @@ stateStep2 :: Bool
            -> SearchNode
            -> [SearchNode]
 stateStep2 multiPM allowConstrs qNameIndex h s
-  | node_depth s > 200.0 = []
+  | view node_depth s > 200.0 = []
   | TypeArrow _ _      <- goalType = [ modifyNodeBy s' $ arrowStep goalType [] ]
   | TypeForall is cs t <- goalType = [ modifyNodeBy s' $ forallStep is cs t ]
   | otherwise = byProvided ++ byFunctionSimple
   where
 
-    ((VarBinding var goalType, scopeId) Seq.:< gr) = Seq.viewl $ node_goals s
-    s' = s { node_goals = gr }
+    ((VarBinding var goalType, scopeId) Seq.:< gr) = Seq.viewl $ view node_goals s
+    s' = node_goals .~ gr $ s
 
     -- if type is TypeArrow, transform to lambda expression.
     arrowStep :: HsType -> [VarBinding] -> SearchNodeBuilder ()
@@ -377,74 +383,77 @@ stateStep2 multiPM allowConstrs qNameIndex h s
           arrowStep t2 (VarBinding nextId t1 : ts)
       -- finally, do the goal/expression transformation.
       | otherwise = do
-          nextId <- builderAllocHole
+          nextId <- node_nextVarId <<+= 1
           newScopeId <- builderAddScope scopeId
-          builderFillExprHole var
+          (node_expression %=) 
+            $ fillExprHole var
             $ foldl (\e (VarBinding v ty) -> ExpLambda v ty e) (ExpHole nextId)
             $ ts
-          builderAddDepth (heuristics_functionGoalTransform h)
+          node_depth += heuristics_functionGoalTransform h
           builderSetReason "function goal transform"
-          builderSetLastStepBinding Nothing
+          node_lastStepBinding .= Nothing
           -- for each parameter introduced in the lambda-expression above,
           -- it may be possible to pattern-match. and pattern-matching
           -- may cause duplication of the goals (e.g. for the different cases
           -- in the pattern match).
-          mapM_ builderAppendGoal =<< ( addScopePatternMatch multiPM g nextId newScopeId
-                                      $ map splitBinding
-                                      $ reverse
-                                      $ ts
-                                      )
+          additionalGoals <- (addScopePatternMatch multiPM g nextId newScopeId
+            $ map splitBinding
+            $ reverse
+            $ ts
+            )
+          node_goals %= (Seq.>< Seq.fromList additionalGoals)
 
     -- if type is TypeForall, fix the forall-variables, i.e. invent a fresh
     -- set of constants that replace the relevant forall-variables.
     forallStep :: [TVarId] -> [HsConstraint] -> HsType -> SearchNodeBuilder ()
     forallStep vs cs t = do
-      dataIds <- mapM (const builderAllocNVar) vs
-      builderAddDepth (heuristics_functionGoalTransform h) -- TODO: different heuristic?
+      dataIds <- mapM (const $ node_nextNVarId <<+= 1) vs
+      node_depth += heuristics_functionGoalTransform h -- TODO: different heuristic?
       builderSetReason "forall-type goal transformation"
-      builderSetLastStepBinding Nothing
+      node_lastStepBinding .= Nothing
       let substs = IntMap.fromList $ zip vs $ TypeConstant <$> dataIds
-      builderPrependGoal ( VarBinding var (snd $ applySubsts substs t)
-                         , scopeId )
-      builderAddGivenConstraints $ snd . constraintApplySubsts substs <$> cs
-      return ()
+      node_goals %= ((VarBinding var $ snd $ applySubsts substs t, scopeId) <|)
+      (node_queryClassEnv %=) $ addQueryClassEnv $ snd . constraintApplySubsts substs <$> cs
     -- try to resolve the goal by looking at the parameters in scope, i.e.
     -- the parameters accumulated by building the expression so far.
     -- e.g. for (\x -> (_ :: Int)), the goal can be filled by `x` if
     -- `x :: Int`.
 
-    byProvided = do
-      (provId, provT, provPs, forallTypes, constraints) <- scopeGetAllBindings (node_providedScopes s) scopeId
-      let incF = incVarIds (+(1+node_maxTVarId s))
-      let ss = IntMap.fromList $ zip forallTypes (incF . TypeVar <$> forallTypes)
-      let provType = snd $ applySubsts ss provT
-      let provConstrs = S.toList $           qClassEnv_constraints (node_queryClassEnv s)
-                                   `S.union` S.fromList (snd . constraintApplySubsts ss <$> constraints)
-      byGenericUnify
-        (Right (provId, foldr TypeArrow provT provPs))
-        (provType)
-        (provConstrs)
-        (snd . applySubsts ss <$> provPs)
-        (heuristics_stepProvidedGood h)
-        (heuristics_stepProvidedBad h)
-        ("inserting given value " ++ show provId ++ "::" ++ show provT)
-        (unify goalType provType)
+    byProvided = flip mapMaybe
+      (scopeGetAllBindings (view node_providedScopes s) scopeId)
+      $ \(provId, provT, provPs, forallTypes, constraints) -> let
+          incF        = incVarIds (+(1 + view node_maxTVarId s))
+          ss          = IntMap.fromList $ zip forallTypes (incF . TypeVar <$> forallTypes)
+          provType    = snd $ applySubsts ss provT
+          provConstrs = S.toList $ S.union
+            (qClassEnv_constraints $ view node_queryClassEnv s)
+            (S.fromList (snd . constraintApplySubsts ss <$> constraints))
+        in byGenericUnify
+          (Right (provId, foldr TypeArrow provT provPs))
+          (provType)
+          (provConstrs)
+          (snd . applySubsts ss <$> provPs)
+          (heuristics_stepProvidedGood h)
+          (heuristics_stepProvidedBad h)
+          ("inserting given value " ++ show provId ++ "::" ++ show provT)
+          (unify goalType provType)
 
     -- try to resolve the goal by looking at functions from the environment.
-    byFunctionSimple = do
-      (funcR, funcId, funcRating, funcConstrs, funcParams) <- V.toList $ node_functions s
-      let offset = 1+node_maxTVarId s
-      let incF = incVarIds (+offset)
-      let provType = incF funcR
-      byGenericUnify
-        (Left funcId)
-        (provType)
-        (map (constraintMapTypes incF) funcConstrs)
-        (map incF funcParams)
-        (heuristics_stepEnvGood h + funcRating)
-        (heuristics_stepEnvBad h + funcRating)
-        ("applying function " ++ show funcId)
-        (unifyOffset goalType (HsTypeOffset funcR offset))
+    byFunctionSimple = flip mapMaybe
+      (V.toList $ view node_functions s)
+      $ \(funcR, funcId, funcRating, funcConstrs, funcParams) -> let
+          offset   = 1 + view node_maxTVarId s
+          incF     = incVarIds (+offset)
+          provType = incF funcR
+        in byGenericUnify
+          (Left funcId)
+          (provType)
+          (map (constraintMapTypes incF) funcConstrs)
+          (map incF funcParams)
+          (heuristics_stepEnvGood h + funcRating)
+          (heuristics_stepEnvBad h + funcRating)
+          ("applying function " ++ show funcId)
+          (unifyOffset goalType (HsTypeOffset funcR offset))
 
     -- common code for byProvided and byFunctionSimple
     byGenericUnify :: Either QNameId (TVarId, HsType)
@@ -455,7 +464,7 @@ stateStep2 multiPM allowConstrs qNameIndex h s
                    -> Float
                    -> String
                    -> Maybe (Substs, Substs)
-                   -> [SearchNode]
+                   -> Maybe SearchNode
     byGenericUnify applier
                    provided
                    provConstrs
@@ -465,76 +474,70 @@ stateStep2 multiPM allowConstrs qNameIndex h s
                    reasonPart
                    unifyResult
       = case unifyResult of
-          Nothing                -> noUnify
+          Nothing               -> noUnify
           Just (goalSS, provSS) -> byUnified goalSS provSS
      where
+      applierl = applier ^? _Left
+      applierr = applier ^? _Right
       coreExp = either ExpName (uncurry ExpVar) applier
-      bTrace  = case applier of
-        Left  x -> Just (show x)
-        Right _ -> Nothing
       noUnify = case dependencies of
-        [] -> [] -- we can't (randomly) partially apply a non-function
-        (d:ds) -> return $ modifyNodeBy s' $ do
+        [] -> Nothing -- we can't (randomly) partially apply a non-function
+        (d:ds) -> Just $ modifyNodeBy s' $ do
           vResult <- builderAllocVar
-          vParam  <- builderAllocHole
-          builderFillExprHole var $ ExpLet
-                                      vResult
-                                      provided
-                                      (ExpApply coreExp $ ExpHole vParam)
-                                      (ExpHole var)
-          builderPrependGoal (VarBinding vParam d, scopeId)
+          vParam  <- node_nextVarId <<+= 1
+          (node_expression %=) $ fillExprHole var $ ExpLet
+            vResult
+            provided
+            (ExpApply coreExp $ ExpHole vParam)
+            (ExpHole var)
+          node_goals %= ((VarBinding vParam d, scopeId) <|)
           newScopeId <- builderAddScope scopeId
-          builderAddConstraintGoals provConstrs
-          case applier of
-              Left _      -> return ()
-              Right (i,_) -> builderAddVarUsage i
-          builderFixMaxTVarId $ maximum $ map largestId dependencies
-          builderAddDepth depthModNoMatch
+          node_constraintGoals %= (++ provConstrs)
+          traverse_ (\r -> node_varUses . ix (fst r) += 1) applierr
+          (node_maxTVarId %=) $ max $ maximum $ map largestId dependencies
+          node_depth += depthModNoMatch
           builderSetReason $ "randomly trying to apply function "
                             ++ showExpressionPure qNameIndex coreExp
-          mapM_ builderAppendGoal =<< addScopePatternMatch
+          additionalGoals <- addScopePatternMatch
             multiPM
             goalType
             var
             newScopeId
             (let (r,ps,fs,cs) = splitArrowResultParams provided
               in [(vResult, r, ds++ps, fs, cs)])
+          node_goals %= (Seq.>< Seq.fromList additionalGoals)
       byUnified goalSS provSS = do
         let allSS = IntMap.union goalSS provSS
-        let substs = case applier of
+            substs = case applier of
               Left _  -> goalSS
               Right _ -> allSS
-            contxt = node_queryClassEnv s
+            contxt = view node_queryClassEnv s
             (applied1, constrs1) = mapM (constraintApplySubsts substs)
-                                        (node_constraintGoals s)
+                                        (view node_constraintGoals s)
             constrs2 = map (snd . constraintApplySubsts provSS)
                      $ provConstrs
         newConstraints <- if allowConstrs
-          then [constrs1 ++ constrs2]
+          then Just $ constrs1 ++ constrs2
           else if getAny applied1
-            then                   maybeToList (isPossible contxt (constrs1 ++ constrs2))
-            else (constrs1 ++) <$> maybeToList (isPossible contxt constrs2)
-        return $ modifyNodeBy s' $ do
+            then                   isPossible contxt (constrs1 ++ constrs2)
+            else (constrs1 ++) <$> isPossible contxt constrs2
+        Just $ modifyNodeBy s' $ do
           let paramN = length dependencies
-          vars <- replicateM paramN builderAllocHole
+          vars <- replicateM paramN $ node_nextVarId <<+= 1
           let newGoals = mkGoals scopeId $ zipWith VarBinding vars dependencies
-          case applier of
-            Left _  ->
-              forM_ newGoals (builderAppendGoal . goalApplySubst provSS)
-            Right _ -> 
-              forM_ newGoals builderAppendGoal
+          forM_ newGoals $ (.) builderAppendGoal
+            $ ala Endo foldMap $ applierl $> goalApplySubst provSS
           builderApplySubst substs
-          builderFillExprHole var $ case paramN of
-            0 -> coreExp -- TODO: this case is superfluous, isnt it..
-            _ -> foldl ExpApply coreExp (map ExpHole vars)
-          case applier of
-            Left _       -> return ()
-            Right (i, _) -> builderAddVarUsage i
-          builderSetConstraints newConstraints
-          builderFixMaxTVarId $ maximum
-                              $ largestSubstsId goalSS
-                                : map largestId dependencies
-          builderAddDepth depthModMatch
+          (node_expression %=) $ fillExprHole var
+            $ foldl ExpApply coreExp (map ExpHole vars)
+          traverse_ (\r -> node_varUses . ix (fst r) += 1)  applierr
+          node_constraintGoals .= newConstraints
+          (node_maxTVarId %=)
+            $ max
+            $ maximum
+            $ largestSubstsId goalSS
+              : map largestId dependencies
+          node_depth += depthModMatch
           let substsTxt   = show (IntMap.union goalSS provSS)
                             ++ " unifies "
                             ++ show goalType
@@ -544,7 +547,7 @@ stateStep2 multiPM allowConstrs qNameIndex h s
                                             ++ ") are provable"
           builderSetReason $ reasonPart ++ ", because " ++ substsTxt
                             ++ " and because " ++ provableTxt
-          builderSetLastStepBinding bTrace
+          node_lastStepBinding .= fmap show applierl
 
 
 {-# INLINE addScopePatternMatch #-}
@@ -568,7 +571,7 @@ addScopePatternMatch multiPM goalType vid sid bindings = case bindings of
     offset <- builderGetTVarOffset
     let incF = incVarIds (+offset)
     let expVar = ExpVar v (foldr TypeArrow vtResult vtParams)
-    builderAddPBinding sid b
+    node_providedScopes %= scopesAddPBinding sid b
     let defaultHandleRest = addScopePatternMatch multiPM goalType vid sid bindingRest
     case vtResult of
       TypeVar {}    -> defaultHandleRest -- dont pattern-match on variables, even if it unifies
@@ -578,59 +581,59 @@ addScopePatternMatch multiPM goalType vid sid bindings = case bindings of
         error $ "addScopePatternMatch: TypeForall (RankNTypes not yet implemented)" -- todo when we do RankNTypes
                 ++ show vtResult
       _ | not $ null vtParams -> defaultHandleRest
-        | otherwise -> do -- SearchNodeBuilder
-        deconss <- builderDeconss
-        let mapFunc decons = case decons of
-              (matchParam, [(matchId, matchRs)], False) -> let
-                resultTypes = map incF matchRs
-                unifyResult = unifyRightOffset vtResult
-                                               (HsTypeOffset matchParam offset)
-                -- inputType = incF matchParam
-                mapFunc1 substs = do -- SearchNodeBuilder
-                  vars <- replicateM (length matchRs) builderAllocVar
-                  builderAddVarUsage v
-                  builderSetReason $ "pattern matching on " ++ showVar v
-                  let newProvTypes = map (snd . applySubsts substs) resultTypes
-                      newBinds = zipWith (\x y -> splitBinding (VarBinding x y))
-                                         vars
-                                         newProvTypes
-                      expr = ExpLetMatch matchId
-                                         (zip vars matchRs)
-                                         expVar
-                                         (ExpHole vid)
-                  builderFillExprHole vid expr
-                  when (not $ null matchRs)
-                       (builderFixMaxTVarId $ maximum $ map largestId newProvTypes)
-                  addScopePatternMatch multiPM
-                                       goalType
-                                       vid
-                                       sid
-                                       (reverse newBinds ++ bindingRest)
-                in mapFunc1 <$> unifyResult
-              (matchParam, matchers@(_:_), False) | multiPM -> let
-                unifyResult = unifyRightOffset vtResult
-                                               (HsTypeOffset matchParam offset)
-                -- inputType = incF matchParam
-                mapFunc2 substs = do -- SearchNodeBuilder
-                  mData <- matchers `forM` \(matchId, matchRs) -> do -- SearchNodeBuilder
-                    newSid <- builderAddScope sid
-                    let resultTypes = map incF matchRs
-                    vars <- replicateM (length matchRs) builderAllocVar
-                    builderAddVarUsage v
-                    newVid <- builderAllocHole
-                    let newProvTypes = map (snd . applySubsts substs) resultTypes
-                        newBinds = zipWith (\x y -> splitBinding (VarBinding x y)) vars newProvTypes
-                    when (not $ null matchRs)
-                         (builderFixMaxTVarId $ maximum $ map largestId newProvTypes)
-                    return ( (matchId, zip vars newProvTypes, ExpHole newVid)
-                           , (newVid, reverse newBinds, newSid) )
-                  builderSetReason $ "pattern matching on " ++ showVar v
-                  builderFillExprHole vid $ ExpCaseMatch expVar (map fst mData)
-                  concat <$> map snd mData `forM` \(newVid, newBinds, newSid) ->
-                    addScopePatternMatch multiPM goalType newVid newSid (newBinds++bindingRest)
-                in mapFunc2 <$> unifyResult
-              _ -> Nothing -- TODO: decons for recursive data types
-
-        fromMaybe defaultHandleRest $ asum $ mapFunc <$> deconss
+        | otherwise -> do
+          deconss <- use node_deconss
+          fromMaybe defaultHandleRest . asum . map mapFunc $ deconss
+         where
+          mapFunc :: DeconstructorBinding -> Maybe (SearchNodeBuilder [TGoal])
+          mapFunc (matchParam, [(matchId, matchRs)], False) = let
+            resultTypes = map incF matchRs
+            unifyResult = unifyRightOffset vtResult
+                                           (HsTypeOffset matchParam offset)
+            -- inputType = incF matchParam
+            mapFunc1 substs = do -- SearchNodeBuilder
+              vars <- replicateM (length matchRs) builderAllocVar
+              node_varUses . ix v += 1
+              builderSetReason $ "pattern matching on " ++ showVar v
+              let newProvTypes = map (snd . applySubsts substs) resultTypes
+                  newBinds = zipWith (\x y -> splitBinding (VarBinding x y))
+                                     vars
+                                     newProvTypes
+                  expr = ExpLetMatch matchId
+                                     (zip vars matchRs)
+                                     expVar
+                                     (ExpHole vid)
+              node_expression %= fillExprHole vid expr
+              when (not $ null matchRs)
+                   $ (node_maxTVarId %=) $ max $ maximum $ map largestId newProvTypes
+              addScopePatternMatch multiPM
+                                   goalType
+                                   vid
+                                   sid
+                                   (reverse newBinds ++ bindingRest)
+            in mapFunc1 <$> unifyResult
+          mapFunc (matchParam, matchers@(_:_), False) | multiPM = let
+            unifyResult = unifyRightOffset vtResult
+                                           (HsTypeOffset matchParam offset)
+            -- inputType = incF matchParam
+            mapFunc2 substs = do -- SearchNodeBuilder
+              mData <- matchers `forM` \(matchId, matchRs) -> do -- SearchNodeBuilder
+                newSid <- builderAddScope sid
+                let resultTypes = map incF matchRs
+                vars <- replicateM (length matchRs) builderAllocVar
+                node_varUses . ix v += 1
+                newVid <- node_nextVarId <<+= 1
+                let newProvTypes = map (snd . applySubsts substs) resultTypes
+                    newBinds = zipWith (\x y -> splitBinding (VarBinding x y)) vars newProvTypes
+                when (not $ null matchRs)
+                     $ (node_maxTVarId %=) $ max $ maximum $ map largestId newProvTypes
+                return ( (matchId, zip vars newProvTypes, ExpHole newVid)
+                       , (newVid, reverse newBinds, newSid) )
+              builderSetReason $ "pattern matching on " ++ showVar v
+              (node_expression %=) $ fillExprHole vid $ ExpCaseMatch expVar (map fst mData)
+              concat <$> map snd mData `forM` \(newVid, newBinds, newSid) ->
+                addScopePatternMatch multiPM goalType newVid newSid (newBinds++bindingRest)
+            in mapFunc2 <$> unifyResult
+          mapFunc _ = Nothing -- TODO: decons for recursive data types
   -- where
   --  (<&>) = flip (<$>)
