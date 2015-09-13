@@ -29,7 +29,7 @@ import Control.Monad.Writer.Strict
 
 import Control.Applicative ( (<$>), (<*>), Applicative )
 
-import Data.Maybe ( fromMaybe )
+import Data.Maybe ( fromMaybe, mapMaybe )
 import Data.Either ( lefts, rights )
 import Data.List ( find )
 import Data.Traversable ( traverse, for )
@@ -79,18 +79,17 @@ getTypeClasses :: forall m r w s m0
                -> [Module]
                -> m [Either String HsTypeClass]
 getTypeClasses ds tDeclMap ms = do
-  let mdecls = [ (moduleName, d)
+  let mdecls = [ (moduleName, d) -- []
                | (Module _ moduleName _ _ _ _ decls) <- ms
                , d <- decls
                ]
-  (rawMap :: M.Map QNameId (ModuleName, Context, [TyVarBind]))
-    <- fmap M.fromList $ sequence $ do
-      ( moduleName
-       ,ClassDecl _loc context name vars _fdeps _cdecls
-       ) <- mdecls
-      return $ do
-        qnid <- getOrCreateQNameId $ convertModuleName moduleName name
-        return (qnid, (moduleName, context, vars))
+  (rawMap :: M.Map QNameId (ModuleName, Context, [TyVarBind])) <-
+    fmap M.fromList $ sequence
+      [ [ (qnid, (moduleName, context, vars)) --m (inner) --[]
+        | qnid <- getOrCreateQNameId $ convertModuleName moduleName name
+        ]
+      | (moduleName,ClassDecl _loc context name vars _fdeps _cdecls) <- mdecls
+      ]
   (secondMap :: M.Map QNameId (Either String ([TempAsst], [TVarId])))
     <- rawMap `for` \(moduleName, assts, vars) ->
           withMultiStateA (ConvData 0 M.empty) $ runEitherT
@@ -116,15 +115,12 @@ getTypeClasses ds tDeclMap ms = do
     helper :: QNameId
            -> Either String ([TempAsst], [TVarId])
            -> Either String HsTypeClass
-    helper _ (Left e) = Left e
-    helper qnid (Right (tempAssts, tVarIds)) = HsTypeClass qnid tVarIds
-                                             <$> mapM h tempAssts
-      where
-        h :: TempAsst -> Either String HsConstraint
-        h (cQnid, types) = case LazyMap.lookup cQnid resultMap of
-            Nothing -> Right $ HsConstraint unknown types
-            Just (Left e)   -> Left e
-            Just (Right tc) -> Right $ HsConstraint tc types
+    helper qnid eTcRawData = do
+      (tempAssts, tVarIds) <- eTcRawData
+      HsTypeClass qnid tVarIds
+        <$> tempAssts `forM` \(cQnid, vars) ->
+          flip HsConstraint vars <$> M.findWithDefault (Right unknown) cQnid resultMap
+
     resultMap :: LazyMap.Map QNameId (Either String HsTypeClass)
       -- CARE: DONT USE STRICT METHODS ON THIS MAP
       --       (COMPILER WONT COMPLAIN)
@@ -186,8 +182,9 @@ constrTransform mn ds tDeclMap tcLookupF (ClassA qname types) = do
   let ctypes = convertTypeInternal [] mn ds tDeclMap `mapM` types
   let qn = convertQName mn ds qname
   qnid <- getOrCreateQNameId qn
-  case tcLookupF qnid of
-    Nothing -> left $ "unknown type class: " ++ show qn
-    Just tc -> HsConstraint tc <$> ctypes
+  maybe
+    (left $ "unknown type class: " ++ show qn)
+    (\tc -> HsConstraint tc <$> ctypes)
+    (tcLookupF qnid)
 constrTransform mn ds tDeclMap tcLookupF (ParenA c) = constrTransform mn ds tDeclMap tcLookupF c
 constrTransform _ _ _ _ c = left $ "unknown HsConstraint: " ++ show c

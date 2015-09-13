@@ -48,10 +48,10 @@ import Data.List ( intercalate, find )
 import Control.Monad ( mplus, guard )
 import Control.Monad.Identity ( Identity(runIdentity) )
 
-import Control.Lens.Wrapped  ( ala )
-
 import Control.Monad.Trans.MultiState ( MonadMultiState(..) )
 import Control.Monad.Trans.MultiRWS
+
+import Control.Lens ( ala )
 
 import Debug.Hood.Observe
 import Debug.Trace
