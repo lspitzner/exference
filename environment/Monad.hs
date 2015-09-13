@@ -18,7 +18,8 @@ msum :: (Foldable t, MonadPlus m) => t (m a) -> m a
 mfilter :: MonadPlus m => (a -> Data.Bool.Bool) -> m a -> m a 
 zipWithM :: Monad m => (a -> b -> m c) -> [a] -> [b] -> m [c] 
 foldM :: (Foldable t, Monad m) => (b -> a -> m b) -> b -> t a -> m b 
-forever :: Monad m => m a -> m b
+forever :: Monad m => m () -> m Void
+(>>) :: Monad m => m () -> m b -> m b
 
 instance Monad []
 instance Monad IO

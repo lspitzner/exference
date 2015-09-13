@@ -53,6 +53,7 @@ Data.Maybe.maybeToList    =  6.0
 Data.Map.lookup           = -2.0
 
 Control.Monad.(>>=)       = -4.0
+Control.Monad.(>>)        = 10.0
 
 Data.Monoid.mempty        = 20.0
 Data.Monoid.mappend       = 5.0
@@ -101,3 +102,11 @@ Data.Char.chr              = 3.0
 Data.Data.gmapQi           = 3.0
 
 Control.Comonad.extract    = 9.0
+
+Data.Text.pack             = 6.0
+Data.Text.unpack           = 6.0
+
+Data.Proxy.Proxy           = 7.0
+
+Data.Bool.True             = 3.0
+Data.Bool.False            = 3.0
