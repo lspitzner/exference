@@ -79,37 +79,21 @@ getTypeClasses :: forall m r w s m0
                -> [Module]
                -> m [Either String HsTypeClass]
 getTypeClasses ds tDeclMap ms = do
-  let mdecls = [ (moduleName, d) -- []
-               | (Module _ moduleName _ _ _ _ decls) <- ms
-               , d <- decls
-               ]
-  (rawMap :: M.Map QNameId (ModuleName, Context, [TyVarBind])) <-
+  secondMap :: M.Map QNameId (Either String ([TempAsst], [TVarId])) <-
     fmap M.fromList $ sequence
-      [ [ (qnid, (moduleName, context, vars)) --m (inner) --[]
+      [ [ (qnid, x) --m (inner) -- []
         | qnid <- getOrCreateQNameId $ convertModuleName moduleName name
+        , x <- withMultiStateA (ConvData 0 M.empty) $ runEitherT $ let
+              convF (ClassA qname types) = (,)
+                <$> getOrCreateQNameId (convertQName    (Just moduleName) ds qname)
+                <*> types `forM` convertTypeInternal [] (Just moduleName) ds tDeclMap
+              convF (ParenA c) = convF c
+              convF c = left $ "unknown HsConstraint: " ++ show c
+            in (,) <$> mapM convF context <*> mapM tyVarTransform vars
         ]
-      | (moduleName,ClassDecl _loc context name vars _fdeps _cdecls) <- mdecls
+      | Module _ moduleName _ _ _ _ decls <- ms
+      , ClassDecl _loc context name vars _fdeps _cdecls <- decls
       ]
-  (secondMap :: M.Map QNameId (Either String ([TempAsst], [TVarId])))
-    <- rawMap `for` \(moduleName, assts, vars) ->
-          withMultiStateA (ConvData 0 M.empty) $ runEitherT
-          [ (tempAssts, vars')
-          | vars' <- mapM tyVarTransform vars
-          , let convF (ClassA qname types) =
-                  [ (qnid, ctypes)
-                  | qnid <- getOrCreateQNameId (convertQName (Just moduleName)
-                                                             ds
-                                                             qname)
-                  , ctypes <- types `forM` convertTypeInternal []
-                                                               (Just moduleName)
-                                                               ds
-                                                               tDeclMap
-                  ]
-                convF (ParenA c)           = convF c
-                convF c                    = left
-                                           $ "unknown HsConstraint: " ++ show c
-          , tempAssts <- mapM convF assts
-          ]
   unknown <- unknownTypeClass
   let
     helper :: QNameId
