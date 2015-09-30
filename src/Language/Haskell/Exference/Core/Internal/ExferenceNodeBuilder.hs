@@ -4,12 +4,11 @@
 module Language.Haskell.Exference.Core.Internal.ExferenceNodeBuilder
   ( SearchNodeBuilder
   , modifyNodeBy
-  , builderAppendGoal
   , builderSetReason
   , builderGetTVarOffset
-  , builderAllocVar
   , builderAddScope
   , builderApplySubst
+  , builderAllocVar
   )
 where
 
@@ -31,9 +30,8 @@ import Control.Applicative
 import qualified Data.Map as M
 import qualified Data.IntMap.Strict as IntMap
 import qualified Data.Vector as V
-import Data.Sequence
 
-import Control.Lens hiding ( (<|), (|>) )
+import Control.Lens
 
 
 
@@ -42,12 +40,9 @@ type SearchNodeBuilder a = State SearchNode a
 modifyNodeBy :: SearchNode -> SearchNodeBuilder () -> SearchNode
 modifyNodeBy = flip execState
 
-builderAppendGoal :: TGoal -> SearchNodeBuilder ()
-builderAppendGoal = (node_goals %=) . flip (|>)
-
 {-
 builderAddVars :: [TVarId] -> SearchNodeBuilder ()
-builderAddVars = (node_varUses %=) . M.union . M.fromList . map (,0)
+builderAddVars = (node_varUses <>=) . M.fromList . map (,0)
 -}
 
 -- sets reason, and, as appropriate, lastNode
@@ -66,20 +61,13 @@ builderGetTVarOffset = (+1) <$> use node_maxTVarId
 builderAllocVar :: SearchNodeBuilder TVarId
 builderAllocVar = do
   vid <- use node_nextVarId
-  node_varUses %= IntMap.insert vid 0
+  node_varUses . at vid ?= 0
   node_nextVarId <<+= 1
-
-{-
-builderAllocVars :: Int -> SearchNodeBuilder [TVarId]
-builderAllocVars n = do
-  vid <- node_nextVarId <<+= n
-  return $ take n $ [vid..]
--}
 
 -- take the current scope, add new scope, return new id
 builderAddScope :: ScopeId -> SearchNodeBuilder ScopeId
 builderAddScope parentId = do
-  (newId, newScopes) <- addScope parentId <$> use node_providedScopes
+  (newId, newScopes) <- uses node_providedScopes $ addScope parentId
   node_providedScopes .= newScopes
   return newId
 
@@ -89,3 +77,4 @@ builderApplySubst :: Substs -> SearchNodeBuilder ()
 builderApplySubst substs = do
   node_goals . mapped %= goalApplySubst substs
   node_providedScopes %= scopesApplySubsts substs
+

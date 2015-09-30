@@ -40,7 +40,7 @@ import Control.DeepSeq.Generics
 import System.Mem.StableName ( StableName, makeStableName )
 import System.IO.Unsafe ( unsafePerformIO )
 
-import Data.Maybe ( maybeToList, listToMaybe, fromMaybe, catMaybes, mapMaybe )
+import Data.Maybe ( maybeToList, listToMaybe, fromMaybe, catMaybes, mapMaybe, isNothing )
 import Control.Arrow ( first, second, (***) )
 import Control.Monad ( when, unless, guard, mzero, replicateM
                      , replicateM_, forM, join, forM_ )
@@ -50,10 +50,7 @@ import Data.Foldable ( traverse_ )
 import Data.Ord ( comparing )
 import Data.Function ( on )
 import Data.Functor ( ($>) )
-import Data.Monoid ( mempty, First(First), getFirst, mconcat, Any(..), Endo(..) )
-#if MIN_VERSION_base(4,8,0)
-import Data.Monoid ( Alt(..) )
-#endif
+import Data.Monoid ( mempty, First(First), getFirst, mconcat, Any(..), Endo(..), Sum(..) )
 import Data.Foldable ( foldMap, sum, asum )
 import Control.Monad.Morph ( lift )
 import Data.Typeable ( Typeable )
@@ -146,10 +143,6 @@ type FindExpressionsState = ( Int    -- number of steps already performed
                             , RatedNodes -- pqueue
                             )
 
-type SolutionOutput = (BindingUsages
-                    , SearchTree
-                    , [(Int,Float,Expression,[HsConstraint],Int)])
-
 -- Entry-point and main function of the algorithm.
 -- Takes input, produces list of outputs. Output is basically a
 -- [[Solution]], plus some statistics and stuff.
@@ -172,7 +165,7 @@ findExpressions (ExferenceInput rawType
                                 sClassEnv
                                 allowUnused
                                 allowConstraints
-                                allowConstraintsStopStep
+                                _allowConstraintsStopStep
                                 multiPM
                                 qNameIndex
                                 maxSteps -- since we output a [[x]],
@@ -183,121 +176,114 @@ findExpressions (ExferenceInput rawType
                                          -- not worth the refactor atm.
                                 memLimit
                                 heuristics) =
-  [ (bindingUsages, searchTree, solutions)
-  | (bindingUsages, searchTree, stuples) <- resultTuples
-  , let solutions = [ (e, constrs, ExferenceStats n compl fsize)
-                    | (n, compl, e, constrs, fsize) <- stuples
-                    ]
-  ]
-  where
-    t = forallify rawType
-    rootSearchNode = SearchNode
-        (Seq.singleton (VarBinding 0 t, 0))
-        []
-        initialScopes
-        IntMap.empty
-        (V.fromList funcs) -- TODO: lift this further up?
-        deconss
-        (mkQueryClassEnv sClassEnv [])
-        (ExpHole 0)
-        1 -- TODO: change to 0?
-        (largestId t)
-        0
-        0.0
+  take maxSteps $ unfoldr helper $ rootFindExpressionState
+ where
+  rootFindExpressionState =
+    ( 0
+    , 0
+    , emptyBindingUsages
+    , initialSearchTreeBuilder initNodeName (ExpHole 0)
+    , Q.singleton 0.0 rootSearchNode
+    )
+  t = forallify rawType
+  rootSearchNode = SearchNode
+    (Seq.singleton (VarBinding 0 t, 0))
+    []
+    initialScopes
+    IntMap.empty
+    (V.fromList funcs) -- TODO: lift this further up?
+    deconss
+    (mkQueryClassEnv sClassEnv [])
+    (ExpHole 0)
+    1 -- TODO: change to 0?
+    (largestId t)
+    0
+    0.0
 #if LINK_NODES
-        Nothing
+    Nothing
 #endif
-        ""
-        Nothing
-    initNodeName = unsafePerformIO $ makeStableName $! rootSearchNode
-    --resultTuples = helper ( 0
-    resultTuples = take maxSteps
-                 $ unfoldr helper
-                  ( 0
-                  , 0
-                  , emptyBindingUsages
-                  , initialSearchTreeBuilder initNodeName (ExpHole 0)
-                  , Q.singleton 0.0 rootSearchNode
-                  )
-    transformSolutions :: [SearchNode] -> FindExpressionsState -> SolutionOutput
-    transformSolutions potentialSolutions (n, _, newBindingUsages, newSearchTreeBuilder, newNodes) = (
+    ""
+    Nothing
+  initNodeName = unsafePerformIO $ makeStableName $! rootSearchNode
+  transformSolutions :: [SearchNode] -> FindExpressionsState -> ExferenceChunkElement
+  transformSolutions potentialSolutions (n, _, newBindingUsages, newSearchTreeBuilder, newNodes) = (
       newBindingUsages,
       buildSearchTree newSearchTreeBuilder initNodeName,
-      [ (n, d, e, remainingConstraints, Q.size newNodes)
-        | solution <- potentialSolutions
-        , let contxt = view node_queryClassEnv solution
-        , remainingConstraints <- maybeToList
-                                $ filterUnresolved contxt
-                                $ view node_constraintGoals solution
-          -- if allowConstraints, unresolved constraints are allowed;
-          -- otherwise we discard this solution.
-        , allowConstraints || null remainingConstraints
-        , let unusedVarCount = getUnusedVarCount
-                                 (view node_varUses solution)
-          -- similarly:
-          -- if allowUnused, there may be unused variables in the
-          -- output. Otherwise the solution is discarded.
-        , allowUnused || unusedVarCount==0
-        , let e = -- trace (showNodeDevelopment solution) $ 
-                  view node_expression solution
-        , let d = view node_depth solution
-                + ( heuristics_unusedVar heuristics
-                  * fromIntegral unusedVarCount
-                  )
-                -- + ( heuristics_solutionLength heuristics
-                --   * fromIntegral (length $ show e)<
-                --   )
-        ])
-    helper :: FindExpressionsState -> Maybe (SolutionOutput, FindExpressionsState)
-    helper (n, worst, bindingUsages, st, states)
-      | Q.null states = Nothing
-      | ((_,s), restNodes) <- Q.deleteFindMax states = let
-                     -- actual work happens in stateStep
-        rNodes = stateStep multiPM
-                           allowConstraints
-                           qNameIndex
-                           heuristics
-                           s
-        -- distinguish "finished"/"unfinished" sub-SearchNodes
-        (potentialSolutions, futures) = partition (Seq.null . view node_goals) rNodes
-        newBindingUsages = fromMaybe id (incBindingUsage <$> view node_lastStepBinding s) bindingUsages
-        f :: Float -> Float
-        f x | x > 900 = 0.0
-            | otherwise = let k = 1.111e-3*x
-                           in 1 + 2*k**3 - 3*k**2
-        ratedNew    = [ ( rateNode heuristics newS + 4.5*f (fromIntegral n)
-                        , newS)
-                      | newS <- futures ]
-        qsize = Q.size states
-          -- this cutoff is somewhat arbitrary, and can, theoretically,
-          -- distort the order of the results (i.e.: lead to results being
-          -- omitted).
-        filteredNew = fromMaybe id mFunc ratedNew where
-          mFunc = [ filter ((>cutoff) . fst)
-                  | qsize > maxSteps
-                  , mmax <- memLimit
-                  , let cutoff = worst * fromIntegral mmax
-                                       / fromIntegral qsize
-                  ]
-                
-        newNodes = foldr (uncurry Q.insert) restNodes filteredNew
-        newSearchTreeBuilder =
+      [ (e, remainingConstraints, ExferenceStats n d $ Q.size newNodes)
+      | solution <- potentialSolutions
+      , let contxt = view node_queryClassEnv solution
+      , remainingConstraints <- maybeToList
+                              $ filterUnresolved contxt
+                              $ view node_constraintGoals solution
+        -- if allowConstraints, unresolved constraints are allowed;
+        -- otherwise we discard this solution.
+      , allowConstraints || null remainingConstraints
+      , let unusedVarCount = getUnusedVarCount solution
+        -- similarly:
+        -- if allowUnused, there may be unused variables in the
+        -- output. Otherwise the solution is discarded.
+      , allowUnused || unusedVarCount==0
+      , let e = -- trace (showNodeDevelopment solution) $
+                view node_expression solution
+      , let d = view node_depth solution
+              + ( heuristics_unusedVar heuristics
+                * fromIntegral unusedVarCount
+                )
+              -- + ( heuristics_solutionLength heuristics
+              --   * fromIntegral (length $ show e)<
+              --   )
+      ]
+    )
+  helper :: FindExpressionsState -> Maybe (ExferenceChunkElement, FindExpressionsState)
+  helper (n, worst, bindingUsages, st, states)
+    | Q.null states = Nothing
+    | ((_,s), restNodes) <- Q.deleteFindMax states = let
+                   -- actual work happens in stateStep
+      rNodes = stateStep multiPM
+                         allowConstraints
+                         qNameIndex
+                         heuristics
+                         s
+      -- distinguish "finished"/"unfinished" sub-SearchNodes
+      (potentialSolutions, futures) = partition (Seq.null . view node_goals) rNodes
+      newBindingUsages = fromMaybe id (incBindingUsage <$> view node_lastStepBinding s) bindingUsages
+      f :: Float -> Float
+      f x | x > 900 = 0.0
+          | otherwise = let k = 1.111e-3*x
+                         in 1 + 2*k**3 - 3*k**2
+      ratedNew    = [ ( rateNode heuristics newS + 4.5*f (fromIntegral n)
+                      , newS)
+                    | newS <- futures ]
+      qsize = Q.size states
+        -- this cutoff is somewhat arbitrary, and can, theoretically,
+        -- distort the order of the results (i.e.: lead to results being
+        -- omitted).
+      filteredNew = fromMaybe id mFunc ratedNew where
+        mFunc = [ filter ((>cutoff) . fst)
+                | qsize > maxSteps
+                , mmax <- memLimit
+                , let cutoff = worst * fromIntegral mmax
+                                     / fromIntegral qsize
+                ]
+
+      newNodes = foldr (uncurry Q.insert) restNodes filteredNew
+      newSearchTreeBuilder =
 #if BUILD_SEARCH_TREE
-          ((++) [ unsafePerformIO $ do
-              n1 <- makeStableName $! ns
-              n2 <- makeStableName $! s
-              return (n1,n2,view node_expression ns)
-            | ns<-rNodes] &&&
-          (:) (unsafePerformIO (makeStableName $! s)))
+        ((++) [ unsafePerformIO $ do
+            n1 <- makeStableName $! ns
+            n2 <- makeStableName $! s
+            return (n1,n2,view node_expression ns)
+          | ns<-rNodes] &&&
+        (:) (unsafePerformIO (makeStableName $! s)))
 #endif
-          st
-        newState =
-          ( n+1
-          , minimum $ worst:map fst filteredNew
-          , newBindingUsages
-          , newSearchTreeBuilder
-          , newNodes )
-        in Just (transformSolutions potentialSolutions newState, newState)
+        st
+      newState =
+        ( n+1
+        , minimum $ worst:map fst filteredNew
+        , newBindingUsages
+        , newSearchTreeBuilder
+        , newNodes )
+      in Just (transformSolutions potentialSolutions newState, newState)
 
 rateNode :: ExferenceHeuristicsConfig -> SearchNode -> Float
 rateNode h s = 0.0 - rateGoals h (view node_goals s) - view node_depth s + rateUsage h s
@@ -319,21 +305,19 @@ rateGoals h = sum . fmap rateGoal
 -- using this rating had bad effect on ordering; not used anymore
 {-
 rateScopes :: Scopes -> Float
-rateScopes (Scopes _ sMap) = M.foldr' f 0.0 sMap
-  where
-    f (Scope binds _) x = x + fromIntegral (length binds)
+rateScopes (Scopes _ sMap) = alaf Sum foldMap f sMap where
+    f (Scope binds _) = fromIntegral (length binds)
 -}
 
 rateUsage :: ExferenceHeuristicsConfig -> SearchNode -> Float
-rateUsage h s = IntMap.foldr f 0.0 $ view node_varUses s
-  where
-    f :: Int -> Float -> Float
-    f 0 x = x - heuristics_tempUnusedVarPenalty h
-    f 1 x = x
-    f n x = x - fromIntegral (n-1) * heuristics_tempMultiVarUsePenalty h
+rateUsage h s = alaf Sum foldMap f $ s ^.. node_varUses . folded where
+  f :: Int -> Float
+  f 0 = - heuristics_tempUnusedVarPenalty h
+  f 1 = 0
+  f n = - fromIntegral (n-1) * heuristics_tempMultiVarUsePenalty h
 
-getUnusedVarCount :: VarUsageMap -> Int
-getUnusedVarCount m = length $ filter (==0) $ IntMap.elems m
+getUnusedVarCount :: SearchNode -> Int
+getUnusedVarCount s = length $ filter (==0) $ s ^.. node_varUses . folded
 
 -- just redirects to stateStep2; purpose is debugging. i should use the
 -- `| False -> debugging stuff` trick instead maybe.
@@ -345,11 +329,12 @@ stateStep :: Bool
           -> [SearchNode]
 stateStep multiPM allowConstrs qNameIndex h s
   = stateStep2 multiPM allowConstrs qNameIndex h
-              -- $ (\_ -> trace (showSearchNode' qNameIndex s ++ " " ++ show (rateNode h s)) s)
-              $ s
-              -- trace (show (view node_depth s) ++ " " ++ show (rateGoals $ view node_goals s)
-              --                            ++ " " ++ show (rateScopes $ view node_providedScopes s)
-              --                            ++ " " ++ show (view node_expression s)) $
+    -- $ trace (showSearchNode' qNameIndex s ++ " " ++ show (rateNode h s))
+    $ s
+    -- trace (unwords [ show (view  node_depth                     s)
+    --                , show (views node_goals          rateGoals  s)
+    --                , show (views node_providedScopes rateScopes s)
+    --                , show (view  node_expression                s))]) $
 
 -- Take one SearchNode, return some amount of sub-SearchNodes. Some of the
 -- returned SearchNodes may in fact be (potential) solutions that do not
@@ -385,10 +370,8 @@ stateStep2 multiPM allowConstrs qNameIndex h s
       | otherwise = do
           nextId <- node_nextVarId <<+= 1
           newScopeId <- builderAddScope scopeId
-          (node_expression %=) 
-            $ fillExprHole var
-            $ foldl (\e (VarBinding v ty) -> ExpLambda v ty e) (ExpHole nextId)
-            $ ts
+          node_expression %= fillExprHole var
+            (foldl (\e (VarBinding v ty) -> ExpLambda v ty e) (ExpHole nextId) ts)
           node_depth += heuristics_functionGoalTransform h
           builderSetReason "function goal transform"
           node_lastStepBinding .= Nothing
@@ -401,7 +384,7 @@ stateStep2 multiPM allowConstrs qNameIndex h s
             $ reverse
             $ ts
             )
-          node_goals %= (Seq.>< Seq.fromList additionalGoals)
+          node_goals <>= Seq.fromList additionalGoals
 
     -- if type is TypeForall, fix the forall-variables, i.e. invent a fresh
     -- set of constants that replace the relevant forall-variables.
@@ -413,7 +396,7 @@ stateStep2 multiPM allowConstrs qNameIndex h s
       node_lastStepBinding .= Nothing
       let substs = IntMap.fromList $ zip vs $ TypeConstant <$> dataIds
       node_goals %= ((VarBinding var $ snd $ applySubsts substs t, scopeId) <|)
-      (node_queryClassEnv %=) $ addQueryClassEnv $ snd . constraintApplySubsts substs <$> cs
+      node_queryClassEnv %= addQueryClassEnv (snd . constraintApplySubsts substs <$> cs)
     -- try to resolve the goal by looking at the parameters in scope, i.e.
     -- the parameters accumulated by building the expression so far.
     -- e.g. for (\x -> (_ :: Int)), the goal can be filled by `x` if
@@ -485,16 +468,16 @@ stateStep2 multiPM allowConstrs qNameIndex h s
         (d:ds) -> Just $ modifyNodeBy s' $ do
           vResult <- builderAllocVar
           vParam  <- node_nextVarId <<+= 1
-          (node_expression %=) $ fillExprHole var $ ExpLet
+          node_expression %= fillExprHole var (ExpLet
             vResult
             provided
             (ExpApply coreExp $ ExpHole vParam)
-            (ExpHole var)
+            (ExpHole var))
           node_goals %= ((VarBinding vParam d, scopeId) <|)
           newScopeId <- builderAddScope scopeId
-          node_constraintGoals %= (++ provConstrs)
-          traverse_ (\r -> node_varUses . ix (fst r) += 1) applierr
-          (node_maxTVarId %=) $ max $ maximum $ map largestId dependencies
+          node_constraintGoals <>= provConstrs
+          traverse_ (\r -> node_varUses . singular (ix $ fst r) += 1) applierr
+          node_maxTVarId %= max (maximum $ map largestId dependencies)
           node_depth += depthModNoMatch
           builderSetReason $ "randomly trying to apply function "
                             ++ showExpressionPure qNameIndex coreExp
@@ -505,7 +488,7 @@ stateStep2 multiPM allowConstrs qNameIndex h s
             newScopeId
             (let (r,ps,fs,cs) = splitArrowResultParams provided
               in [(vResult, r, ds++ps, fs, cs)])
-          node_goals %= (Seq.>< Seq.fromList additionalGoals)
+          node_goals <>= Seq.fromList additionalGoals
       byUnified goalSS provSS = do
         let allSS = IntMap.union goalSS provSS
             substs = case applier of
@@ -525,18 +508,16 @@ stateStep2 multiPM allowConstrs qNameIndex h s
           let paramN = length dependencies
           vars <- replicateM paramN $ node_nextVarId <<+= 1
           let newGoals = mkGoals scopeId $ zipWith VarBinding vars dependencies
-          forM_ newGoals $ (.) builderAppendGoal
-            $ ala Endo foldMap $ applierl $> goalApplySubst provSS
+          node_goals <>= Seq.fromList
+            (ala Endo foldMap (applierl $> (goalApplySubst provSS))
+            <$> newGoals)
           builderApplySubst substs
-          (node_expression %=) $ fillExprHole var
-            $ foldl ExpApply coreExp (map ExpHole vars)
-          traverse_ (\r -> node_varUses . ix (fst r) += 1)  applierr
+          node_expression %= fillExprHole var
+            (foldl ExpApply coreExp (map ExpHole vars))
+          traverse_ (\r -> node_varUses . singular (ix $ fst r) += 1) applierr
           node_constraintGoals .= newConstraints
-          (node_maxTVarId %=)
-            $ max
-            $ maximum
-            $ largestSubstsId goalSS
-              : map largestId dependencies
+          node_maxTVarId %= max (maximum
+            $ largestSubstsId goalSS : map largestId dependencies)
           node_depth += depthModMatch
           let substsTxt   = show (IntMap.union goalSS provSS)
                             ++ " unifies "
@@ -593,7 +574,7 @@ addScopePatternMatch multiPM goalType vid sid bindings = case bindings of
             -- inputType = incF matchParam
             mapFunc1 substs = do -- SearchNodeBuilder
               vars <- replicateM (length matchRs) builderAllocVar
-              node_varUses . ix v += 1
+              node_varUses . singular (ix v) += 1
               builderSetReason $ "pattern matching on " ++ showVar v
               let newProvTypes = map (snd . applySubsts substs) resultTypes
                   newBinds = zipWith (\x y -> splitBinding (VarBinding x y))
@@ -604,8 +585,8 @@ addScopePatternMatch multiPM goalType vid sid bindings = case bindings of
                                      expVar
                                      (ExpHole vid)
               node_expression %= fillExprHole vid expr
-              when (not $ null matchRs)
-                   $ (node_maxTVarId %=) $ max $ maximum $ map largestId newProvTypes
+              when (not $ null matchRs) $
+                node_maxTVarId %= max (maximum $ map largestId newProvTypes)
               addScopePatternMatch multiPM
                                    goalType
                                    vid
@@ -621,16 +602,16 @@ addScopePatternMatch multiPM goalType vid sid bindings = case bindings of
                 newSid <- builderAddScope sid
                 let resultTypes = map incF matchRs
                 vars <- replicateM (length matchRs) builderAllocVar
-                node_varUses . ix v += 1
+                node_varUses . singular (ix v) += 1
                 newVid <- node_nextVarId <<+= 1
                 let newProvTypes = map (snd . applySubsts substs) resultTypes
                     newBinds = zipWith (\x y -> splitBinding (VarBinding x y)) vars newProvTypes
-                when (not $ null matchRs)
-                     $ (node_maxTVarId %=) $ max $ maximum $ map largestId newProvTypes
+                when (not $ null matchRs) $
+                  node_maxTVarId %= max (maximum $ map largestId newProvTypes)
                 return ( (matchId, zip vars newProvTypes, ExpHole newVid)
                        , (newVid, reverse newBinds, newSid) )
               builderSetReason $ "pattern matching on " ++ showVar v
-              (node_expression %=) $ fillExprHole vid $ ExpCaseMatch expVar (map fst mData)
+              node_expression %= fillExprHole vid (ExpCaseMatch expVar $ map fst mData)
               concat <$> map snd mData `forM` \(newVid, newBinds, newSid) ->
                 addScopePatternMatch multiPM goalType newVid newSid (newBinds++bindingRest)
             in mapFunc2 <$> unifyResult

@@ -72,6 +72,7 @@ Library
                -O2
                -j
                -Wall
+               -Werror
                -fno-warn-unused-imports
                -fno-warn-orphans
                -fno-spec-constr

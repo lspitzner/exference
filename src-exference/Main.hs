@@ -74,6 +74,7 @@ import qualified Flags_exference
 import System.Environment ( getArgs )
 import System.Console.GetOpt
 import Data.Version ( showVersion )
+import System.IO ( hSetBuffering, BufferMode(..), stdout, stderr )
 
 import Debug.Hood.Observe
 
@@ -145,6 +146,8 @@ fullUsageInfo = usageInfo header options
 
 main :: IO ()
 main = runO $ do
+  hSetBuffering stdout LineBuffering
+  hSetBuffering stderr LineBuffering
   argv <- getArgs
   defaultEnvPath <- getDataFileName "environment"
   (flags, inputs) <- mainOpts argv
@@ -160,13 +163,11 @@ main = runO $ do
           (False,False) -> return False
           (True, False) -> return True
           (False,True ) -> return False
-          (True, True ) -> do
-            error "--serial and --parallel are in conflict! aborting" 
+          (True, True ) ->
+            error "--serial and --parallel are in conflict! aborting"
         when (Version `elem` flags || verbosity>0) $ lift printVersion
         -- ((eSignatures, StaticClassEnv clss insts), messages) <- runWriter <$> parseExternal testBaseInput'
-        let envDir = case [d | EnvDir d <- flags] of
-                       []    -> defaultEnvPath
-                       (d:_) -> d
+        let envDir = fromMaybe defaultEnvPath $ listToMaybe [d | EnvDir d <- flags]
         when (verbosity>0) $ lift $ do
           putStrLn $ "[Environment]"
           putStrLn $ "reading environment from " ++ envDir
@@ -178,7 +179,7 @@ main = runO $ do
          ,messages :: [String] ) <- withMultiWriterAW $ environmentFromPath envDir
         let
           env = (eSignatures, eDeconss, sEnv)
-        when (verbosity>0 && not (null messages)) $ lift $ do
+        when (verbosity>0 && not (null messages)) $ lift $
           forM_ messages $ \m -> putStrLn $ "environment warning: " ++ m
         when (PrintEnv `elem` flags) $ lift $ do
           when (verbosity>0) $ putStrLn "[Environment]"
@@ -293,7 +294,7 @@ main = runO $ do
                             putStrLn $ "WARNING: parallel version not implemented for given flags, falling back to serial!"
                             when (verbosity>0) $ putStrLn "[running findOneExpression ..]"
                             return $ maybeToList $ findOneExpression input
-                          else lift $ do 
+                          else lift $ do
                             when (verbosity>0) $ putStrLn "[running findOneExpression ..]"
                             return $ maybeToList $ findOneExpression input
                         | Best `elem` flags -> if par
@@ -333,7 +334,7 @@ main = runO $ do
 
         -- printChecks     testHeuristicsConfig env
         -- printStatistics testHeuristicsConfig env
-        
+
         -- print $ compileDict testDictRatings $ eSignatures
         -- print $ parseConstrainedType defaultClassEnv $ "(Show a) => [a] -> String"
         -- print $ inflateHsConstraints a b

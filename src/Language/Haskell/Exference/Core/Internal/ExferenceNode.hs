@@ -309,8 +309,8 @@ showSearchNode
   tVarPType (i, t, ps, [], []) = tVarType $ VarBinding i (foldr TypeArrow t ps)
   tVarPType (i, t, ps, fs, cs) = tVarType $ VarBinding i (TypeForall fs cs (foldr TypeArrow t ps))
 
-showNodeDevelopment :: forall m 
-                     . MonadMultiState QNameIndex m
+showNodeDevelopment :: forall m
+                    . MonadMultiState QNameIndex m
                     => SearchNode
                     -> m String
 #if LINK_NODES

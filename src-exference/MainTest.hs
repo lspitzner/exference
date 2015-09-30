@@ -46,6 +46,8 @@ import qualified Data.Map as M
 import qualified Data.IntMap as IntMap
 import Data.Tree ( drawTree )
 import qualified ListT
+import Control.Monad.Trans.Maybe ( MaybeT (..) )
+import Data.Foldable ( asum )
 
 import Control.Monad.Trans.MultiRWS
 import Data.HList.ContainsType
@@ -343,31 +345,25 @@ checkExpectedResults :: forall m m0 r w s
 checkExpectedResults heuristics env = mapMultiRWST (return . runIdentity)
                                       -- for lazyness, we drop the IO
                                     $ sequence
-                                    $ do
-  (name, allowUnused, patternM, typeStr, expected, hidden) <- checkData
-  return $ do
-    input <- checkInput heuristics env typeStr allowUnused patternM hidden
-    let getExp :: Int
-               -> [(Expression, [HsConstraint], ExferenceStats)]
-               -> MultiRWST r w s Identity (Maybe (Int, ExferenceStats))
-        getExp _ [] = return $ Nothing
-        getExp n ((e, _, s):r) = do
-          eStr <- showExpression $ simplifyExpression e
-          if eStr `elem` expected
-            then return $ Just (n,s)
-            else getExp (n+1) r
-    r <- case findExpressions input of
-        []       -> return $ Nothing
-        xs@((e, _, stats):_) -> [ Just ( (simplifyExpression e, stats)
-                                       , rs
-                                       )
-                                | rs <- getExp 0 xs
-                                ]
-    return $
-      ( name
-      , expected
-      , r
-      )
+  [ [ (name, expected, r)
+    | input <- checkInput heuristics env typeStr allowUnused patternM hidden
+    , let getExp :: (Expression, [HsConstraint], ExferenceStats)
+                 -> MaybeT (MultiRWST r w s Identity) ExferenceStats
+          getExp (e, _, s) =
+            [ s
+            | eStr <- lift $ showExpression $ simplifyExpression e
+            , eStr `elem` expected
+            ]
+    , let xs = findExpressions input
+    , r <- runMaybeT
+        [ ((simplifyExpression e, stats), rs)
+        | let ((e, _, stats):_) = xs
+        , rs <- lift $ runMaybeT $ asum $ zipWith (fmap . (,)) [0..] $ map getExp xs
+        ]
+    ]
+  | (name, allowUnused, patternM, typeStr, expected, hidden) <- checkData
+  ]
+      
 
 {-
 checkBestResults :: ExferenceHeuristicsConfig
