@@ -196,6 +196,7 @@ findExpressions (ExferenceInput rawType
     (mkQueryClassEnv sClassEnv [])
     (ExpHole 0)
     1 -- TODO: change to 0?
+    1000000000
     (largestId t)
     0
     0.0
@@ -246,7 +247,7 @@ findExpressions (ExferenceInput rawType
                          s
       -- distinguish "finished"/"unfinished" sub-SearchNodes
       (potentialSolutions, futures) = partition (Seq.null . view node_goals) rNodes
-      newBindingUsages = fromMaybe id (incBindingUsage <$> view node_lastStepBinding s) bindingUsages
+      newBindingUsages = fromMaybe id ((\i -> at i . non 0 +~ 1) <$> view node_lastStepBinding s) bindingUsages
       f :: Float -> Float
       f x | x > 900 = 0.0
           | otherwise = let k = 1.111e-3*x
@@ -310,14 +311,14 @@ rateScopes (Scopes _ sMap) = alaf Sum foldMap f sMap where
 -}
 
 rateUsage :: ExferenceHeuristicsConfig -> SearchNode -> Float
-rateUsage h s = alaf Sum foldMap f $ s ^.. node_varUses . folded where
+rateUsage h s = alaf Sum foldMap f $ s ^.. node_varUses . foldMap at [1000000000-2.. s^.node_nextUsesCountedVarId - 1] . non 0 where
   f :: Int -> Float
   f 0 = - heuristics_tempUnusedVarPenalty h
   f 1 = 0
   f n = - fromIntegral (n-1) * heuristics_tempMultiVarUsePenalty h
 
 getUnusedVarCount :: SearchNode -> Int
-getUnusedVarCount s = length $ filter (==0) $ s ^.. node_varUses . folded
+getUnusedVarCount s = length $ filter isNothing $ s ^.. node_varUses . foldMap at [1000000000.. s^.node_nextUsesCountedVarId - 1]
 
 -- just redirects to stateStep2; purpose is debugging. i should use the
 -- `| False -> debugging stuff` trick instead maybe.
@@ -364,7 +365,7 @@ stateStep2 multiPM allowConstrs qNameIndex h s
     arrowStep g ts
       -- descend until no more TypeArrows, accumulating what is seen.
       | TypeArrow t1 t2 <- g = do
-          nextId <- builderAllocVar
+          nextId <- node_nextUsesCountedVarId <<+= 1
           arrowStep t2 (VarBinding nextId t1 : ts)
       -- finally, do the goal/expression transformation.
       | otherwise = do
@@ -466,7 +467,7 @@ stateStep2 multiPM allowConstrs qNameIndex h s
       noUnify = case dependencies of
         [] -> Nothing -- we can't (randomly) partially apply a non-function
         (d:ds) -> Just $ modifyNodeBy s' $ do
-          vResult <- builderAllocVar
+          vResult <- node_nextUsesCountedVarId <<+= 1
           vParam  <- node_nextVarId <<+= 1
           node_expression %= fillExprHole var (ExpLet
             vResult
@@ -476,7 +477,7 @@ stateStep2 multiPM allowConstrs qNameIndex h s
           node_goals %= ((VarBinding vParam d, scopeId) <|)
           newScopeId <- builderAddScope scopeId
           node_constraintGoals <>= provConstrs
-          traverse_ (\r -> node_varUses . singular (ix $ fst r) += 1) applierr
+          traverse_ (\r -> node_varUses . at (fst r) . non 0 += 1) applierr
           node_maxTVarId %= max (maximum $ map largestId dependencies)
           node_depth += depthModNoMatch
           builderSetReason $ "randomly trying to apply function "
@@ -514,7 +515,7 @@ stateStep2 multiPM allowConstrs qNameIndex h s
           builderApplySubst substs
           node_expression %= fillExprHole var
             (foldl ExpApply coreExp (map ExpHole vars))
-          traverse_ (\r -> node_varUses . singular (ix $ fst r) += 1) applierr
+          traverse_ (\r -> node_varUses . at (fst r) . non 0 += 1) applierr
           node_constraintGoals .= newConstraints
           node_maxTVarId %= max (maximum
             $ largestSubstsId goalSS : map largestId dependencies)
@@ -573,8 +574,8 @@ addScopePatternMatch multiPM goalType vid sid bindings = case bindings of
                                            (HsTypeOffset matchParam offset)
             -- inputType = incF matchParam
             mapFunc1 substs = do -- SearchNodeBuilder
-              vars <- replicateM (length matchRs) builderAllocVar
-              node_varUses . singular (ix v) += 1
+              vars <- replicateM (length matchRs) $ node_nextUsesCountedVarId <<+= 1
+              node_varUses . at v . non 0 += 1
               builderSetReason $ "pattern matching on " ++ showVar v
               let newProvTypes = map (snd . applySubsts substs) resultTypes
                   newBinds = zipWith (\x y -> splitBinding (VarBinding x y))
@@ -601,8 +602,8 @@ addScopePatternMatch multiPM goalType vid sid bindings = case bindings of
               mData <- matchers `forM` \(matchId, matchRs) -> do -- SearchNodeBuilder
                 newSid <- builderAddScope sid
                 let resultTypes = map incF matchRs
-                vars <- replicateM (length matchRs) builderAllocVar
-                node_varUses . singular (ix v) += 1
+                vars <- replicateM (length matchRs) $ node_nextUsesCountedVarId <<+= 1
+                node_varUses . at v . non 0 += 1
                 newVid <- node_nextVarId <<+= 1
                 let newProvTypes = map (snd . applySubsts substs) resultTypes
                     newBinds = zipWith (\x y -> splitBinding (VarBinding x y)) vars newProvTypes

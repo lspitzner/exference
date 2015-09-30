@@ -168,11 +168,12 @@ data SearchNode = SearchNode
   , _node_constraintGoals :: [HsConstraint]
   , _node_providedScopes  :: Scopes
   , _node_varUses         :: VarUsageMap
-  , _node_functions       :: (V.Vector FunctionBinding)
+  , _node_functions       :: V.Vector FunctionBinding
   , _node_deconss         :: [DeconstructorBinding]
   , _node_queryClassEnv   :: QueryClassEnv
   , _node_expression      :: Expression
   , _node_nextVarId       :: {-# UNPACK #-} !TVarId
+  , _node_nextUsesCountedVarId :: {-# UNPACK #-} !TVarId
   , _node_maxTVarId       :: {-# UNPACK #-} !TVarId
   , _node_nextNVarId      :: {-# UNPACK #-} !TVarId -- id used when resolving rankN-types
   , _node_depth           :: {-# UNPACK #-} !Float
@@ -180,7 +181,7 @@ data SearchNode = SearchNode
   , _node_previousNode    :: Maybe SearchNode
 #endif
   , _node_lastStepReason  :: String
-  , _node_lastStepBinding :: (Maybe String)
+  , _node_lastStepBinding :: Maybe String
   }
   deriving Generic
 
@@ -262,6 +263,7 @@ showSearchNode
               qClassEnv
               sexpression
               snextVarId
+              snextUsesCountedVarId
               smaxTVarId
               snextNVarId
               sdepth
@@ -287,6 +289,7 @@ showSearchNode
       $$  (text $ "expression = " ++ exprStr)
       $$  (text $ "reason     = " ++ reason)
       $$  (parens $    (text $ "nextVarId="++show snextVarId)
+                   <+> (text $ "nextUsesCountedVarId="++show snextUsesCountedVarId)
                    <+> (text $ "maxTVarId="++show smaxTVarId)
                    <+> (text $ "nextNVarId="++show snextNVarId)
                    <+> (text $ "depth="++show sdepth))

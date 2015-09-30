@@ -8,7 +8,6 @@ module Language.Haskell.Exference.Core.Internal.ExferenceNodeBuilder
   , builderGetTVarOffset
   , builderAddScope
   , builderApplySubst
-  , builderAllocVar
   )
 where
 
@@ -57,12 +56,6 @@ builderGetTVarOffset :: SearchNodeBuilder TVarId
 builderGetTVarOffset = (+1) <$> use node_maxTVarId
  -- TODO: is (+1) really necessary? it was in pre-transformation code,
  --       but i cannot find good reason now.. test?
-
-builderAllocVar :: SearchNodeBuilder TVarId
-builderAllocVar = do
-  vid <- use node_nextVarId
-  node_varUses . at vid ?= 0
-  node_nextVarId <<+= 1
 
 -- take the current scope, add new scope, return new id
 builderAddScope :: ScopeId -> SearchNodeBuilder ScopeId
