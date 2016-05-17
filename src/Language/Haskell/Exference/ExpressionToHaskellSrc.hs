@@ -78,7 +78,7 @@ convertToFunc q ident e = withMultiStateA (M.empty :: Map T.TVarId T.HsType)
                                    (map (PVar . Ident) params)
                                    Nothing
                                    rhs'
-                                   (BDecls [])]
+                                   Nothing]
                   | rhs' <- UnGuardedRhs <$> convertExp q rhsExp
                   , params <- mapM (T.showTypedVar . fst) (reverse is)
                   ]
@@ -168,7 +168,7 @@ convertInternal q p (E.ExpLet i _ bindE inE) = do
   let convBind = PatBind noLoc
                    (PVar $ Ident $ varName)
                    (UnGuardedRhs $ rhs)
-                   (BDecls [])
+                   Nothing
   e <- convertInternal q 0 inE
   return $ parens (p>=2) $ mergeLet convBind e
 convertInternal q p (E.ExpLetMatch n ids bindE inE) = do
@@ -179,7 +179,7 @@ convertInternal q p (E.ExpLetMatch n ids bindE inE) = do
                    (PParen $ PApp (UnQual $ Ident $ name)
                                   (map (PVar . Ident) varNames))
                    (UnGuardedRhs $ rhs)
-                   (BDecls [])
+                   Nothing
   e <- convertInternal q 0 inE
   return $ parens (p>=2) $ mergeLet convBind e
 convertInternal q p (E.ExpCaseMatch bindE alts) = do
@@ -192,7 +192,7 @@ convertInternal q p (E.ExpCaseMatch bindE alts) = do
         (PApp (UnQual $ Ident $ name)
               (map (PVar . Ident) varNames))
         (UnGuardedRhs $ rhs)
-        (BDecls [])
+        Nothing
   return $ parens (p>=2) $ Case e as
 
 convertName :: MonadMultiState T.QNameIndex m => Int -> T.QNameId -> m String

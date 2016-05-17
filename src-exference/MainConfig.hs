@@ -88,6 +88,7 @@ testBaseInput' = map h testBaseInput
                            False
                            False
                            Nothing
+                           False
           fname = "./BaseContext/preprocessed/"++s++".hs"
       in (mode, fname)
 

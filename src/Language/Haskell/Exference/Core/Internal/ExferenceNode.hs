@@ -50,6 +50,7 @@ import Text.PrettyPrint
 import Control.Arrow ( first, second, (***) )
 
 import Control.DeepSeq.Generics
+import Control.DeepSeq
 import GHC.Generics
 import Control.Lens.TH ( makeClassy )
 

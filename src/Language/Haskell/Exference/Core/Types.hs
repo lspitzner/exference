@@ -56,6 +56,7 @@ import Data.Monoid ( Monoid(..), Any(..) )
 import Control.Monad ( liftM, liftM2, MonadPlus )
 import Control.Applicative ( Applicative, Alternative, empty, (<|>) )
 import Control.Arrow ( first )
+import Data.Orphans ()
 
 import qualified Data.Set as S
 import qualified Data.IntSet as IntSet
@@ -69,6 +70,7 @@ import Text.ParserCombinators.Parsec.Char
 import Language.Haskell.Exts.Syntax ( Name (..) )
 
 import Control.DeepSeq.Generics
+import Control.DeepSeq
 import GHC.Generics
 import Data.Data ( Data )
 import Data.Typeable ( Typeable )
@@ -438,6 +440,6 @@ freeVars (TypeArrow t1 t2)   = S.union (freeVars t1) (freeVars t2)
 freeVars (TypeApp t1 t2)     = S.union (freeVars t1) (freeVars t2)
 freeVars (TypeForall is _ t) = foldr S.delete (freeVars t) is
 
-instance Monoid w => Monad ((,) w) where
-  return = (,) mempty
-  (w,x) >>= f = first (mappend w) (f x)
+-- instance Monoid w => Monad ((,) w) where
+--   return = (,) mempty
+--   (w,x) >>= f = first (mappend w) (f x)

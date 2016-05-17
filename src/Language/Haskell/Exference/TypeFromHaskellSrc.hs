@@ -60,6 +60,7 @@ haskellSrcExtsParseMode s = P.ParseMode (s++".hs")
                                       False
                                       False
                                       Nothing
+                                      False
   where
     exts1 = [ TypeOperators
             , ExplicitForAll

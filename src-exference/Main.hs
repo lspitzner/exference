@@ -369,6 +369,7 @@ _tryParse shouldBangPattern s = do
                                       False
                                       False
                                       Nothing
+                                      False
                            )
                            content of
     f@(ParseFailed _ _) -> do

@@ -113,6 +113,7 @@ Library
   hs-source-dirs: src
   Build-Depends:
     base >=3 && <5,
+    base-orphans,
     containers,
     pretty >= 1.1,
     deepseq-generics,

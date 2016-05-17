@@ -25,6 +25,7 @@ import Data.Functor.Identity ( runIdentity )
 import Data.Functor ( (<$>) )
 
 import Control.DeepSeq.Generics
+import Control.DeepSeq
 import GHC.Generics
 
 import Control.Monad.Trans.MultiRWS

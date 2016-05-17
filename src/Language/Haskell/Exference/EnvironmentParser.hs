@@ -300,6 +300,7 @@ environmentFromModuleAndRatings s1 s2 = do
                        False
                        False
                        Nothing
+                       False
   (decls, deconss, cntxt, ds, tdm) <- parseModules [(mode, s1)]
   r <- lift $ ratingsFromFile s2
   case r of
