@@ -6,7 +6,9 @@ module MainTest
   , printCheckExpectedResults
   , printStatistics
   , printMaxUsage
+#if BUILD_SEARCH_TREE
   , printSearchTree
+#endif
   , filterBindingsSimple -- TODO: refactor/move this
   )
 where
@@ -14,7 +16,9 @@ where
 
 
 import Language.Haskell.Exference.Core ( ExferenceHeuristicsConfig(..)
-                                      , findExpressionsWithStats )
+                                       , findExpressionsWithStats
+                                       , ExferenceChunkElement(..)
+                                       )
 import Language.Haskell.Exference
 import Language.Haskell.Exference.ExpressionToHaskellSrc
 import Language.Haskell.Exference.BindingsFromHaskellSrc
@@ -45,7 +49,6 @@ import Control.Monad.Writer.Strict
 import qualified Data.Map as M
 import qualified Data.IntMap as IntMap
 import Data.Tree ( drawTree )
-import qualified ListT
 import Control.Monad.Trans.Maybe ( MaybeT (..) )
 import Data.Foldable ( asum )
 
@@ -245,7 +248,7 @@ checkData =
 -}
 
 exampleInput :: [(String, Bool, Bool, String)]
-exampleInput = 
+exampleInput =
   [ (,,,) "State"      False False "(s -> (a, s)) -> State s a"
   , (,,,) "showmap"    False False "(Show b) => (a -> b) -> [a] -> [String]"
   , (,,,) "ffbind"     False False "(a -> t -> b) -> (t -> a) -> (t -> b)"
@@ -363,7 +366,7 @@ checkExpectedResults heuristics env = mapMultiRWST (return . runIdentity)
     ]
   | (name, allowUnused, patternM, typeStr, expected, hidden) <- checkData
   ]
-      
+
 
 {-
 checkBestResults :: ExferenceHeuristicsConfig
@@ -633,10 +636,11 @@ printMaxUsage h (bindings, deconss, sEnv) = sequence_ $ do
                   16384
                   (Just 16384)
                   h
-    let (stats, _, _) = last $ findExpressionsWithStats input
+    let stats = chunkBindingUsages $ last $ findExpressionsWithStats input
         highest = take 5 $ sortBy (flip $ comparing snd) $ M.toList stats
     lift $ putStrLn $ printf "%-12s: %s" name (show highest)
 
+#if BUILD_SEARCH_TREE
 printSearchTree :: ( ContainsType QNameIndex s )
                 => ExferenceHeuristicsConfig
                 -> EnvDictionary
@@ -660,7 +664,7 @@ printSearchTree h (bindings, deconss, sEnv) = sequence_ $ do
                   256
                   (Just 256)
                   h
-    let (_, tree, _) = last $ findExpressionsWithStats input
+    let tree = chunkSearchTree $ last $ findExpressionsWithStats input
     let showf (total,processed,expression,_)
           = printf "%d (+%d): %s" processed
                                   (total-processed)
@@ -672,3 +676,4 @@ printSearchTree h (bindings, deconss, sEnv) = sequence_ $ do
          $ fmap showf
          $ filterSearchTreeProcessedN 2
          $ tree
+#endif

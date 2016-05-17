@@ -31,8 +31,6 @@ import Data.List ( partition, sortBy, groupBy, minimumBy )
 import Data.Ord ( comparing )
 import Data.Function ( on )
 
-import qualified ListT ( ListT, take, head, uncons, toList )
-
 import Debug.Trace
 
 
@@ -40,15 +38,15 @@ import Debug.Trace
 -- returns the first found solution (not necessarily the best overall)
 findOneExpression :: ExferenceInput
                   -> Maybe ExferenceOutputElement
-findOneExpression input = listToMaybe $ findExpressions input
+findOneExpression = listToMaybe . findExpressions
 
 -- calculates at most n solutions, sorts by rating, returns the first m
 takeFindSortNExpressions :: Int
                          -> Int
                          -> ExferenceInput
                          -> [ExferenceOutputElement]
-takeFindSortNExpressions m n input =
-  take m $ findSortNExpressions n input
+takeFindSortNExpressions m n =
+  take m . findSortNExpressions n
 
 -- calculates at most n solutions, and returns them sorted by their rating
 findSortNExpressions :: Int
@@ -89,7 +87,7 @@ findFirstBestExpressions input
 findFirstExpressionLookahead :: Int
                              -> ExferenceInput
                              -> Maybe ExferenceOutputElement
-findFirstExpressionLookahead n input = f 999999 Nothing (findExpressionsChunked input)
+findFirstExpressionLookahead n = f 999999 Nothing . findExpressionsChunked
   where
     f :: Int
       -> Maybe ExferenceOutputElement
@@ -118,8 +116,8 @@ findFirstExpressionLookahead n input = f 999999 Nothing (findExpressionsChunked 
 findFirstBestExpressionsLookahead :: Int
                                   -> ExferenceInput
                                   -> [ExferenceOutputElement]
-findFirstBestExpressionsLookahead n input =
-  f 999999 99999.9 [] (findExpressionsChunked input)
+findFirstBestExpressionsLookahead n =
+  f 999999 99999.9 [] . findExpressionsChunked
  where
   f :: Int
     -> Float
@@ -144,8 +142,8 @@ findFirstBestExpressionsLookahead n input =
 findFirstBestExpressionsLookaheadPreferNoConstraints :: Int
                                                      -> ExferenceInput
                                                      -> [ExferenceOutputElement]
-findFirstBestExpressionsLookaheadPreferNoConstraints n input =
-  f 999999 99999.9 [] [] (findExpressionsChunked input)
+findFirstBestExpressionsLookaheadPreferNoConstraints n =
+  f 999999 99999.9 [] [] . findExpressionsChunked
  where
   f :: Int
     -> Float

@@ -10,8 +10,9 @@ where
 
 
 
-import Language.Haskell.Exference.Core ( ExferenceHeuristicsConfig(..)
-                                      , findExpressionsWithStats )
+import Language.Haskell.Exference.Core ( ExferenceChunkElement(..)
+                                       , ExferenceHeuristicsConfig(..)
+                                       , findExpressionsWithStats )
 import Language.Haskell.Exference
 import Language.Haskell.Exference.ExpressionToHaskellSrc
 import Language.Haskell.Exference.BindingsFromHaskellSrc
@@ -266,9 +267,10 @@ main = runO $ do
                       if not Flags_exference.buildSearchTree
                         then lift $ putStrLn "exference-core was not compiled with flag \"buildSearchTree\""
                         else do
+#if BUILD_SEARCH_TREE
                           when (verbosity>0) $ lift $ putStrLn "[running findExpressionsWithStats ..]"
-                          let (_, tree, _) = last $ findExpressionsWithStats
-                                                  $ input {input_maxSteps = 8192}
+                          let tree = chunkSearchTree $ last $ findExpressionsWithStats
+                                   $ input {input_maxSteps = 8192}
                           let showf (total,processed,expression,_)
                                 = ( printf "%d (+%d):" processed (total-processed)
                                   , showExpressionPure qNameIndex $ simplifyExpression expression
@@ -279,12 +281,14 @@ main = runO $ do
                               (printf "%-50s %s" (indent ++ n) m)
                               : concatMap (helper ("  "++indent)) ts
                           (lift . putStrLn) `mapM_` helper "" (showf <$> filterSearchTreeProcessedN 64 tree)
+#endif
+                          return ()
                           -- putStrLn . showf `mapM_` draw
                           --   -- $ filterSearchTreeProcessedN 2
                           --   tree
                   | EnvUsage `elem` flags -> lift $ do
                       when (verbosity>0) $ putStrLn "[running findExpressionsWithStats ..]"
-                      let (stats, _, _) = last $ findExpressionsWithStats input
+                      let stats = chunkBindingUsages $ last $ findExpressionsWithStats input
                           highest = take 8 $ sortBy (flip $ comparing snd) $ M.toList stats
                       putStrLn $ show $ highest
                   | otherwise -> do

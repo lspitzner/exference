@@ -121,9 +121,7 @@ Library
     unordered-containers >= 0.2.5 && < 0.3,
     hashable >=1.2.4.0 && <1.3,
     pqueue >=1.3.1 && < 1.4,
-    list-t >= 0.2.3 && < 0.3,
     mmorph >= 1.0.4 && < 1.1,
-    mtl-c,
     transformers,
     mtl,
     vector,
@@ -148,7 +146,6 @@ Executable exference
       containers,
       transformers,
       mtl,
-      list-t,
       haskell-src-exts,
       data-pprint >= 0.2.4,
       deepseq,
@@ -189,3 +186,4 @@ Executable exference
   extensions: NoMonomorphismRestriction
               FlexibleContexts
               ScopedTypeVariables
+              CPP

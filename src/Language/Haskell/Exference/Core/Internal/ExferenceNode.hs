@@ -1,10 +1,14 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE PatternGuards #-}
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE FunctionalDependencies #-}
+{-# LANGUAGE TypeSynonymInstances #-}
+{-# LANGUAGE FlexibleInstances #-}
+
 
 module Language.Haskell.Exference.Core.Internal.ExferenceNode
   ( SearchNode (..)
-  , HasSearchNode (..) -- SearchNode lenses
   , TGoal
   , Scopes (..)
   , Scope (..)
@@ -27,6 +31,24 @@ module Language.Haskell.Exference.Core.Internal.ExferenceNode
   , addGoalProvided -- unused atm
   , showSearchNode
   , showSearchNode'
+  -- SearchNode lenses
+  , HasGoals (..)
+  , HasConstraintGoals (..)
+  , HasProvidedScopes (..)
+  , HasVarUses (..)
+  , HasFunctions (..)
+  , HasDeconss (..)
+  , HasQueryClassEnv (..)
+  , HasExpression (..)
+  , HasNextVarId (..)
+  , HasMaxTVarId (..)
+  , HasNextNVarId (..)
+  , HasDepth (..)
+#if LINK_NODES  
+  , HasPreviousNode (..)
+#endif
+  , HasLastStepReason (..)
+  , HasLastStepBinding (..)
   )
 where
 
@@ -52,7 +74,7 @@ import Control.Arrow ( first, second, (***) )
 import Control.DeepSeq.Generics
 import Control.DeepSeq
 import GHC.Generics
-import Control.Lens.TH ( makeClassy )
+import Control.Lens.TH ( makeFields )
 
 import Control.Monad.Trans.MultiRWS
 import Control.Monad.Trans.MultiState ( runMultiStateTNil )
@@ -99,11 +121,11 @@ data Scopes = Scopes ScopeId (IntMap.IntMap Scope)
 initialScopes :: Scopes
 initialScopes = Scopes 1 (IntMap.singleton 0 $ Scope [] [])
 
-scopeGetAllBindings :: Scopes -> Int -> [VarPBinding]
-scopeGetAllBindings ss@(Scopes _ scopeMap) sid =
+scopeGetAllBindings :: Int -> Scopes -> [VarPBinding]
+scopeGetAllBindings sid ss@(Scopes _ scopeMap) =
   case IntMap.lookup sid scopeMap of
     Nothing -> []
-    Just (Scope binds ids) -> binds ++ concatMap (scopeGetAllBindings ss) ids
+    Just (Scope binds ids) -> binds ++ concatMap (`scopeGetAllBindings` ss) ids
 
 scopesApplySubsts :: Substs -> Scopes -> Scopes
 scopesApplySubsts substs (Scopes i scopeMap) = Scopes i $ IntMap.map scopeF scopeMap
@@ -164,23 +186,23 @@ mkGoals :: ScopeId
 mkGoals sid vbinds = [(b,sid)|b<-vbinds]
 
 data SearchNode = SearchNode
-  { _node_goals           :: Seq TGoal
-  , _node_constraintGoals :: [HsConstraint]
-  , _node_providedScopes  :: Scopes
-  , _node_varUses         :: VarUsageMap
-  , _node_functions       :: (V.Vector FunctionBinding)
-  , _node_deconss         :: [DeconstructorBinding]
-  , _node_queryClassEnv   :: QueryClassEnv
-  , _node_expression      :: Expression
-  , _node_nextVarId       :: {-# UNPACK #-} !TVarId
-  , _node_maxTVarId       :: {-# UNPACK #-} !TVarId
-  , _node_nextNVarId      :: {-# UNPACK #-} !TVarId -- id used when resolving rankN-types
-  , _node_depth           :: {-# UNPACK #-} !Float
+  { _searchNodeGoals           :: Seq TGoal
+  , _searchNodeConstraintGoals :: [HsConstraint]
+  , _searchNodeProvidedScopes  :: Scopes
+  , _searchNodeVarUses         :: VarUsageMap
+  , _searchNodeFunctions       :: V.Vector FunctionBinding
+  , _searchNodeDeconss         :: [DeconstructorBinding]
+  , _searchNodeQueryClassEnv   :: QueryClassEnv
+  , _searchNodeExpression      :: Expression
+  , _searchNodeNextVarId       :: {-# UNPACK #-} !TVarId
+  , _searchNodeMaxTVarId       :: {-# UNPACK #-} !TVarId
+  , _searchNodeNextNVarId      :: {-# UNPACK #-} !TVarId -- id used when resolving rankN-types
+  , _searchNodeDepth           :: {-# UNPACK #-} !Float
 #if LINK_NODES
-  , _node_previousNode    :: Maybe SearchNode
+  , _searchNodePreviousNode    :: Maybe SearchNode
 #endif
-  , _node_lastStepReason  :: String
-  , _node_lastStepBinding :: (Maybe String)
+  , _searchNodeLastStepReason  :: String
+  , _searchNodeLastStepBinding :: Maybe String
   }
   deriving Generic
 
@@ -314,7 +336,7 @@ showNodeDevelopment :: forall m
                     => SearchNode
                     -> m String
 #if LINK_NODES
-showNodeDevelopment s = case node_previousNode s of
+showNodeDevelopment s = case previousNode s of
   Nothing -> showSearchNode s
   Just p  -> do
     pStr <- showNodeDevelopment p
@@ -330,4 +352,4 @@ showNodeDevelopment _ = return "[showNodeDevelopment: exference-core was not com
 splitBinding :: VarBinding -> VarPBinding
 splitBinding (VarBinding v t) = let (rt,pts,fvs,cs) = splitArrowResultParams t in (v,rt,pts,fvs,cs)
 
-makeClassy ''SearchNode
+makeFields ''SearchNode

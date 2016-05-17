@@ -19,17 +19,19 @@ import Language.Haskell.Exference.Core.Expression
 import Language.Haskell.Exference.Core.Internal.ExferenceNode
 import Language.Haskell.Exference.Core.FunctionBinding
 
-import Control.Monad.State.CPS ( State
-                                , StateT( StateT )
-                                , execState
-                                , modify
-                                , get
-                                , put
-                                )
+import Control.Monad.State ( State
+                           , StateT( StateT )
+                           , execState
+                           , modify
+                           , get
+                           , put
+                           )
+import Control.Monad.State.Lazy ( MonadState )
 import Control.Applicative
 import qualified Data.Map as M
 import qualified Data.IntMap.Strict as IntMap
 import qualified Data.Vector as V
+import Control.Monad ( liftM )
 
 import Control.Lens
 
@@ -42,39 +44,38 @@ modifyNodeBy = flip execState
 
 {-
 builderAddVars :: [TVarId] -> SearchNodeBuilder ()
-builderAddVars = (node_varUses <>=) . M.fromList . map (,0)
+builderAddVars = (varUses <>=) . M.fromList . map (,0)
 -}
 
 -- sets reason, and, as appropriate, lastNode
-builderSetReason :: String -> SearchNodeBuilder ()
+builderSetReason :: MonadState SearchNode m => String -> m ()
 builderSetReason r = do
-  node_lastStepReason .= r
+  lastStepReason .= r
 #if LINK_NODES
-  node_previousNode <~ Just <$> get
+  previousNode <~ liftM Just get
 #endif
 
-builderGetTVarOffset :: SearchNodeBuilder TVarId
-builderGetTVarOffset = (+1) <$> use node_maxTVarId
+builderGetTVarOffset :: MonadState SearchNode m => m TVarId
+builderGetTVarOffset = liftM (+1) $ use maxTVarId
  -- TODO: is (+1) really necessary? it was in pre-transformation code,
  --       but i cannot find good reason now.. test?
 
-builderAllocVar :: SearchNodeBuilder TVarId
+builderAllocVar :: MonadState SearchNode m => m TVarId
 builderAllocVar = do
-  vid <- use node_nextVarId
-  node_varUses . at vid ?= 0
-  node_nextVarId <<+= 1
+  vid <- use nextVarId
+  varUses . at vid ?= 0
+  nextVarId <<+= 1
 
 -- take the current scope, add new scope, return new id
-builderAddScope :: ScopeId -> SearchNodeBuilder ScopeId
+builderAddScope :: MonadState SearchNode m => ScopeId -> m ScopeId
 builderAddScope parentId = do
-  (newId, newScopes) <- uses node_providedScopes $ addScope parentId
-  node_providedScopes .= newScopes
+  (newId, newScopes) <- uses providedScopes $ addScope parentId
+  providedScopes .= newScopes
   return newId
 
 -- apply substs in goals and scopes
 -- not contraintGoals, because that's handled by caller
-builderApplySubst :: Substs -> SearchNodeBuilder ()
+builderApplySubst :: MonadState SearchNode m => Substs -> m ()
 builderApplySubst substs = do
-  node_goals . mapped %= goalApplySubst substs
-  node_providedScopes %= scopesApplySubsts substs
-
+  goals . mapped %= goalApplySubst substs
+  providedScopes %= scopesApplySubsts substs
