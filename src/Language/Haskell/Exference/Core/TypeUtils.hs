@@ -5,12 +5,8 @@
 {-# LANGUAGE DataKinds #-}
 
 module Language.Haskell.Exference.Core.TypeUtils
-  ( reduceIds
-  , incVarIds
+  ( incVarIds
   , largestId
-  , distinctify
-  , arrowDepth
-  , badReadVar
   , largestSubstsId
   , forallify -- unused atm
   , mkStaticClassEnv
@@ -19,9 +15,7 @@ module Language.Haskell.Exference.Core.TypeUtils
   , unknownTypeClass
   , inflateInstances
   , splitArrowResultParams
-  , emptyQNameIndex
   , getOrCreateQNameId
-  , findQName
   , lookupQNameId
   , withQNameIndex
   , showQNameIndex
@@ -58,9 +52,6 @@ import Debug.Trace
 
 
 
-emptyQNameIndex :: QNameIndex
-emptyQNameIndex = QNameIndex 0 M.empty M.empty
-
 getOrCreateQNameId :: MonadMultiState QNameIndex m
                    => QualifiedName -> m QNameId
 getOrCreateQNameId name = do
@@ -74,13 +65,6 @@ getOrCreateQNameId name = do
     Just i ->
       return i
 
-findQName :: MonadMultiState QNameIndex m
-          => (QualifiedName -> Bool)
-          -> m (Maybe QNameId)
-findQName p = do
-  QNameIndex _ indA _ <- mGet
-  return $ snd <$> find (\(qname, _) -> p qname) (M.toList indA)
-
 withQNameIndex :: Monad m => MultiRWST r w (QNameIndex ': ss) m a -> MultiRWST r w ss m a
 withQNameIndex = withMultiStateA emptyQNameIndex
 
@@ -89,44 +73,12 @@ showQNameIndex = do
   QNameIndex _ _ indB <- mGet
   return $ [ printf "% 5d %s" k (show v) | (k,v) <- M.toAscList indB ]
 
-badReadVar :: String -> TVarId
-badReadVar [c] = ord c - ord 'a'
-badReadVar _ = error "badReadVar: that's why it is called badReadVar"
-
-arrowDepth :: HsType -> Int
-arrowDepth (TypeVar _)      = 1
-arrowDepth (TypeConstant _) = 1
-arrowDepth (TypeCons _)     = 1
-arrowDepth (TypeArrow _ t)  = 1 + arrowDepth t
-arrowDepth (TypeApp _ _)    = 1
-arrowDepth (TypeForall _ _ t) = arrowDepth t
-
 -- binds everything in Foralls, so there are no free variables anymore.
 forallify :: HsType -> HsType
 forallify t = case t of
   TypeForall is cs t' -> TypeForall (S.toList frees++is) cs t'
   _                   -> TypeForall (S.toList frees) [] t
  where frees = freeVars t
-
-reduceIds :: HsType -> HsType
-reduceIds t = evalState (f t) (IntMap.empty, 0)
-  where
-    f :: HsType -> State (IntMap.IntMap TVarId, TVarId) HsType
-    f (TypeVar i)           = TypeVar <$> g i
-    f c@(TypeConstant _)    = return c
-    f c@(TypeCons _)        = return c
-    f (TypeArrow t1 t2)     = TypeArrow  <$> f t1 <*> f t2
-    f (TypeApp   t1 t2)     = TypeApp    <$> f t1 <*> f t2
-    f (TypeForall is cs t1) = TypeForall <$> mapM g is <*> mapM h cs <*> f t1
-    g :: TVarId -> State (IntMap.IntMap TVarId, TVarId) TVarId
-    g i = do
-      (mapping, next) <- get
-      case IntMap.lookup i mapping of
-        Nothing -> do
-          put (IntMap.insert i next mapping, next+1)
-          return next
-        Just x -> return x
-    h (HsConstraint cls params) = HsConstraint cls <$> mapM f params
 
 incVarIds :: (TVarId -> TVarId) -> HsType -> HsType
 incVarIds f (TypeVar i) = TypeVar (f i)
@@ -147,9 +99,6 @@ largestId (TypeCons _)      = -1
 largestId (TypeArrow t1 t2) = largestId t1 `max` largestId t2
 largestId (TypeApp t1 t2)   = largestId t1 `max` largestId t2
 largestId (TypeForall _ _ t)  = largestId t
-
-distinctify :: HsType -> HsType -> HsType
-distinctify a b = let x = largestId a in incVarIds (+(x+1)) b
 
 largestSubstsId :: Substs -> TVarId
 largestSubstsId = IntMap.foldl' (\a b -> a `max` largestId b) 0
