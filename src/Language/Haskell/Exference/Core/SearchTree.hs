@@ -26,6 +26,7 @@ import qualified Data.HashMap.Strict as HM
 import qualified Data.HashSet as HS
 import Data.Hashable ( Hashable )
 import Control.Lens
+import Control.Comonad.Cofree
 
 
 
@@ -46,20 +47,17 @@ buildSearchTree :: forall a
                 => SearchTreeBuilder a
                 -> a
                 -> SearchTree
-buildSearchTree (assocs,processed) root = ff $ unfoldTree f root where
-  ff t@(Node (x,e) ts)
-    | eval <- processed x
-    , subtrees <- map ff ts
-    = Node ( 1 + sumOf (folded . _1) subtrees
-           , (if eval then 1 else 0) + sumOf (folded . _2) subtrees
-           , e)
+buildSearchTree (assocs,processed) root = ff $ coiter children root where
+  ff (x :< xs)
+    | subtrees <- map ff xs
+    = Node (                         1        + sumOf (folded . _1) subtrees
+           , if elemProcessed x then 1 else 0 + sumOf (folded . _2) subtrees
+           , values x)
            subtrees
-  processed = flip HS.member $ HS.fromList processed
-  f :: a -> ((a,Expression), [a])
-  f x = ((x, mValues HM.! x), fromMaybe [] $ HM.lookup x mChildren)
-  mValues = HM.fromList $ map (\(i,_,v) -> (i,v)) assocs
-  mChildren = HM.fromListWith (++)
-     $ assocs >>= \(i,p,_) -> if i==p then [] else [(p, [i])]
+  elemProcessed = flip HS.member $ HS.fromList processed
+  values = (HM.!) $ HM.fromList $ map (\(i,_,v) -> (i,v)) assocs
+  children = fromMaybe [] . flip HM.lookup
+    (HM.fromListWith (++) $ assocs >>= \(i,p,_) -> if i==p then [] else [(p, [i])])
 
 initialSearchTreeBuilder :: a -> Expression -> SearchTreeBuilder a
 initialSearchTreeBuilder x e = ([(x,x,e)],[])
@@ -70,8 +68,8 @@ filterSearchTreeN :: Int -> SearchTree -> SearchTree
 filterSearchTreeN n (Node d ts) = Node d (ts >>= f)
   where
     f :: SearchTree -> [SearchTree]
-    f (Node d'@(k,_,_,_) ts') | n>k = []
-                              | otherwise = [Node d' $ ts' >>= f]
+    f (Node d'@(k,_,_) ts') | n>k = []
+                            | otherwise = [Node d' $ ts' >>= f]
 
 -- removes all nodes that have less than n total nodes (incl. self)
 -- e.g. if n==2, all nodes without children are removed.
@@ -79,8 +77,8 @@ filterSearchTreeProcessedN :: Int -> SearchTree -> SearchTree
 filterSearchTreeProcessedN n (Node d ts) = Node d (ts >>= f)
   where
     f :: SearchTree -> [SearchTree]
-    f (Node d'@(_,k,_,_) ts') | n>k = []
-                              | otherwise = [Node d' $ ts' >>= f]
+    f (Node d'@(_,k,_) ts') | n>k = []
+                            | otherwise = [Node d' $ ts' >>= f]
 
 -- limits depth of tree
 takeSearchTree :: Int -> SearchTree -> SearchTree
