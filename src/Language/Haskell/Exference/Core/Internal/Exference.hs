@@ -48,12 +48,12 @@ import Data.Maybe ( maybeToList, listToMaybe, fromMaybe, catMaybes, mapMaybe, is
 import Control.Arrow ( first, second, (***) )
 import Control.Monad ( when, unless, guard, mzero, replicateM
                      , replicateM_, forM, join, forM_, liftM )
-import Control.Applicative ( (<$>), (<*>), (*>), (<|>) )
+import Control.Applicative ( (<$>), (<*>), (*>), (<|>), empty )
 import Data.List ( partition, sortBy, groupBy, unfoldr )
 import Data.Ord ( comparing )
 import Data.Function ( on )
 import Data.Functor ( ($>) )
-import Data.Monoid ( mempty, First(First), getFirst, mconcat, Any(..), Endo(..), Sum(..) )
+import Data.Monoid ( Any(..), Endo(..), Sum(..) )
 import Data.Foldable ( foldMap, sum, asum, traverse_ )
 import Control.Monad.Morph ( lift )
 import Data.Typeable ( Typeable )
@@ -193,7 +193,7 @@ findExpressions (ExferenceInput rawType
   rootFindExpressionState = FindExpressionsState
     0
     0
-    emptyBindingUsages
+    empty
 #if BUILD_SEARCH_TREE
     (initialSearchTreeBuilder initNodeName (ExpHole 0))
 #endif
@@ -203,7 +203,7 @@ findExpressions (ExferenceInput rawType
     (Seq.singleton (VarBinding 0 t, 0))
     []
     initialScopes
-    IntMap.empty
+    empty
     (V.fromList funcs) -- TODO: lift this further up?
     deconss'
     (mkQueryClassEnv sClassEnv [])
