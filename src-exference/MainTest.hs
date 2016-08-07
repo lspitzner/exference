@@ -665,7 +665,7 @@ printSearchTree h (bindings, deconss, sEnv) = sequence_ $ do
                   (Just 256)
                   h
     let tree = chunkSearchTree $ last $ findExpressionsWithStats input
-    let showf (total,processed,expression,_)
+    let showf (total,processed,expression)
           = printf "%d (+%d): %s" processed
                                   (total-processed)
                                   (showExpressionPure qNameIndex expression)

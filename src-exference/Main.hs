@@ -271,7 +271,7 @@ main = runO $ do
                           when (verbosity>0) $ lift $ putStrLn "[running findExpressionsWithStats ..]"
                           let tree = chunkSearchTree $ last $ findExpressionsWithStats
                                    $ input {input_maxSteps = 8192}
-                          let showf (total,processed,expression,_)
+                          let showf (total,processed,expression)
                                 = ( printf "%d (+%d):" processed (total-processed)
                                   , showExpressionPure qNameIndex $ simplifyExpression expression
                                   )

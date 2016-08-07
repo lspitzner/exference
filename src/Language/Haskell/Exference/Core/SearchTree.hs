@@ -25,13 +25,13 @@ import Control.Monad.Reader
 import qualified Data.HashMap.Strict as HM
 import qualified Data.HashSet as HS
 import Data.Hashable ( Hashable )
+import Control.Lens
 
 
 
 type SearchTreeValue = ( Int         -- total number of children
                        , Int         -- number of processed children
                        , Expression  -- expression
-                       , Bool        -- processed
                        )
 
 type SearchTree = Tree SearchTreeValue
@@ -41,35 +41,22 @@ type SearchTreeBuilder a = ( [(a, a, Expression)] -- id, parentid, expr,
                            , [a]                  -- processed list
                            )
 
-type SearchTreeBuilderTemp a = ( HM.HashMap a Expression
-                               , HM.HashMap a [a]
-                               )
-
 buildSearchTree :: forall a
                  . (Eq a, Hashable a)
                 => SearchTreeBuilder a
                 -> a
                 -> SearchTree
-buildSearchTree (assocs,processed) root = ff pureTree where
-  isProcessed (_,_,_,x) = x
+buildSearchTree (assocs,processed) root = ff $ unfoldTree f root where
   ff t@(Node (x,e) ts)
-    | eval <- HS.member x $ 
+    | eval <- HS.member x processedSet
     , subtrees <- map ff ts
-    = Node ( length t
-           , if eval || not (null ts)
-               then 1 + length (filter isProcessed
-                               $ concatMap flatten subtrees)
-               else 0
-           , e
-           , eval)
+    = Node ( 1 + sumOf (folded . _1) subtrees
+           , (if eval then 1 else 0) + sumOf (folded . _2) subtrees
+           , e)
            subtrees
-  processedSet = 
-  pureTree :: Tree (a,Expression)
-  pureTree = runReader (unfoldTreeM f root) (mv,mp)
-  f :: a -> Reader (SearchTreeBuilderTemp a) ((a,Expression), [a])
-  f x = do
-    (mValues, mChildren) <- ask
-    return $ ((x, mValues HM.! x), fromMaybe [] $ HM.lookup x mChildren)
+  processedSet = HS.fromList processed
+  f :: a -> ((a,Expression), [a])
+  f x = ((x, mValues HM.! x), fromMaybe [] $ HM.lookup x mChildren)
   mv = HM.fromList $ map (\(i,_,v) -> (i,v)) assocs
   mp = HM.fromListWith (++)
      $ assocs >>= \(i,p,_) -> if i==p then [] else [(p, [i])]
