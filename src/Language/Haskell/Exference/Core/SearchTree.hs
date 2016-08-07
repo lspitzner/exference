@@ -48,17 +48,17 @@ buildSearchTree :: forall a
                 -> SearchTree
 buildSearchTree (assocs,processed) root = ff $ unfoldTree f root where
   ff t@(Node (x,e) ts)
-    | eval <- HS.member x processedSet
+    | eval <- processed x
     , subtrees <- map ff ts
     = Node ( 1 + sumOf (folded . _1) subtrees
            , (if eval then 1 else 0) + sumOf (folded . _2) subtrees
            , e)
            subtrees
-  processedSet = HS.fromList processed
+  processed = flip HS.member $ HS.fromList processed
   f :: a -> ((a,Expression), [a])
   f x = ((x, mValues HM.! x), fromMaybe [] $ HM.lookup x mChildren)
-  mv = HM.fromList $ map (\(i,_,v) -> (i,v)) assocs
-  mp = HM.fromListWith (++)
+  mValues = HM.fromList $ map (\(i,_,v) -> (i,v)) assocs
+  mChildren = HM.fromListWith (++)
      $ assocs >>= \(i,p,_) -> if i==p then [] else [(p, [i])]
 
 initialSearchTreeBuilder :: a -> Expression -> SearchTreeBuilder a
