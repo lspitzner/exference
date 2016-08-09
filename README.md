@@ -25,6 +25,8 @@ sometimes stopping with "i could not find any solutions".
 # Compiling from source
 
 ~~~~
+git clone git@github.com:lspitzner/exference.git
+cd exference
 stack build
 ~~~~
 
