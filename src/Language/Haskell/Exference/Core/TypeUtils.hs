@@ -66,7 +66,7 @@ getOrCreateQNameId name = do
       return i
 
 withQNameIndex :: Monad m => MultiRWST r w (QNameIndex ': ss) m a -> MultiRWST r w ss m a
-withQNameIndex = withMultiStateA emptyQNameIndex
+withQNameIndex = withMultiStateA $ QNameIndex 0 M.empty M.empty
 
 showQNameIndex :: MonadMultiState QNameIndex m => m [String]
 showQNameIndex = do
