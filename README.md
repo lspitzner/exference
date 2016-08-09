@@ -27,6 +27,21 @@ sometimes stopping with "i could not find any solutions".
 ~~~~
 git clone git@github.com:lspitzner/exference.git
 cd exference
+cabal sandbox init
+# note that ghc-7.10 does not work yet;
+# i recommend ghc-7.8.4 for now.
+cabal install --only-dependencies
+cabal configure
+cabal build
+# and, for example
+cabal run -- "(Show b) => (a->b) -> [a] -> [String]"
+~~~~
+
+Alternatively:
+
+~~~~
+git clone git@github.com:lspitzner/exference.git
+cd exference
 stack build
 ~~~~
 
