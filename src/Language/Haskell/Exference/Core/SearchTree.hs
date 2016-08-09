@@ -25,8 +25,7 @@ import Control.Monad.Reader
 import qualified Data.HashMap.Strict as HM
 import qualified Data.HashSet as HS
 import Data.Hashable ( Hashable )
-import Control.Lens
-import Control.Comonad.Cofree
+import Control.Lens hiding ( children )
 
 
 
@@ -47,11 +46,11 @@ buildSearchTree :: forall a
                 => SearchTreeBuilder a
                 -> a
                 -> SearchTree
-buildSearchTree (assocs,processed) root = ff $ coiter children root where
-  ff (x :< xs)
+buildSearchTree (assocs,processed) root = ff $ unfoldTree (\x -> (x, children x)) root where
+  ff (Node x xs)
     | subtrees <- map ff xs
-    = Node (                         1        + sumOf (folded . _1) subtrees
-           , if elemProcessed x then 1 else 0 + sumOf (folded . _2) subtrees
+    = Node (                         1        + sumOf (folded . to rootLabel . _1) subtrees
+           , if elemProcessed x then 1 else 0 + sumOf (folded . to rootLabel . _2) subtrees
            , values x)
            subtrees
   elemProcessed = flip HS.member $ HS.fromList processed

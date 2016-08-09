@@ -193,7 +193,7 @@ findExpressions (ExferenceInput rawType
   rootFindExpressionState = FindExpressionsState
     0
     0
-    empty
+    M.empty
 #if BUILD_SEARCH_TREE
     (initialSearchTreeBuilder initNodeName (ExpHole 0))
 #endif
@@ -203,7 +203,7 @@ findExpressions (ExferenceInput rawType
     (Seq.singleton (VarBinding 0 t, 0))
     []
     initialScopes
-    empty
+    IntMap.empty
     (V.fromList funcs) -- TODO: lift this further up?
     deconss'
     (mkQueryClassEnv sClassEnv [])

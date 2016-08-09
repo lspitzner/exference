@@ -5,8 +5,8 @@
 # http://docs.haskellstack.org/en/stable/yaml_configuration/
 
 # A warning or info to be displayed to the user on config load.
-user-message: ! 'Warning (added by new or init): Some packages were found to be incompatible
-  with the resolver and have been left commented out in the packages section.
+user-message: ! 'Warning (added by new or init): Specified resolver could not satisfy
+  all dependencies. Some external packages have been added as dependencies.
 
   You can suppress this message by removing it from stack.yaml
 
@@ -43,18 +43,19 @@ resolver: lts-5.18
 # A package marked 'extra-dep: true' will only be built if demanded by a
 # non-dependency (i.e. a user package), and its test suites and benchmarks
 # will not be run. This is useful for tweaking upstream packages.
-packages: []
-# The following packages have been ignored due to incompatibility with the
-# resolver compiler, dependency conflicts with other packages
-# or unsatisfied dependencies.
-#- .
-
+packages:
+- '.'
 # Dependency packages to be pulled from upstream that are not in the resolver
 # (e.g., acme-missiles-0.3)
-extra-deps: []
+extra-deps:
+- FPretty-1.1
+- hood-0.3
+- multistate-0.7.1.1
 
 # Override default flag values for local packages and extra-deps
-flags: {}
+flags:
+  exference:
+    build-executables: false
 
 # Extra package databases containing global packages
 extra-package-dbs: []
