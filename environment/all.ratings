@@ -1,112 +1,112 @@
-Data.Functor.fmap         = -2.1
-Control.Applicative.pure  = 1.0
-Control.Applicative.(<*>) = 0.3
-Text.Show.show            = 3.0
-Data.Eq.(==)              = 4.0
-Prelude.fromInteger       = 16.0
-Prelude.toRational        = 16.0
-Prelude.toInteger         = 16.0
-Prelude.fromRational      = 16.0
-Prelude.truncate          = 16.0
-Prelude.round             = 16.0
-Prelude.ceiling           = 16.0
-Prelude.floor             = 16.0
-Data.Either.Left          = 10.0
-Data.Either.Right         = 999.0
-Data.Maybe.Just           = 999.0
-Data.Maybe.Nothing        = 6.0
-()                        = 9.9
-(:)                       = 5.0
+Data.Functor.fmap         -2.1
+Control.Applicative.pure  1.0
+Control.Applicative.(<*>) 0.3
+Text.Show.show            3.0
+Data.Eq.(==)              4.0
+Prelude.fromInteger       16.0
+Prelude.toRational        16.0
+Prelude.toInteger         16.0
+Prelude.fromRational      16.0
+Prelude.truncate          16.0
+Prelude.round             16.0
+Prelude.ceiling           16.0
+Prelude.floor             16.0
+Data.Either.Left          10.0
+Data.Either.Right         999.0
+Data.Maybe.Just           999.0
+Data.Maybe.Nothing        6.0
+()                        9.9
+(:)                       5.0
 
-Prelude.minBound          = 16.0
-Prelude.maxBound          = 16.0
-Prelude.toEnum            = 50.0
-Data.Bool.(&&)            = 12.0
-Data.Bool.(||)            = 12.0
-Prelude.enumFrom          = 15.0
-Prelude.fromEnum          = 15.0
-Prelude.enumFromTo        = 15.0
-Prelude.enumFromThen      = 15.0
-Prelude.enumFromToThenTo  = 10.0
-Data.Foldable.asum        = 8.0
-Control.Monad.msum        = 15.0
-Text.Show.showsPrec       = 30.0
-Data.Ord.(<)              = 20.0
-Data.Ord.(<=)             = 20.0
-Data.Ord.(>)              = 20.0
-Data.Ord.(>=)             = 20.0
-(,)                       = 5.0
-(,,)                      = 5.0
-(,,,)                     = 4.0
-(,,,,)                    = 3.0
-(,,,,,)                   = 2.0
+Prelude.minBound          16.0
+Prelude.maxBound          16.0
+Prelude.toEnum            50.0
+Data.Bool.(&&)            12.0
+Data.Bool.(||)            12.0
+Prelude.enumFrom          15.0
+Prelude.fromEnum          15.0
+Prelude.enumFromTo        15.0
+Prelude.enumFromThen      15.0
+Prelude.enumFromToThenTo  10.0
+Data.Foldable.asum        8.0
+Control.Monad.msum        15.0
+Text.Show.showsPrec       30.0
+Data.Ord.(<)              20.0
+Data.Ord.(<=)             20.0
+Data.Ord.(>)              20.0
+Data.Ord.(>=)             20.0
+(,)                       5.0
+(,,)                      5.0
+(,,,)                     4.0
+(,,,,)                    3.0
+(,,,,,)                   2.0
 
-Control.Monad.mfilter     = 3.0
-Prelude.realToFrac        = 20.0
-Prelude.fromIntegral      = 20.0
+Control.Monad.mfilter     3.0
+Prelude.realToFrac        20.0
+Prelude.fromIntegral      20.0
 
-Data.Maybe.maybe          =  6.0
-Data.Maybe.fromMaybe      =  6.0
-Data.Maybe.catMaybes      =  6.0
-Data.Maybe.mapMaybe       =  6.0
-Data.Maybe.maybeToList    =  6.0
-Data.Map.lookup           = -2.0
+Data.Maybe.maybe           6.0
+Data.Maybe.fromMaybe       6.0
+Data.Maybe.catMaybes       6.0
+Data.Maybe.mapMaybe        6.0
+Data.Maybe.maybeToList     6.0
+Data.Map.lookup           -2.0
 
-Control.Monad.(>>=)       = -4.0
-Control.Monad.(>>)        = 10.0
+Control.Monad.(>>=)       -4.0
+Control.Monad.(>>)        10.0
 
-Data.Monoid.mempty        = 20.0
-Data.Monoid.mappend       = 5.0
-Data.Monoid.mconcat       = 5.0
+Data.Monoid.mempty        20.0
+Data.Monoid.mappend       5.0
+Data.Monoid.mconcat       5.0
 
-Control.Applicative.(<|>)     = 20.0
+Control.Applicative.(<|>)     20.0
 
-Control.Monad.Trans.Cont.Cont = 5.0
+Control.Monad.Trans.Cont.Cont 5.0
 
-Data.Traversable.traverse     = -2.0
-Data.Traversable.sequenceA    = -2.0
+Data.Traversable.traverse     -2.0
+Data.Traversable.sequenceA    -2.0
 
-Data.Foldable.fold            = 7.5
-Data.Foldable.foldMap         = 7.5
-Data.Foldable.foldr           = 7.5
-Data.Foldable.foldl           = 7.5
+Data.Foldable.fold            7.5
+Data.Foldable.foldMap         7.5
+Data.Foldable.foldr           7.5
+Data.Foldable.foldl           7.5
 
 
-Control.Monad.Trans.Either.runEitherT = -3.5
-Control.Monad.State.State = 3.0
-Control.Monad.State.get          = 10.0
-Control.Monad.State.put          = 10.0
-Control.Monad.State.state        = 10.0
-Control.Monad.join               = 0.0
+Control.Monad.Trans.Either.runEitherT -3.5
+Control.Monad.State.State 3.0
+Control.Monad.State.get          10.0
+Control.Monad.State.put          10.0
+Control.Monad.State.state        10.0
+Control.Monad.join               0.0
 
-Data.Void.vacuous = 50.0
-Data.Void.absurd  = 12.0
+Data.Void.vacuous 50.0
+Data.Void.absurd  12.0
 
-Data.Bool.bool = 20.0
+Data.Bool.bool 20.0
 
-Text.Read.readMaybe        = 10.0
-Text.Read.readEither       = 10.0
-Data.Typeable.cast         = 20.0
-Data.Complex.imagPart      = 10.0
-Data.Complex.realPart      = 10.0
-Data.Typeable.typeOf       = 4.0
-Control.Arrow.zeroArrow    = 20.0
-Control.Category.id        = 20.0
-Data.Data.dataTypeOf       = 10.0
-Data.Data.toConstr         = 5.0
-Data.Data.dataTypeConstrs  = 5.0
-Data.Ord.compare           = 4.0
-Data.Char.ord              = 3.0
-Data.Char.chr              = 3.0
+Text.Read.readMaybe        10.0
+Text.Read.readEither       10.0
+Data.Typeable.cast         20.0
+Data.Complex.imagPart      10.0
+Data.Complex.realPart      10.0
+Data.Typeable.typeOf       4.0
+Control.Arrow.zeroArrow    20.0
+Control.Category.id        20.0
+Data.Data.dataTypeOf       10.0
+Data.Data.toConstr         5.0
+Data.Data.dataTypeConstrs  5.0
+Data.Ord.compare           4.0
+Data.Char.ord              3.0
+Data.Char.chr              3.0
 
-Data.Data.gmapQi           = 3.0
+Data.Data.gmapQi           3.0
 
-Control.Comonad.extract    = 9.0
+Control.Comonad.extract    9.0
 
-Data.Text.pack             = 6.0
-Data.Text.unpack           = 6.0
+Data.Text.pack             6.0
+Data.Text.unpack           6.0
 
-Data.Proxy.Proxy           = 7.0
+Data.Proxy.Proxy           7.0
 
-Data.Bool.True             = 3.0
-Data.Bool.False            = 3.0
+Data.Bool.True             3.0
+Data.Bool.False            3.0
