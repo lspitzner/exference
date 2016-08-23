@@ -193,7 +193,7 @@ getClassMethods tcs ds tDeclMap modules = fmap join $ sequence $ do
       Nothing -> return [Left $ "unknown type class: "++show name]
       Just cls -> do
         let cnstrA = HsConstraint cls <$> mapM ((TypeVar <$>) . tyVarTransform) vars
-        --     action :: ( MonadMultiState ConvData m ) => m [Either String [HsFunctionDecl]]        
+        --     action :: ( MonadMultiState ConvData m ) => m [Either String [HsFunctionDecl]]
         rEithers <- withMultiStateA (ConvData 0 M.empty) $ do
           cnstrE <- runEitherT cnstrA
           case cnstrE of

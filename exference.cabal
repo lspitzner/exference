@@ -134,6 +134,7 @@ Library
     bifunctors,
     safe,
     lens >= 4.12 && < 4.15,
+    split,
     multistate >= 0.6.2
 
 

@@ -9,7 +9,6 @@ module Language.Haskell.Exference.EnvironmentParser
   , environmentFromPath
   , haskellSrcExtsParseMode
   , compileWithDict
-  , ratingsFromFile
   )
 where
 
@@ -34,7 +33,7 @@ import Control.DeepSeq
 import System.Process
 
 import Control.Applicative ( (<$>), (<*>), (<*) )
-import Control.Arrow ( first, second, (***) )
+import Control.Arrow ( (***) )
 import Control.Monad ( when, forM_, guard, forM, mplus, mzero )
 import Data.List ( sortBy, find, isSuffixOf )
 import Data.Ord ( comparing )
@@ -43,6 +42,8 @@ import Data.Maybe ( listToMaybe, fromMaybe, maybeToList, catMaybes )
 import Data.Either ( lefts, rights )
 import Control.Monad.Writer.Strict
 import System.Directory ( getDirectoryContents )
+import Control.Exception ( try, SomeException )
+import Data.Bifunctor ( first, second )
 
 import Language.Haskell.Exts.Syntax ( Module(..), Decl(..), ModuleName(..) )
 import Language.Haskell.Exts.Parser ( parseModuleWithMode
@@ -54,8 +55,7 @@ import Language.Haskell.Exts.Extension ( Language (..)
                                        , Extension (..)
                                        , KnownExtension (..) )
 
-import Text.ParserCombinators.Parsec
-import Text.ParserCombinators.Parsec.Char
+import Data.List.Split ( chunksOf )
 import Control.Monad.Trans.MultiRWS
 import Data.HList.ContainsType
 
@@ -113,7 +113,7 @@ builtInDeconstructorsM = mapM helper ds
 -- | Takes a list of bindings, and a dictionary of desired
 -- functions and their rating, and compiles a list of
 -- RatedFunctionBindings.
--- 
+--
 -- If a function in the dictionary is not in the list of bindings,
 -- Left is returned with the corresponding name.
 --
@@ -213,7 +213,7 @@ parseModules l = do
                   -> [QualifiedName]
                   -> TypeDeclMap
                   -> Module
-                  -> m ([HsFunctionDecl], [DeconstructorBinding]) 
+                  -> m ([HsFunctionDecl], [DeconstructorBinding])
     hExtractBinds cntxt ds tDeclMap modul@(Module _ (ModuleName _mname) _ _ _ _ _) = do
       -- tell $ return $ mname
       eFromData <- getDataConss (sClassEnv_tclasses cntxt) ds tDeclMap [modul]
@@ -248,29 +248,10 @@ parseModulesSimple s = helper
   helper (decls, deconss, cntxt, ds, tdm) = (addRating <$> decls, deconss, cntxt, ds, tdm)
 
 ratingsFromFile :: String -> IO (Either String [(QualifiedName, Float)])
-ratingsFromFile s = do
-  content <- readFile s
-  let
-    parser =
-      (many $ try $ do
-        spaces
-        name <- many1 (noneOf " ")
-        _ <- space
-        spaces
-        _ <- char '='
-        spaces
-        minus <- optionMaybe $ char '-'
-        a <- many1 digit
-        b <- char '.'
-        c <- many1 digit
-        let qname = parseQualifiedName name
-        case minus of
-          Nothing -> return (qname, read $ a++b:c)
-          Just _  -> return (qname, read $ '-':a++b:c))
-      <* spaces
-  return $ case runParser parser () "" content of
-    Left e -> Left $ show e
-    Right x -> Right x
+ratingsFromFile = (fmap . first) show . (try :: IO a -> IO (Either SomeException a))
+  . fmap (map (\[name, float] -> (parseQualifiedName name, read float)) . chunksOf 2 . words)
+  . readFile
+
 
 -- TODO: add warnings for ratings not applied
 environmentFromModuleAndRatings :: ( ContainsType [String] w

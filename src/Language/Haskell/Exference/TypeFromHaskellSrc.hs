@@ -28,15 +28,17 @@ import qualified Language.Haskell.Exference.Core.Types as T
 import qualified Language.Haskell.Exference.Core.TypeUtils as TU
 import qualified Data.Map as M
 
-import Control.Applicative ( (<$>), (<*>), Applicative )
+import Control.Applicative ( (<$>), (<*>), Applicative, liftA2 )
 import Data.Maybe ( fromMaybe )
 import Data.List ( find )
+import Control.Arrow ( (&&&) )
 
 import Control.Monad.State.Strict
 import Control.Monad.Trans.Maybe
 import Control.Monad.Identity
 import Control.Monad.Trans.Either
 
+import Data.List.Split ( wordsBy )
 import Control.Monad.Trans.MultiRWS
 import Control.Monad.Trans.MultiState ( MonadMultiState(..) )
 import Data.HList.ContainsType
@@ -170,18 +172,8 @@ convertModuleName (ModuleName n) (Symbol s) = parseQualifiedName
                                             $ "(" ++ n ++ "." ++ s ++ ")"
 
 parseQualifiedName :: String -> T.QualifiedName
-parseQualifiedName s = case s of
-  ""                                 -> T.QualifiedName [] ""
-  [_]                                -> helper s                 [] False
-  _ | head s == '(' && last s == ')' -> helper (tail $ init $ s) [] True
-    | otherwise                      -> helper s                 [] False
- where
-  helper :: String -> [String] -> Bool -> T.QualifiedName
-  helper n ns isOperator = case span (/='.') n of
-    (final, []) -> T.QualifiedName (reverse ns) $ if isOperator
-                     then "(" ++ final ++ ")"
-                     else final
-    (part, _:rest) -> helper rest (part:ns) isOperator
+parseQualifiedName s = let (prebracket, operator) = span (/='(') s
+  in liftA2 T.QualifiedName init last $ wordsBy (=='.') prebracket ++ words operator
 
 convertConstraint :: ( MonadMultiState T.QNameIndex m
                      , MonadMultiState ConvData m
@@ -270,4 +262,3 @@ findInvalidNames valids (T.TypeApp t1 t2)     =
   (++) <$> findInvalidNames valids t1 <*> findInvalidNames valids t2
 findInvalidNames valids (T.TypeForall _ _ t1) =
   findInvalidNames valids t1
-
