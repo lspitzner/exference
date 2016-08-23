@@ -37,6 +37,14 @@ cabal build
 cabal run -- "(Show b) => (a->b) -> [a] -> [String]"
 ~~~~
 
+Alternatively:
+
+~~~~
+git clone git@github.com:lspitzner/exference.git
+cd exference
+stack build
+~~~~
+
 # Usage notes
 
 There are certain types of queries where *Exference* will not be able to find

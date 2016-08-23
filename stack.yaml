@@ -1,0 +1,11 @@
+resolver: lts-5.18
+packages:
+- '.'
+extra-deps:
+- FPretty-1.1
+- hood-0.3
+- multistate-0.7.1.1
+flags:
+  exference:
+    build-executables: false
+extra-package-dbs: []

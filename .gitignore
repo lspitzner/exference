@@ -10,4 +10,4 @@ cabal.sandbox.config
 **/*.gui~
 \#*.gui\#
 Main
-
+.stack-work
