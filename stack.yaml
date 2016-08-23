@@ -5,7 +5,8 @@ extra-deps:
 - FPretty-1.1
 - hood-0.3
 - multistate-0.7.1.1
+- data-pprint-0.2.4.1
 flags:
   exference:
-    build-executables: false
+    build-executables: true
 extra-package-dbs: []
