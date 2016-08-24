@@ -16,8 +16,8 @@ import Language.Haskell.Exference.Core.Expression
 
 
 
-type HsFunctionDecl = (QNameId, HsType)
-type RatedHsFunctionDecl = (QNameId, Float, HsType)
+type HsFunctionDecl = (QualifiedName, HsType)
+type RatedHsFunctionDecl = (QualifiedName, Float, HsType)
                             -- name, rating, type
 
 declToBinding :: RatedHsFunctionDecl -> FunctionBinding

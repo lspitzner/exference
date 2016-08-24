@@ -274,17 +274,14 @@ exampleInput =
   , (,,,) "liftA2"     False False "Applicative f => (a -> b -> c) -> f a -> f b -> f c"
   ]
 
-filterBindings :: (MonadMultiState QNameIndex m, Functor m)
-               => (QualifiedName -> Bool)
+filterBindings :: (QualifiedName -> Bool)
                -> [FunctionBinding]
-               -> m [FunctionBinding]
-filterBindings p = filterM $ \(_, qnid, _, _, _) ->
-  maybe False p <$> lookupQNameId qnid
+               -> [FunctionBinding]
+filterBindings p = filter $ \(_, qn, _, _, _) -> p qn
 
-filterBindingsSimple :: (MonadMultiState QNameIndex m, Functor m)
-                     => [String]
+filterBindingsSimple :: [String]
                      -> [FunctionBinding]
-                     -> m [FunctionBinding]
+                     -> [FunctionBinding]
 filterBindingsSimple es = filterBindings $ \n -> case n of
   QualifiedName _ name -> name `notElem` es
   _                    -> True
@@ -292,7 +289,6 @@ filterBindingsSimple es = filterBindings $ \n -> case n of
 checkInput :: ( m ~ MultiRWST r w s m0
               , Monad m0
               , Functor m0
-              , ContainsType QNameIndex s
               , ContainsType TypeDeclMap r
               )
            => ExferenceHeuristicsConfig
@@ -305,8 +301,7 @@ checkInput :: ( m ~ MultiRWST r w s m0
 checkInput heuristics (bindings, deconss, sEnv) typeStr allowUnused patternM hidden = do
   tDeclMap <- mAsk
   ty <- unsafeReadType (sClassEnv_tclasses sEnv) exampleDataTypes tDeclMap typeStr
-  filteredBindings <- filterBindingsSimple ("fix":"forever":"iterateM_":hidden) bindings
-  qNameIndex <- mGet
+  let filteredBindings = filterBindingsSimple ("fix":"forever":"iterateM_":hidden) bindings
   return $ ExferenceInput
     ty
     filteredBindings
@@ -316,7 +311,6 @@ checkInput heuristics (bindings, deconss, sEnv) typeStr allowUnused patternM hid
     False
     8192
     patternM
-    qNameIndex
     20000
     (Just 8192)
     heuristics
@@ -333,7 +327,6 @@ checkExpectedResults :: forall m m0 r w s
                       . ( m ~ MultiRWST r w s m0
                         , Monad m0
                         , Functor m0
-                        , ContainsType QNameIndex s
                         , ContainsType TypeDeclMap r
                         )
                      => ExferenceHeuristicsConfig
@@ -354,8 +347,7 @@ checkExpectedResults heuristics env = mapMultiRWST (return . runIdentity)
                  -> MaybeT (MultiRWST r w s Identity) ExferenceStats
           getExp (e, _, s) =
             [ s
-            | eStr <- lift $ showExpression $ simplifyExpression e
-            , eStr `elem` expected
+            | showExpression (simplifyExpression e) `elem` expected
             ]
     , let xs = findExpressions input
     , r <- runMaybeT
@@ -461,16 +453,14 @@ checkResults heuristics (bindings, sEnv) = do
 exampleOutput :: ( m ~ MultiRWST r w s m0
                  , Monad m0
                  , Functor m0
-                 , ContainsType QNameIndex s
                  )
               => ExferenceHeuristicsConfig
               -> EnvDictionary
               -> m [[(Expression, [HsConstraint], ExferenceStats)]]
 exampleOutput heuristics (bindings, deconss, sEnv) =
   exampleInput `forM` \(_, allowUnused, patternM, s) -> do
-    ty <- unsafeReadType (sClassEnv_tclasses sEnv) exampleDataTypes (IntMap.empty) s
-    filteredBindings <- filterBindingsSimple ["join", "liftA2"] bindings
-    qNameIndex <- mGet
+    ty <- unsafeReadType (sClassEnv_tclasses sEnv) exampleDataTypes (M.empty) s
+    let filteredBindings = filterBindingsSimple ["join", "liftA2"] bindings
     return $ takeFindSortNExpressions 10 10 $ ExferenceInput
                 ty
                 filteredBindings
@@ -480,7 +470,6 @@ exampleOutput heuristics (bindings, deconss, sEnv) =
                 False
                 8192
                 patternM
-                qNameIndex
                 32768
                 (Just 32768)
                 heuristics
@@ -488,7 +477,6 @@ exampleOutput heuristics (bindings, deconss, sEnv) =
 exampleInOut :: ( m ~ MultiRWST r w s m0
                 , Monad m0
                 , Functor m0
-                , ContainsType QNameIndex s
                 )
              => ExferenceHeuristicsConfig
              -> EnvDictionary
@@ -498,8 +486,7 @@ exampleInOut :: ( m ~ MultiRWST r w s m0
 exampleInOut h env =
   zip exampleInput <$> exampleOutput h env
 
-printAndStuff :: ContainsType QNameIndex s
-              => ExferenceHeuristicsConfig
+printAndStuff :: ExferenceHeuristicsConfig
               -> EnvDictionary
               -> MultiRWST r w s IO ()
 printAndStuff h env = exampleInOut h env >>= mapM_ f
@@ -508,7 +495,6 @@ printAndStuff h env = exampleInOut h env >>= mapM_ f
     f ((name, _, _, _), results) = mapM_ g results
       where
         g (expr, _, ExferenceStats n d m) = do
-          str <- showExpression expr
           {-
           if doPf then do
             pf <- pointfree $ str
@@ -517,7 +503,7 @@ printAndStuff h env = exampleInOut h env >>= mapM_ f
                        ++ " (depth " ++ show d ++ ", " ++ show n ++ " steps)"
            else
           -}
-          lift $ putStrLn $ name ++ " = " ++ str
+          lift $ putStrLn $ name ++ " = " ++ showExpression expr
                             ++ " (depth "
                             ++ show d
                             ++ ", "
@@ -526,8 +512,7 @@ printAndStuff h env = exampleInOut h env >>= mapM_ f
                             ++ show m
                             ++ " max pqueue size)"
 
-printStatistics :: ContainsType QNameIndex s
-                => ExferenceHeuristicsConfig
+printStatistics :: ExferenceHeuristicsConfig
                 -> EnvDictionary
                 -> MultiRWST r w s IO ()
 printStatistics h env = exampleInOut h env >>= mapM_ f
@@ -548,15 +533,13 @@ printStatistics h env = exampleInOut h env >>= mapM_ f
          )
 
 printCheckExpectedResults :: forall r w s
-                           . ( ContainsType QNameIndex s
-                             , ContainsType TypeDeclMap r
+                           . ( ContainsType TypeDeclMap r
                              )
                           => ExferenceHeuristicsConfig
                           -> EnvDictionary
                           -> MultiRWST r w s IO ()
 printCheckExpectedResults h env = do
     xs <- checkExpectedResults h env
-    qNameIndex <- mGet
     case () of { () -> do
     stats <- mapM helper xs
     lift $ putStrLn $ "total:     " ++ show (length stats)
@@ -590,7 +573,7 @@ printCheckExpectedResults h env = do
       return (Nothing, Nothing)
     helper (name, e, Just ((first,stats), Nothing)) = do
       lift $ putStrLn $ printf "%-12s: expected solution not found!" name
-      let firstStr = showExpressionPure qNameIndex first
+      let firstStr = showExpression first
       lift $ putStrLn $ "  first solution:       " ++ firstStr
       lift $ putStrLn $ "  first solution stats: " ++ show stats
       lift $ putStrLn $ "  expected solutions:   " ++ intercalate
@@ -602,27 +585,25 @@ printCheckExpectedResults h env = do
       return (Just stats, Just stats)
     helper (name, e, Just ((first, fstats), Just (n, stats))) = do
       lift $ putStrLn $ printf "%-12s: expected solution not first, but %d!" name n
-      lift $ putStrLn $ "  first solution:     " ++ showExpressionPure qNameIndex first
+      lift $ putStrLn $ "  first solution:     " ++ showExpression first
       lift $ putStrLn $ "  expected solutions:   " ++ intercalate
                       "\n                     or " e
       lift $ putStrLn $ "  first solution stats:    " ++ show fstats
       lift $ putStrLn $ "  expected solution stats: " ++ show stats
-      lift $ putStrLn $ "  " ++ show (showExpressionPure qNameIndex first)
+      lift $ putStrLn $ "  " ++ show (showExpression first)
       return (Just fstats, Just stats)
     g :: ExferenceStats -> (Int,Float) -> (Int,Float)
     g (ExferenceStats a b _) (d,e) = (a+d,b+e)
   }
 
-printMaxUsage :: ( ContainsType QNameIndex s )
-              => ExferenceHeuristicsConfig
+printMaxUsage :: ExferenceHeuristicsConfig
               -> EnvDictionary
               -> MultiRWST r w s IO ()
 printMaxUsage h (bindings, deconss, sEnv) = sequence_ $ do
   (name, allowUnused, patternM, typeStr, _expected, hidden) <- checkData
   return $ do
-    ty <- unsafeReadType (sClassEnv_tclasses sEnv) exampleDataTypes (IntMap.empty) typeStr
-    filteredBindings <- filterBindingsSimple hidden bindings
-    qNameIndex <- mGet
+    ty <- unsafeReadType (sClassEnv_tclasses sEnv) exampleDataTypes (M.empty) typeStr
+    let filteredBindings = filterBindingsSimple hidden bindings
     let input = ExferenceInput
                   ty
                   filteredBindings
@@ -632,7 +613,6 @@ printMaxUsage h (bindings, deconss, sEnv) = sequence_ $ do
                   False
                   8192
                   patternM
-                  qNameIndex
                   16384
                   (Just 16384)
                   h
@@ -648,9 +628,8 @@ printSearchTree :: ( ContainsType QNameIndex s )
 printSearchTree h (bindings, deconss, sEnv) = sequence_ $ do
   (name, allowUnused, patternM, typeStr, _expected, hidden) <- checkData
   return $ do
-    ty <- unsafeReadType (sClassEnv_tclasses sEnv) exampleDataTypes (IntMap.empty) typeStr
+    ty <- unsafeReadType (sClassEnv_tclasses sEnv) exampleDataTypes (M.empty) typeStr
     filteredBindings <- filterBindingsSimple hidden bindings
-    qNameIndex <- mGet
     let input = ExferenceInput
                   ty
                   filteredBindings
@@ -660,7 +639,6 @@ printSearchTree h (bindings, deconss, sEnv) = sequence_ $ do
                   False
                   8192
                   patternM
-                  qNameIndex
                   256
                   (Just 256)
                   h

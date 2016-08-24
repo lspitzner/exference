@@ -59,7 +59,7 @@ simplifyId :: Expression -> Expression
 simplifyId e@ExpVar{}                 = e
 simplifyId e@ExpName{}                = e
 simplifyId e@(ExpLambda i _ (ExpVar j _))
-  | i == j                            = ExpName specialQName_id
+  | i == j                            = ExpName (QualifiedName [] "id")
   | otherwise                         = e
 simplifyId (ExpLambda i ty e)         = ExpLambda i ty $ simplifyId e
 simplifyId (ExpApply e1 e2)           = ExpApply (simplifyId e1) (simplifyId e2)
@@ -104,7 +104,7 @@ simplifyCompose' i ty [] e@ExpVar{} = ExpLambda i ty e
 simplifyCompose' i ty l e@(ExpVar j _)
   | i == j    = foldl1 (\e1 e2 -> ExpApply
                                     (ExpApply
-                                      (ExpName specialQName_compose) e2) e1)
+                                      (ExpName (QualifiedName [] "(.)")) e2) e1)
                        l
   | otherwise = ExpLambda i ty $ foldl (flip ExpApply) e l
 simplifyCompose' i ty l (ExpApply e1 e2)

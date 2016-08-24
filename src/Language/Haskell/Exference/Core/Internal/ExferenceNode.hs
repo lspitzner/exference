@@ -30,7 +30,6 @@ module Language.Haskell.Exference.Core.Internal.ExferenceNode
   , initialScopes
   , addGoalProvided -- unused atm
   , showSearchNode
-  , showSearchNode'
   -- SearchNode lenses
   , HasGoals (..)
   , HasConstraintGoals (..)
@@ -265,15 +264,7 @@ instance NFData SearchNode   where rnf = genericRnf
 --       tVarPType (i, t, ps, [], []) = tVarType (i, foldr TypeArrow t ps)
 --       tVarPType (i, t, ps, fs, cs) = tVarType (i, TypeForall fs cs (foldr TypeArrow t ps))
 
-showSearchNode' :: QNameIndex -> SearchNode -> String
-showSearchNode' ind sn = runIdentity
-                       $ runMultiRWSTNil
-                       $ withMultiStateA ind
-                       $ showSearchNode sn
-
-showSearchNode :: ( ContainsType QNameIndex s, Monad m, Functor m )
-               => SearchNode
-               -> MultiRWST r w s m String
+showSearchNode :: SearchNode -> String
 showSearchNode
   (SearchNode sgoals
               scgoals
@@ -292,11 +283,9 @@ showSearchNode
 #endif
               reason
               _lastStepBinding
-              )
-    = do
-  exprStr <- showExpression sexpression
-  return
-    $ show
+              ) =
+  let exprStr = showExpression sexpression
+  in show
     $ text "SearchNode" <+> (
           (text   "goals      ="
            <+> brackets (vcat $ punctuate (text ", ") $ map tgoal $ toList sgoals)
@@ -331,10 +320,7 @@ showSearchNode
   tVarPType (i, t, ps, [], []) = tVarType $ VarBinding i (foldr TypeArrow t ps)
   tVarPType (i, t, ps, fs, cs) = tVarType $ VarBinding i (TypeForall fs cs (foldr TypeArrow t ps))
 
-showNodeDevelopment :: forall m
-                    . MonadMultiState QNameIndex m
-                    => SearchNode
-                    -> m String
+showNodeDevelopment :: SearchNode -> String
 #if LINK_NODES
 showNodeDevelopment s = case previousNode s of
   Nothing -> showSearchNode s
@@ -343,7 +329,7 @@ showNodeDevelopment s = case previousNode s of
     cStr <- showSearchNode s
     return $ pStr ++ "\n" ++ cStr
 #else
-showNodeDevelopment _ = return "[showNodeDevelopment: exference-core was not compiled with -fLinkNodes]"
+showNodeDevelopment _ = "[showNodeDevelopment: exference-core was not compiled with -fLinkNodes]"
 #endif
 
 -- instance Observable SearchNode where

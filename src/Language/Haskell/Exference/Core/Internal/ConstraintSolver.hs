@@ -53,10 +53,10 @@ checkPossibleGeneric containsVarsResult otherwiseResult qClassEnv = fmap concat 
   possibleFromInstance :: HsConstraint -> Maybe [HsConstraint]
   possibleFromInstance c = asum $ f <$> is where
     (HsConstraint cclass cparams) = c
-    is = IntMap.findWithDefault []
-                                (tclass_name cclass)
-                                ( sClassEnv_instances
-                                  $ qClassEnv_env qClassEnv )
+    is = M.findWithDefault []
+                           (tclass_name cclass)
+                           ( sClassEnv_instances
+                             $ qClassEnv_env qClassEnv )
     f (HsInstance instConstrs _iclass instParams) = do
       substs <- unifyRightEqs $ zipWith TypeEq cparams instParams
       checkPossibleGeneric containsVarsResult otherwiseResult

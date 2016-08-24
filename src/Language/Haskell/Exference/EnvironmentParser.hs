@@ -65,21 +65,15 @@ import qualified Data.Map as M
 import qualified Data.IntMap as IntMap
 
 
-builtInDeclsM :: ( ContainsType QNameIndex s
-                 , Monad m
-                 )
-              => MultiRWST r w s m [HsFunctionDecl]
+builtInDeclsM :: (Monad m) => MultiRWST r w s m [HsFunctionDecl]
 builtInDeclsM = do
-  cons <- getOrCreateQNameId Cons
-  listCon <- getOrCreateQNameId ListCon
-  let consType = (cons, TypeArrow
+  let consType = (Cons, TypeArrow
             (TypeVar 0)
-            (TypeArrow (TypeApp (TypeCons listCon)
+            (TypeArrow (TypeApp (TypeCons ListCon)
                                 (TypeVar 0))
-                       (TypeApp (TypeCons listCon)
+                       (TypeApp (TypeCons ListCon)
                                 (TypeVar 0))))
-  tupleConss <- mapM (\(a,b) -> [(x,y) | x <- getOrCreateQNameId a
-                                       , y <- unsafeReadType0 b])
+  tupleConss <- mapM (\(a,b) -> [(a,y) | y <- unsafeReadType0 b])
     [ (,) (TupleCon 0) "Unit"
     , (,) (TupleCon 2) "a -> b -> (a, b)"
     , (,) (TupleCon 3) "a -> b -> c -> (a, b, c)"
@@ -90,17 +84,11 @@ builtInDeclsM = do
     ]
   return $ consType : tupleConss
 
-builtInDeconstructorsM :: ( ContainsType QNameIndex s
-                          , Monad m
-                          )
-                       => MultiRWST r w s m [DeconstructorBinding]
+builtInDeconstructorsM :: (Monad m) => MultiRWST r w s m [DeconstructorBinding]
 builtInDeconstructorsM = mapM helper ds
  where
-  helper (t, xs) = [ (x,y,False)
+  helper (t, xs) = [ (x,xs,False)
                    | x <- unsafeReadType0 t
-                   , y <- xs `forM` \(a,b) -> [ (v,b)
-                                              | v <- getOrCreateQNameId a
-                                              ]
                    ]
   ds = [ (,) "(a, b)" [(TupleCon 2, [TypeVar 0, TypeVar 1])]
        , (,) "(a, b, c)" [(TupleCon 3, [TypeVar 0, TypeVar 1, TypeVar 2])]
@@ -118,15 +106,12 @@ builtInDeconstructorsM = mapM helper ds
 -- Left is returned with the corresponding name.
 --
 -- Otherwise, the result is Right.
-compileWithDict :: ( MonadMultiState QNameIndex m )
-                => [(QualifiedName, Float)]
+compileWithDict :: [(QualifiedName, Float)]
                 -> [HsFunctionDecl]
-                -> m (Either String [RatedHsFunctionDecl])
+                -> Either String [RatedHsFunctionDecl]
                 -- function_not_found or all bindings
-compileWithDict ratings binds = do
-  rat <- ratings `forM` \(qname, r) -> [ (qnid, r)
-                                       | qnid <- getOrCreateQNameId qname]
-  return $ rat `forM` \(name, rating) ->
+compileWithDict ratings binds =
+  ratings `forM` \(name, rating) ->
     case find ((name==).fst) binds of
       Nothing    -> Left $ show name
       Just (_,t) -> Right (name, rating, t)
@@ -139,7 +124,6 @@ compileWithDict ratings binds = do
 parseModules :: forall m r w s
               . ( m ~ MultiRWST r w s IO
                 , ContainsType [String] w
-                , ContainsType QNameIndex s
                 )
              => [(ParseMode, String)]
              -> m
@@ -166,19 +150,19 @@ parseModules l = do
   let ds = getDataTypes mods
   typeDeclsE <- getTypeDecls ds mods
   lefts typeDeclsE `forM_` (mTell . (:[]))
-  let typeDecls = IntMap.fromList $ (\x -> (tdecl_name x, x)) <$> rights typeDeclsE
+  let typeDecls = M.fromList $ (\x -> (tdecl_name x, x)) <$> rights typeDeclsE
   (cntxt@(StaticClassEnv clss insts), n_insts) <- getClassEnv ds typeDecls mods
   -- TODO: try to exfere this stuff
   (decls, deconss) <- do
     stuff <- mapM (hExtractBinds cntxt ds typeDecls) mods
     return $ concat *** concat $ unzip stuff
-  clssNames <- catMaybes <$> mapM (lookupQNameId . tclass_name) clss
+  let clssNames = fmap tclass_name clss
   let allValidNames = ds ++ clssNames
   let
     dataToBeChecked :: [(String, HsType)]
     dataToBeChecked =
          [ ("the instance data for " ++ show i, t)
-         | insts' <- IntMap.elems insts
+         | insts' <- M.elems insts
          , i@(HsInstance _ _ ts) <- insts'
          , t <- ts]
       ++ [ ("the binding " ++ show n, t)
@@ -186,13 +170,12 @@ parseModules l = do
   let
     check :: String -> HsType -> m ()
     check s t = do
-      names <- findInvalidNames allValidNames t
-      names `forM_` \n ->
+      findInvalidNames allValidNames t `forM_` \n ->
         mTell ["unknown binding '"++show n++"' used in " ++ s]
   dataToBeChecked `forM_` uncurry check
   mTell ["got " ++ show (length clss) ++ " classes"]
   mTell ["and " ++ show (n_insts) ++ " instances"]
-  mTell ["(-> " ++ show (length $ concat $ IntMap.elems $ insts) ++ " instances after inflation)"]
+  mTell ["(-> " ++ show (length $ concat $ M.elems $ insts) ++ " instances after inflation)"]
   mTell ["and " ++ show (length decls) ++ " function decls"]
   builtInDecls          <- builtInDeclsM
   builtInDeconstructors <- builtInDeconstructorsM
@@ -231,7 +214,6 @@ parseModules l = do
 -- the output is transformed so that all functionsbindings get
 -- a rating of 0.0.
 parseModulesSimple :: ( ContainsType [String] w
-                      , ContainsType QNameIndex s
                       )
                    => String
                    -> MultiRWST r w s IO
@@ -255,7 +237,6 @@ ratingsFromFile = (fmap . first) show . (try :: IO a -> IO (Either SomeException
 
 -- TODO: add warnings for ratings not applied
 environmentFromModuleAndRatings :: ( ContainsType [String] w
-                                   , ContainsType QNameIndex s
                                    )
                                 => String
                                 -> String
@@ -288,10 +269,7 @@ environmentFromModuleAndRatings s1 s2 = do
     Left e -> do
       mTell ["could not parse ratings!",e]
       return ([], [], cntxt, [], tdm)
-    Right ratingsRaw -> do
-      ratings <- ratingsRaw `forM` \(qname, rval) ->
-            [ (qnid, rval)
-            | qnid <- getOrCreateQNameId qname]
+    Right ratings -> do
       let f (a,b) = declToBinding
                   $ ( a
                     , fromMaybe 0.0 (lookup a ratings)
@@ -301,7 +279,6 @@ environmentFromModuleAndRatings s1 s2 = do
 
 
 environmentFromPath :: ( ContainsType [String] w
-                       , ContainsType QNameIndex s
                        )
                     => FilePath
                     -> MultiRWST r w s IO
@@ -324,16 +301,15 @@ environmentFromPath p = do
   sequence_ $ do
     Left err <- rResult
     return $ mTell ["could not parse rating file", err]
-  (rs' :: [(QNameId, Float)]) <- fmap join $ sequence $ do
+  (rs' :: [(QualifiedName, Float)]) <- fmap join $ sequence $ do
     (rName, rVal) <- rs
     return $ do
       dIds <- fmap join $ sequence $ do
-        (dId, _) <- decls
+        (dName, _) <- decls
         return $ do
-          dName <- lookupQNameId dId
           return $ do
-            guard (Just (show rName) == (show <$> dName))
-            return (dId, rVal)
+            guard (show rName == show dName)
+            return (dName, rVal)
       case dIds of
         [] -> do
           mTell ["rating could not be applied: " ++ show rName]

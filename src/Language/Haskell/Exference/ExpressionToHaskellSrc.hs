@@ -3,6 +3,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE MonadComprehensions #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE DataKinds #-}
 
 module Language.Haskell.Exference.ExpressionToHaskellSrc
   ( convert
@@ -17,8 +18,6 @@ import qualified Language.Haskell.Exference.Core.Types as T
 import qualified Language.Haskell.Exference.Core.TypeUtils as TU
 import Language.Haskell.Exts.Syntax
 
-import Control.Monad.Trans.MultiRWS
-
 import Control.Monad ( forM )
 
 import Control.Applicative
@@ -27,6 +26,10 @@ import qualified Data.Map as M
 import Data.Map ( Map )
 
 import Data.HList.ContainsType
+
+import Data.Functor.Identity
+
+import Control.Monad.Trans.MultiState
 
 
 
@@ -37,15 +40,12 @@ import Data.HList.ContainsType
 -- level 0 = no qualication
 -- level 1 = qualification for anything but infix operators
 -- level 2 = full qualification (prevents infix operators)
-convert :: ( m ~ MultiRWST r w s m2
-           , Functor m2
-           , Monad m2
-           , ContainsType T.QNameIndex s
-           )
-        => Int
+convert :: Int
         -> E.Expression
-        -> m Exp
-convert q e = withMultiStateA (M.empty :: Map T.TVarId T.HsType)
+        -> Exp
+convert q e = runIdentity
+            $ runMultiStateTNil
+            $ withMultiStateA (M.empty :: Map T.TVarId T.HsType)
             $ do
                 E.collectVarTypes e
                 h e []
@@ -58,16 +58,13 @@ convert q e = withMultiStateA (M.empty :: Map T.TVarId T.HsType)
                                    (reverse is)
                   ]
 
-convertToFunc :: ( ContainsType T.QNameIndex s
-                 , Functor m2
-                 , Monad m2
-                 , m ~ MultiRWST r w s m2
-                 )
-              => Int
+convertToFunc :: Int
               -> String
               -> E.Expression
-              -> m Decl
-convertToFunc q ident e = withMultiStateA (M.empty :: Map T.TVarId T.HsType)
+              -> Decl
+convertToFunc q ident e = runIdentity
+                        $ runMultiStateTNil
+                        $ withMultiStateA (M.empty :: Map T.TVarId T.HsType)
                         $ do
                             E.collectVarTypes e
                             h e []
@@ -87,13 +84,7 @@ convertToFunc q ident e = withMultiStateA (M.empty :: Map T.TVarId T.HsType)
 -- level 0 = no qualication
 -- level 1 = qualification for anything but infix operators
 -- level 2 = full qualification (prevents infix operators)
-convertExp :: ( MonadMultiState T.QNameIndex m
-              , MonadMultiState (Map T.TVarId T.HsType) m
-              , Functor m
-              )
-           => Int
-           -> E.Expression
-           -> m Exp
+convertExp :: Int -> E.Expression -> MultiState '[Map T.TVarId T.HsType] Exp
 convertExp q = convertInternal q 0
 
 parens :: Bool -> Exp -> Exp
@@ -104,19 +95,12 @@ parens False e = e
 -- level 0 = no qualication
 -- level 1 = qualification for anything but infix operators
 -- level 2 = full qualification (prevents infix operators)
-convertInternal :: forall m
-                 . ( MonadMultiState T.QNameIndex m
-                   , MonadMultiState (Map T.TVarId T.HsType) m
-                   , Functor m
-                   )
-                => Int
-                -> Int
-                -> E.Expression
-                -> m Exp
+convertInternal
+  :: Int -> Int -> E.Expression -> MultiState '[Map T.TVarId T.HsType] Exp
 convertInternal _ _ (E.ExpVar i _) = Var . UnQual . Ident
                                     <$> T.showTypedVar i
-convertInternal q _ (E.ExpName qn) = Con . UnQual . Ident
-                                     <$> convertName q qn
+convertInternal q _ (E.ExpName qn) =
+  return $ Con $ UnQual $ Ident $ convertName q qn
 convertInternal q p (E.ExpLambda i _ e) =
   [ parens (p>=1) $ Lambda noLoc [PVar $ Ident $ vname] ce
   | ce <- convertInternal q 0 e
@@ -124,21 +108,20 @@ convertInternal q p (E.ExpLambda i _ e) =
   ]
 convertInternal q p (E.ExpApply e1 pe) = recurseApply e1 [pe]
   where
-    defaultApply :: E.Expression -> [E.Expression] -> m Exp
+    defaultApply :: E.Expression -> [E.Expression] -> MultiState '[Map T.TVarId T.HsType] Exp
     defaultApply e pes = do
-      f <- convertInternal q 2 e
+      f  <- convertInternal q 2 e
       ps <- mapM (convertInternal q 3) pes
       return $ parens (p>=3) $ foldl App f ps
-    recurseApply :: E.Expression -> [E.Expression] -> m Exp
+    recurseApply :: E.Expression -> [E.Expression] -> MultiState '[Map T.TVarId T.HsType] Exp
     recurseApply (E.ExpApply e1' pe') pes = recurseApply e1' (pe':pes)
-    recurseApply e@(E.ExpName qnid) pes = do
-      qname <- TU.lookupQNameId qnid
+    recurseApply e@(E.ExpName qname) pes = do
       case qname of
-        Just (T.TupleCon i)
+        T.TupleCon i
           | i==length pes
           , q<2 ->
             Tuple Boxed <$> mapM (convertInternal q 0) pes
-        Just T.Cons
+        T.Cons
           | q<2
           , [p1, p2] <- pes -> do
               q1 <- convertInternal q 1 p1
@@ -147,7 +130,7 @@ convertInternal q p (E.ExpApply e1 pe) = recurseApply e1 [pe]
                 q1
                 (QVarOp $ UnQual $ Symbol ":")
                 q2            
-        Just (T.QualifiedName _ ('(':opR))
+        T.QualifiedName _ ('(':opR)
           | q<2
           , [p1, p2] <- pes -> do
               q1 <- convertInternal q 1 p1
@@ -173,7 +156,7 @@ convertInternal q p (E.ExpLet i _ bindE inE) = do
   return $ parens (p>=2) $ mergeLet convBind e
 convertInternal q p (E.ExpLetMatch n ids bindE inE) = do
   rhs <- convertInternal q 0 bindE
-  name <- convertName q n
+  let name = convertName q n
   varNames <- mapM (T.showTypedVar . fst) ids
   let convBind = PatBind noLoc
                    (PParen $ PApp (UnQual $ Ident $ name)
@@ -186,7 +169,7 @@ convertInternal q p (E.ExpCaseMatch bindE alts) = do
   e <- convertInternal q 0 bindE
   as <- alts `forM` \(c, vars, expr) -> do
     rhs <- convertInternal q 0 expr
-    name <- convertName q c
+    let name = convertName q c
     varNames <- mapM (T.showTypedVar . fst) vars
     return $ Alt noLoc
         (PApp (UnQual $ Ident $ name)
@@ -195,13 +178,10 @@ convertInternal q p (E.ExpCaseMatch bindE alts) = do
         Nothing
   return $ parens (p>=2) $ Case e as
 
-convertName :: MonadMultiState T.QNameIndex m => Int -> T.QNameId -> m String
-convertName d qnid = do
-  qn <- TU.lookupQNameId qnid
-  return $ case (d, qn) of
-    (0, Just (T.QualifiedName _ n)) -> n
-    (_, Just n)                     -> show n
-    (_, Nothing)                    -> "BADQNAMEID"
+convertName :: Int -> T.QualifiedName -> String
+convertName d qn = case (d, qn) of
+  (0, T.QualifiedName _ n) -> n
+  (_, n)                   -> show n
 
 mergeLet :: Decl -> Exp -> Exp
 mergeLet convBind (Let (BDecls otherBinds) finalIn)

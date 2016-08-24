@@ -12,10 +12,10 @@ import Language.Haskell.Exference.Core.Expression
 
 
 
-type FunctionBinding = (HsType, QNameId, Float, [HsConstraint], [HsType])
+type FunctionBinding = (HsType, QualifiedName, Float, [HsConstraint], [HsType])
                       -- input-type, name, rating, contraints, result-types
 
-type DeconstructorBinding = (HsType, [(QNameId, [HsType])], Bool)
+type DeconstructorBinding = (HsType, [(QualifiedName, [HsType])], Bool)
                       -- input-type, (name, result-types)s, is-recursive
 
 type EnvDictionary = ( [FunctionBinding]

@@ -7,7 +7,6 @@
 module Language.Haskell.Exference.Core.Expression
   ( Expression (..)
   , showExpression
-  , showExpressionPure
   , fillExprHole
   , collectVarTypes
   )
@@ -39,17 +38,17 @@ import qualified Data.Map as M
 
 data Expression = ExpVar TVarId HsType -- a
                    -- (type is just for choosing better id when printing)
-                | ExpName QNameId -- Prelude.zip
+                | ExpName QualifiedName -- Prelude.zip
                 | ExpLambda TVarId HsType Expression -- \x -> exp
                 | ExpApply Expression Expression -- f x
                 | ExpHole TVarId                 -- h
-                | ExpLetMatch QNameId [(TVarId, HsType)] Expression Expression
+                | ExpLetMatch QualifiedName [(TVarId, HsType)] Expression Expression
                             -- let (Foo a b c) = bExp in inExp
                 | ExpLet TVarId HsType Expression Expression
                             -- let x = bExp in inExp
                 | ExpCaseMatch
                     Expression
-                    [(QNameId, [(TVarId, HsType)], Expression)]
+                    [(QualifiedName, [(TVarId, HsType)], Expression)]
                      -- case mExp of Foo a b -> e1; Bar c d -> e2
   deriving (Eq, Generic)
 
@@ -127,27 +126,18 @@ collectVarTypes (ExpCaseMatch se matches) = do
     vars `forM_` uncurry refreshVarTypeBinding
     collectVarTypes me
 
-showExpression :: forall m r w s m2
-                . ( m ~ MultiRWST r w s m2
-                  , ContainsType QNameIndex s
-                  , Monad m2
-                  , Functor m2
-                  )
-               => Expression -> m String
-showExpression e = withMultiStateA (M.empty :: Map TVarId HsType)
+showExpression :: Expression -> String
+showExpression e = runIdentity
+                 $ runMultiRWSTNil
+                 $ withMultiStateA (M.empty :: Map TVarId HsType)
                  $ [ shs ""
                    | _ <- collectVarTypes e
                    , shs <- h 0 e
                    ]
  where
-  h :: Int -> Expression -> MultiRWST r w (Map TVarId HsType ': s) m2 ShowS
+  h :: Int -> Expression -> MultiRWS r w (Map TVarId HsType ': s) ShowS
   h _ (ExpVar i _) = showString <$> showTypedVar i
-  h _ (ExpName s) =
-    [ showString
-      $ fromMaybe "badNameInternalError"
-      $ show <$> maybeQName
-    | maybeQName <- lookupQNameId s
-    ] 
+  h _ (ExpName s)  = return $ shows s
   h d (ExpLambda i _ e1) =
     [ showParen (d>0) $ showString ("\\" ++ vname ++ " -> ") . eShows
     | eShows <- h 1 e1
@@ -169,8 +159,7 @@ showExpression e = withMultiStateA (M.empty :: Map TVarId HsType)
     . bindShows . showString " in " . inShows
     | bindShows <- h 0 bindExp
     , inShows   <- h 0 inExp
-    , nMaybe    <- lookupQNameId n
-    , let nStr = fromMaybe "badNameInternalError" $ show <$> nMaybe
+    , let nStr = show n
     , varNames  <- mapM (showTypedVar . fst) vars
     ]
       
@@ -199,22 +188,14 @@ showExpression e = withMultiStateA (M.empty :: Map TVarId HsType)
     . showString " }"
     | bindShows <- h 3 bindExp
     , altsShows <- alts `forM` \(cons, vars, expr) ->
-        [ (showString
-          $ fromMaybe "badNameInternalError"
-          $ show <$> maybeQName
+        [ ( shows cons
           , varNames
-          , exprShows)
-        | maybeQName <- lookupQNameId cons
-        , exprShows <- h 3 expr
+          , exprShows
+          )
+        | exprShows <- h 3 expr
         , varNames <- mapM (showTypedVar . fst) vars
         ]
     ]
-
-showExpressionPure :: QNameIndex -> Expression -> String
-showExpressionPure qNameIndex e = runIdentity
-                                $ runMultiRWSTNil
-                                $ withMultiStateA qNameIndex
-                                $ showExpression e
 
 -- instance Observable Expression where
 --   observer x = observeOpaque (show x) x

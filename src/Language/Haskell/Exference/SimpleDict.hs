@@ -93,7 +93,7 @@ import Debug.Hood.Observe
 emptyClassEnv :: StaticClassEnv
 emptyClassEnv = StaticClassEnv {
   sClassEnv_tclasses = [],
-  sClassEnv_instances = IntMap.empty
+  sClassEnv_instances = M.empty
 }
 
 -- defaultClassEnv :: StaticClassEnv

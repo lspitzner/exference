@@ -15,10 +15,6 @@ module Language.Haskell.Exference.Core.TypeUtils
   , unknownTypeClass
   , inflateInstances
   , splitArrowResultParams
-  , getOrCreateQNameId
-  , lookupQNameId
-  , withQNameIndex
-  , showQNameIndex
   )
 where
 
@@ -51,27 +47,6 @@ import Debug.Hood.Observe
 import Debug.Trace
 
 
-
-getOrCreateQNameId :: MonadMultiState QNameIndex m
-                   => QualifiedName -> m QNameId
-getOrCreateQNameId name = do
-  QNameIndex next indA indB <- mGet
-  case M.lookup name indA of
-    Nothing -> do
-      mSet $ QNameIndex (next+1)
-                        (M.insert name next indA)
-                        (M.insert next name indB)
-      return next
-    Just i ->
-      return i
-
-withQNameIndex :: Monad m => MultiRWST r w (QNameIndex ': ss) m a -> MultiRWST r w ss m a
-withQNameIndex = withMultiStateA $ QNameIndex 0 M.empty M.empty
-
-showQNameIndex :: MonadMultiState QNameIndex m => m [String]
-showQNameIndex = do
-  QNameIndex _ _ indB <- mGet
-  return $ [ printf "% 5d %s" k (show v) | (k,v) <- M.toAscList indB ]
 
 -- binds everything in Foralls, so there are no free variables anymore.
 forallify :: HsType -> HsType
@@ -110,8 +85,8 @@ constraintMapTypes f (HsConstraint a ts) = HsConstraint a (map f ts)
 mkStaticClassEnv :: [HsTypeClass] -> [HsInstance] -> StaticClassEnv
 mkStaticClassEnv tclasses insts = StaticClassEnv tclasses (helper insts)
   where
-    helper :: [HsInstance] -> IntMap.IntMap [HsInstance]
-    helper is = IntMap.fromListWith (++)
+    helper :: [HsInstance] -> M.Map QualifiedName [HsInstance]
+    helper is = M.fromListWith (++)
               $ [ (tclass_name $ instance_tclass i, [i]) | i <- is ]
 
 constraintContainsVariables :: HsConstraint -> Bool
@@ -119,10 +94,11 @@ constraintContainsVariables = any ((-1/=).largestId) . constraint_params
 
 -- TODO: it probably is a bad idea to have any unknown type class mapped to
 --       this, as they might unify at some point.. even if they distinct.
-unknownTypeClass :: (MonadMultiState QNameIndex m) => m HsTypeClass
-unknownTypeClass = do
-  qid <- getOrCreateQNameId $ QualifiedName [] "EXFUnknownTC"
-  return $ HsTypeClass qid [] []
+unknownTypeClass :: HsTypeClass
+unknownTypeClass = HsTypeClass qid [] []
+  where
+    qid = QualifiedName [] "EXFUnknownTC"
+  
 
 inflateInstances :: [HsInstance] -> [HsInstance]
 inflateInstances = ala S.fromList id . concat . takeWhile (not . null) . iterate (concatMap f)

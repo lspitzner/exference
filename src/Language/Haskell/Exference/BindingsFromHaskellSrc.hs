@@ -39,15 +39,13 @@ import Debug.Trace
 
 
 
-getDecls :: ( ContainsType QNameIndex s
-            , Monad m
-            , Functor m
-            )
-         => [QualifiedName]
-         -> [HsTypeClass]
-         -> TypeDeclMap
-         -> [Module]
-         -> MultiRWST r w s m [Either String HsFunctionDecl]
+getDecls
+  :: (Monad m, Functor m)
+  => [QualifiedName]
+  -> [HsTypeClass]
+  -> TypeDeclMap
+  -> [Module]
+  -> MultiRWST r w s m [Either String HsFunctionDecl]
 getDecls ds tcs tDeclMap modules = fmap (>>= either (return.Left) (map Right))
                                 $ sequence
                                 $ do
@@ -55,73 +53,63 @@ getDecls ds tcs tDeclMap modules = fmap (>>= either (return.Left) (map Right))
   d <- decls
   return $ runEitherT $ transformDecl tcs ds mn tDeclMap d
 
-transformDecl :: ( ContainsType QNameIndex s
-                 , Monad m
-                 , Functor m
-                 )
-              => [HsTypeClass]
-              -> [QualifiedName]
-              -> ModuleName
-              -> TypeDeclMap
-              -> Decl
-              -> EitherT String (MultiRWST r w s m) [HsFunctionDecl]
+transformDecl
+  :: (Monad m, Functor m)
+  => [HsTypeClass]
+  -> [QualifiedName]
+  -> ModuleName
+  -> TypeDeclMap
+  -> Decl
+  -> EitherT String (MultiRWST r w s m) [HsFunctionDecl]
 transformDecl tcs ds mn tDeclMap (TypeSig _loc names qtype)
   = insName qtype $ do
       (ctype, _) <- convertType tcs (Just mn) ds tDeclMap qtype
-      mapM (helper mn ctype) names
+      return $ helper mn ctype <$> names
 transformDecl _ _ _ _ _ = return []
 
-transformDecl' :: ( MonadMultiState QNameIndex m
-                  , MonadMultiState ConvData m
-                  , Monad m
-                  , Functor m
-                  )
-               => [HsTypeClass]
-               -> [QualifiedName]
-               -> ModuleName
-               -> TypeDeclMap
-               -> Decl
-               -> EitherT String m [HsFunctionDecl]
+transformDecl'
+  :: (MonadMultiState ConvData m, Monad m, Functor m)
+  => [HsTypeClass]
+  -> [QualifiedName]
+  -> ModuleName
+  -> TypeDeclMap
+  -> Decl
+  -> EitherT String m [HsFunctionDecl]
 transformDecl' tcs ds mn tDeclMap (TypeSig _loc names qtype)
   = insName qtype $ do
       ctype <- convertTypeInternal tcs (Just mn) ds tDeclMap qtype
-      mapM (helper mn ctype) names
+      return $ helper mn ctype <$> names
 transformDecl' _ _ _ _ _ = return []
 
 insName :: (Functor m, Monad m)
         => Type -> EitherT String m a -> EitherT String m a
 insName qtype = bimapEitherT (\x -> x ++ " in " ++ prettyPrint qtype) id
 
-helper :: ( MonadMultiState QNameIndex m )
-       => ModuleName
-       -> HsType
-       -> Name
-       -> m HsFunctionDecl
-helper mn t x = do
-  qid <- getOrCreateQNameId $ convertModuleName mn x
-  return (qid, forallify t)
+helper :: ModuleName -> HsType -> Name -> HsFunctionDecl
+helper mn t x = (convertModuleName mn x, forallify t)
 
-getDataConss :: ( ContainsType QNameIndex s
-                , Monad m
-                )
-             => [HsTypeClass]
-             -> [QualifiedName]
-             -> TypeDeclMap
-             -> [Module]
-             -> MultiRWST r w s m [Either String ( [HsFunctionDecl]
-                                                 , DeconstructorBinding )]
+getDataConss
+  :: (Monad m)
+  => [HsTypeClass]
+  -> [QualifiedName]
+  -> TypeDeclMap
+  -> [Module]
+  -> MultiRWST
+       r
+       w
+       s
+       m
+       [Either String ([HsFunctionDecl], DeconstructorBinding)]
 getDataConss tcs ds tDeclMap modules = sequence $ do
   Module _loc moduleName _pragma _warning _mexp _imp decls <- modules
   DataDecl _loc _newtflag cntxt name params conss _derives <- decls
   let
-    rTypeM :: ( MonadMultiState QNameIndex m
-              , MonadMultiState ConvData m
-              )
+    rTypeM :: ( MonadMultiState ConvData m )
            => EitherT String m HsType
     rTypeM = do
-      rId <- getOrCreateQNameId $ convertModuleName moduleName name
+      let rName = convertModuleName moduleName name
       ps  <- mapM pTransform params
-      return $ (forallify . foldl TypeApp (TypeCons rId)) ps
+      return $ (forallify . foldl TypeApp (TypeCons rName)) ps
     pTransform :: MonadMultiState ConvData m => TyVarBind -> EitherT String m HsType
     pTransform (KindedVar _ _) = left "KindedVar"
     pTransform (UnkindedVar n) = TypeVar <$> getVar n
@@ -129,11 +117,9 @@ getDataConss tcs ds tDeclMap modules = sequence $ do
   --  tTransform (UnBangedTy t) = convertTypeInternal t
   --  tTransform x              = lift $ left $ "unknown Type: " ++ show x
   let
-    typeM :: ( MonadMultiState QNameIndex m
-             , MonadMultiState ConvData m
-             )
+    typeM :: ( MonadMultiState ConvData m )
           => QualConDecl
-          -> EitherT String m (QNameId, [HsType])
+          -> EitherT String m (QualifiedName, [HsType])
     typeM (QualConDecl _loc cbindings ccntxt conDecl) = do
       case cntxt of
         [] -> right ()
@@ -145,14 +131,12 @@ getDataConss tcs ds tDeclMap modules = sequence $ do
         ConDecl c t -> right (c, t)
         x           -> left $ "unknown ConDecl: " ++ show x
       convTs <- convertTypeInternal tcs (Just moduleName) ds tDeclMap `mapM` tys
-      qid <- getOrCreateQNameId $ convertModuleName moduleName cname
-      return $ (qid, convTs)
+      let qName = convertModuleName moduleName cname
+      return $ (qName, convTs)
   let
     addConsMsg = (++) $ show name ++ ": "
   let
-    convAction :: ( MonadMultiState QNameIndex m
-                  , MonadMultiState ConvData m
-                  )
+    convAction :: ( MonadMultiState ConvData m )
                => EitherT String m ([HsFunctionDecl], DeconstructorBinding)
     convAction = do
       rtype  <- rTypeM
@@ -168,26 +152,21 @@ getDataConss tcs ds tDeclMap modules = sequence $ do
     return $ either (Left . addConsMsg) Right convResult
     -- TODO: replace this by bimap..
 
-getClassMethods :: ( ContainsType QNameIndex s
-                   , Monad m
-                   , Functor m
-                   )
-                => [HsTypeClass]
-                -> [QualifiedName]
-                -> TypeDeclMap
-                -> [Module]
-                -> MultiRWST r w s m [Either String HsFunctionDecl]
+getClassMethods
+  :: (Monad m, Functor m)
+  => [HsTypeClass]
+  -> [QualifiedName]
+  -> TypeDeclMap
+  -> [Module]
+  -> MultiRWST r w s m [Either String HsFunctionDecl]
 getClassMethods tcs ds tDeclMap modules = fmap join $ sequence $ do
   Module _loc moduleName _pragma _warning _mexp _imp decls <- modules
   ClassDecl _ _ name@(Ident nameStr) vars _ cdecls <- decls
   return $ do
     let errorMod = (++) ("class method for "++show name++": ")
-    tcsTuples <- tcs `forM` \tc ->
-      [ (qn, tc)
-      | qn <- lookupQNameId $ tclass_name tc
-      ]
-    let searchF (Just (QualifiedName _ n)) = n==nameStr
-        searchF _                          = False
+    let tcsTuples = (\tc -> (tclass_name tc, tc)) <$> tcs
+    let searchF (QualifiedName _ n) = n==nameStr
+        searchF _                   = False
     let maybeClass = snd <$> find (searchF . fst) tcsTuples
     case maybeClass of
       Nothing -> return [Left $ "unknown type class: "++show name]

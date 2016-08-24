@@ -115,9 +115,6 @@ data ExferenceInput = ExferenceInput
                                                 -- if true. serverly increases
                                                 -- search space (decreases
                                                 -- performance).
-  , input_qNameIndex  :: QNameIndex             -- ^ the qNameIndex for
-                                                -- looking up the ids in
-                                                -- expressions.
   , input_maxSteps    :: Int                    -- ^ the maximum number of
                                                 -- steps to perform (otherwise
                                                 -- would not terminate if
@@ -179,7 +176,6 @@ findExpressions (ExferenceInput rawType
                                 allowConstraints
                                 _allowConstraintsStopStep
                                 multiPM
-                                qNameIndex
                                 maxSteps -- since we output a [[x]],
                                          -- this would not really be
                                          -- necessary anymore. but
@@ -269,7 +265,6 @@ findExpressions (ExferenceInput rawType
       rNodes = (`execStateT` s)
         $ stateStep multiPM
                     allowConstraints
-                    qNameIndex
                     heuristics
       -- distinguish "finished"/"unfinished" sub-SearchNodes
       (potentialSolutions, futures) = partition (views goals Seq.null) rNodes
@@ -348,10 +343,9 @@ getUnusedVarCount s = length $ filter (==0) $ s ^.. varUses . folded
 -- step is (and which sub-function to use).
 stateStep :: Bool
           -> Bool
-          -> QNameIndex
           -> ExferenceHeuristicsConfig
           -> StateT SearchNode [] ()
-stateStep multiPM allowConstrs qNameIndex h = do
+stateStep multiPM allowConstrs h = do
 
   do
     _s <- get
@@ -456,7 +450,7 @@ stateStep multiPM allowConstrs qNameIndex h = do
         (unifyOffset goalType (HsTypeOffset funcR offset))
 
     -- on code for byProvided and byFunctionSimple
-    byGenericUnify :: Either QNameId (TVarId, HsType)
+    byGenericUnify :: Either QualifiedName (TVarId, HsType)
                    -> HsType
                    -> [HsConstraint]
                    -> [HsType]
@@ -496,7 +490,7 @@ stateStep multiPM allowConstrs qNameIndex h = do
           maxTVarId %= max (maximum $ map largestId dependencies)
           depth += depthModNoMatch
           builderSetReason $ "randomly trying to apply function "
-                            ++ showExpressionPure qNameIndex coreExp
+                            ++ showExpression coreExp
           additionalGoals <- addScopePatternMatch
             multiPM
             goalType

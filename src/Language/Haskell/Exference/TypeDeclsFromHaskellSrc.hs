@@ -44,14 +44,14 @@ import qualified Data.IntMap as IntMap
 
 
 data HsTypeDecl = HsTypeDecl
-  { tdecl_name :: QNameId
+  { tdecl_name :: QualifiedName
   , tdecl_params :: [TVarId]
   , tdecl_result :: HsType
   } deriving Show -- (Data, Show, Generic, Typeable)
 
-type TypeDeclMap = IntMap HsTypeDecl
+type TypeDeclMap = Map QualifiedName HsTypeDecl
 
-applyTypeDecls :: IntMap (Either String HsTypeDecl)
+applyTypeDecls :: Map QualifiedName (Either String HsTypeDecl)
                -> HsType 
                -> Either String HsType
 applyTypeDecls m = go
@@ -66,9 +66,9 @@ applyTypeDecls m = go
   go (TypeApp l r) = goApp [r] l
   go (TypeForall vars constrs t) = TypeForall vars constrs `liftM` go t
   goApp rs (TypeApp l r)      = goApp (r:rs) l
-  goApp rs (TypeCons qnId)    = case IntMap.lookup qnId m of
-    Nothing                  -> foldl TypeApp (TypeCons qnId) `liftM` mapM go rs
-    Just (Left _)            -> Right $ TypeCons qnId -- no need to show the
+  goApp rs (TypeCons qn)    = case M.lookup qn m of
+    Nothing                  -> foldl TypeApp (TypeCons qn) `liftM` mapM go rs
+    Just (Left _)            -> Right $ TypeCons qn -- no need to show the
                                    -- same error multiple times, or is there?
     Just (Right (HsTypeDecl _ vs t))
                              | i <- length vs
@@ -80,11 +80,10 @@ applyTypeDecls m = go
                                 , let substs = IntMap.fromList $ zip vs pAffected
                                 , let substituted = snd $ applySubsts substs t
                                 ]
-    _                        -> Left $ "wrong number of parameters for type declaration " ++ show qnId
+    _                        -> Left $ "wrong number of parameters for type declaration " ++ show qn
   goApp rs l               = foldl1 TypeApp `liftM` mapM go (l:rs)
 
-getTypeDecls :: ( ContainsType QNameIndex s
-                , Monad m
+getTypeDecls :: ( Monad m
                 )
              => [QualifiedName]
              -> [Module]
@@ -98,21 +97,19 @@ getTypeDecls ds modules = do
            $ do
       (ty, tyVarIndex) <- convertTypeNoDecl [] (Just mn) ds rawTy
       let qname = convertModuleName mn name
-      qNameId <- getOrCreateQNameId qname
       -- the 1000 is arbitrary, but it should not be used anyway.
       -- no new type variables should appear on the left hand side.
       vars <- mapEitherT (withMultiStateA (ConvData 1000 tyVarIndex)) $ rawVars `forM` tyVarTransform
-      return $ HsTypeDecl qNameId vars ty
+      return $ HsTypeDecl qname vars ty
   let converter (HsTypeDecl n vs t) = HsTypeDecl n vs `liftM` applyTypeDecls resultMap t
-      resultMap :: IntMap (Either String HsTypeDecl)
-      resultMap = IntMap.map converter
-                $ IntMap.fromList
+      resultMap :: Map QualifiedName (Either String HsTypeDecl)
+      resultMap = M.map converter
+                $ M.fromList
                 $ map (\x -> (tdecl_name x, x))
                 $ rights rawList
-  return $ [ e | e@(Left _) <- rawList ] ++ IntMap.elems resultMap
+  return $ [ e | e@(Left _) <- rawList ] ++ M.elems resultMap
 
-convertType :: ( ContainsType QNameIndex s
-               , Monad m
+convertType :: ( Monad m
                )
             => [HsTypeClass]
             -> Maybe ModuleName
@@ -122,60 +119,56 @@ convertType :: ( ContainsType QNameIndex s
             -> EitherT String (MultiRWST r w s m) (HsType, TypeVarIndex)
 convertType tcs mn ds declMap t = do
   (ty, index) <- convertTypeNoDecl tcs mn ds t
-  ty' <- hoistEither $ applyTypeDecls (IntMap.map Right declMap) ty
+  ty' <- hoistEither $ applyTypeDecls (M.map Right declMap) ty
   return $ (ty', index)
 
-convertTypeInternal :: ( MonadMultiState QNameIndex m
-                       , MonadMultiState ConvData m
-                       )
-                    => [HsTypeClass]
-                    -> Maybe ModuleName -- default (for unqualified stuff)
+convertTypeInternal
+  :: (MonadMultiState ConvData m)
+  => [HsTypeClass]
+  -> Maybe ModuleName -- default (for unqualified stuff)
                       -- Nothing uses a broad search for lookups
-                    -> [QualifiedName] -- list of fully qualified data types
+  -> [QualifiedName] -- list of fully qualified data types
                                          -- (to keep things unique)
-                    -> TypeDeclMap
-                    -> Type
-                    -> EitherT String m HsType
+  -> TypeDeclMap
+  -> Type
+  -> EitherT String m HsType
 convertTypeInternal tcs defModuleName ds declMap t = do
   ty <- convertTypeNoDeclInternal tcs defModuleName ds t
-  ty' <- hoistEither $ applyTypeDecls (IntMap.map Right declMap) ty
+  ty' <- hoistEither $ applyTypeDecls (M.map Right declMap) ty
   return $ ty'
 
-parseType :: ( ContainsType QNameIndex s
-             , Monad m
-             )
-          => [HsTypeClass]
-          -> Maybe ModuleName
-          -> [QualifiedName]
-          -> TypeDeclMap
-          -> P.ParseMode
-          -> String
-          -> EitherT String (MultiRWST r w s m) (HsType, TypeVarIndex)
+parseType
+  :: (Monad m)
+  => [HsTypeClass]
+  -> Maybe ModuleName
+  -> [QualifiedName]
+  -> TypeDeclMap
+  -> P.ParseMode
+  -> String
+  -> EitherT
+       String
+       (MultiRWST r w s m)
+       (HsType, TypeVarIndex)
 parseType tcs mn ds tDeclMap m s = case P.parseTypeWithMode m s of
   f@(P.ParseFailed _ _) -> left $ show f
   P.ParseOk t           -> convertType tcs mn ds tDeclMap t
 
-unsafeReadType :: ( ContainsType QNameIndex s
-                  , Monad m
-                  )
-               => [HsTypeClass]
-               -> [QualifiedName]
-               -> TypeDeclMap
-               -> String
-               -> MultiRWST r w s m HsType
+unsafeReadType
+  :: (Monad m)
+  => [HsTypeClass]
+  -> [QualifiedName]
+  -> TypeDeclMap
+  -> String
+  -> MultiRWST r w s m HsType
 unsafeReadType tcs ds tDeclMap s = do
   parseRes <- runEitherT $ parseType tcs Nothing ds tDeclMap (haskellSrcExtsParseMode "type") s
   return $ case parseRes of
     Left _ -> error $ "unsafeReadType: could not parse type: " ++ s
     Right (t, _) -> t
 
-unsafeReadType0 :: ( ContainsType QNameIndex s
-                   , Monad m
-                   )
-                => String
-                -> MultiRWST r w s m HsType
+unsafeReadType0 :: (Monad m) => String -> MultiRWST r w s m HsType
 unsafeReadType0 s = do
-  parseRes <- runEitherT $ parseType [] Nothing [] (IntMap.empty) (haskellSrcExtsParseMode "type") s
+  parseRes <- runEitherT $ parseType [] Nothing [] (M.empty) (haskellSrcExtsParseMode "type") s
   return $ case parseRes of
     Left _ -> error $ "unsafeReadType: could not parse type: " ++ s
     Right (t, _) -> t

@@ -159,7 +159,7 @@ main = runO $ do
       putStrLn $ "exference version " ++ showVersion version
   if | [Version] == flags   -> printVersion
      | Help    `elem` flags -> putStrLn fullUsageInfo >> putStrLn "TODO"
-     | otherwise -> runMultiRWSTNil_ $ withQNameIndex $ do
+     | otherwise -> runMultiRWSTNil_ $ do
         par <- case (Parallel `elem` flags, Serial `elem` flags) of
           (False,False) -> return False
           (True, False) -> return True
@@ -184,12 +184,11 @@ main = runO $ do
           forM_ messages $ \m -> putStrLn $ "environment warning: " ++ m
         when (PrintEnv `elem` flags) $ lift $ do
           when (verbosity>0) $ putStrLn "[Environment]"
-          mapM_ print $ IntMap.elems tdeclMap
+          mapM_ print $ M.elems tdeclMap
           mapM_ print $ clss
-          mapM_ print $ [(i,x)| (i,xs) <- IntMap.toList insts, x <- xs]
+          mapM_ print $ [(i,x)| (i,xs) <- M.toList insts, x <- xs]
           mapM_ print $ eSignatures
           mapM_ print $ eDeconss
-        when (verbosity>0) $ showQNameIndex >>= mapM_ (lift . putStrLn)
         when (Examples `elem` flags) $ do
           when (verbosity>0) $ lift $ putStrLn "[Examples]"
           printAndStuff testHeuristicsConfig env
@@ -212,19 +211,15 @@ main = runO $ do
               Left err -> lift $ do
                 putStrLn $ "could not parse input type: " ++ err
               Right (parsedType, tVarIndex) -> do
-                typeStr <- showHsType tVarIndex parsedType
+                let typeStr = showHsType tVarIndex parsedType
                 when (verbosity>0) $ lift $ putStrLn $ "input type parsed as: " ++ typeStr
-                unresolvedIdents <- findInvalidNames validNames parsedType
+                let unresolvedIdents = findInvalidNames validNames parsedType
                 when (not $ null unresolvedIdents) $ lift $ do
                   putStrLn $ "warning: unresolved idents in input: "
                            ++ intercalate ", " (nub $ show <$> unresolvedIdents)
                   putStrLn $ "(this may be harmless, but no instances will be connected to these.)"
-                qNameIndex <- mGet
                 let hidden = if AllowFix `elem` flags then [] else ["fix", "forever", "iterateM_"]
-                let filteredBindings = runIdentity
-                                     $ runMultiRWSTNil
-                                     $ withMultiStateA qNameIndex
-                                     $ filterBindingsSimple hidden eSignatures
+                let filteredBindings = filterBindingsSimple hidden eSignatures
                 let input = ExferenceInput
                       parsedType
                       filteredBindings
@@ -234,7 +229,6 @@ main = runO $ do
                       (Constraints `elem` flags)
                       8192
                       (PatternMatchMC `elem` flags)
-                      qNameIndex
                       65536
                       (Just 8192)
                       (if Shortest `elem` flags then
@@ -253,13 +247,13 @@ main = runO $ do
                         then lift $ putStrLn "[no results]"
                         else forM_ rs
                           $ \(e, constrs, ExferenceStats n d m) -> do
-                            hsE <- convert qualification $ simplifyExpression e
+                            let hsE = convert qualification $ simplifyExpression e
                             lift $ putStrLn $ prettyPrint hsE
                             when (not $ null constrs) $ do
-                              constrStrs <- mapM (showHsConstraint tVarIndex)
-                                          $ S.toList
-                                          $ S.fromList
-                                          $ constrs
+                              let constrStrs = mapM (showHsConstraint tVarIndex)
+                                             $ S.toList
+                                             $ S.fromList
+                                             $ constrs
                               lift $ putStrLn $ "but only with additional contraints: " ++ intercalate ", " constrStrs
                             lift $ putStrLn $ replicate 40 ' ' ++ "(depth " ++ show d
                                         ++ ", " ++ show n ++ " steps, " ++ show m ++ " max pqueue size)"
@@ -325,13 +319,13 @@ main = runO $ do
                       case r :: [ExferenceOutputElement] of
                         [] -> lift $ putStrLn "[no results]"
                         rs -> rs `forM_` \(e, constrs, ExferenceStats n d m) -> do
-                            hsE <- convert qualification $ simplifyExpression e
+                            let hsE = convert qualification $ simplifyExpression e
                             lift $ putStrLn $ prettyPrint hsE
                             when (not $ null constrs) $ do
-                              constrStrs <- mapM (showHsConstraint tVarIndex)
-                                          $ S.toList
-                                          $ S.fromList
-                                          $ constrs
+                              let constrStrs = mapM (showHsConstraint tVarIndex)
+                                             $ S.toList
+                                             $ S.fromList
+                                             $ constrs
                               lift $ putStrLn $ "but only with additional contraints: " ++ intercalate ", " constrStrs
                             lift $ putStrLn $ replicate 40 ' ' ++ "(depth " ++ show d
                                        ++ ", " ++ show n ++ " steps, " ++ show m ++ " max pqueue size)"

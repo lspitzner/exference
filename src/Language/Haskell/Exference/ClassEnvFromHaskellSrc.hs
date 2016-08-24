@@ -47,8 +47,6 @@ import Debug.Trace
 --   The count may be used to inform the user (post-inflation count
 --   would be bad for that purpose.)
 getClassEnv :: ( ContainsType [String] w
-               , ContainsType QNameIndex s
-               , MonadMultiState QNameIndex (MultiRWST r w s m)
                , MonadFix m
                , Applicative m
                )
@@ -66,11 +64,10 @@ getClassEnv ds tDeclMap ms = do
   let insts = inflateInstances insts_uninflated
   return (mkStaticClassEnv tcs insts, length insts_uninflated)
 
-type TempAsst = (QNameId, [HsType])
+type TempAsst = (QualifiedName, [HsType])
 
 getTypeClasses :: forall m r w s m0
-                . ( ContainsType QNameIndex s
-                  , MonadFix m0
+                . ( MonadFix m0
                   , Applicative m0
                   , m ~ MultiRWST r w s m0
                   )
@@ -79,14 +76,14 @@ getTypeClasses :: forall m r w s m0
                -> [Module]
                -> m [Either String HsTypeClass]
 getTypeClasses ds tDeclMap ms = do
-  secondMap :: M.Map QNameId (Either String ([TempAsst], [TVarId])) <-
+  secondMap :: M.Map QualifiedName (Either String ([TempAsst], [TVarId])) <-
     fmap M.fromList $ sequence
-      [ [ (qnid, x) --m (inner) -- []
-        | qnid <- getOrCreateQNameId $ convertModuleName moduleName name
+      [ [ (qn, x) --m (inner) -- []
+        | let qn = convertModuleName moduleName name
         , x <- withMultiStateA (ConvData 0 M.empty) $ runEitherT $ let
-              convF (ClassA qname types) = (,)
-                <$> getOrCreateQNameId (convertQName    (Just moduleName) ds qname)
-                <*> types `forM` convertTypeInternal [] (Just moduleName) ds tDeclMap
+              convF (ClassA qname types) =
+                (,) (convertQName    (Just moduleName) ds qname)
+                <$> types `forM` convertTypeInternal [] (Just moduleName) ds tDeclMap
               convF (ParenA c) = convF c
               convF c = left $ "unknown HsConstraint: " ++ show c
             in (,) <$> mapM convF context <*> mapM tyVarTransform vars
@@ -94,26 +91,24 @@ getTypeClasses ds tDeclMap ms = do
       | Module _ moduleName _ _ _ _ decls <- ms
       , ClassDecl _loc context name vars _fdeps _cdecls <- decls
       ]
-  unknown <- unknownTypeClass
   let
-    helper :: QNameId
+    helper :: QualifiedName
            -> Either String ([TempAsst], [TVarId])
            -> Either String HsTypeClass
     helper qnid eTcRawData = do
       (tempAssts, tVarIds) <- eTcRawData
       HsTypeClass qnid tVarIds
         <$> tempAssts `forM` \(cQnid, vars) ->
-          flip HsConstraint vars <$> M.findWithDefault (Right unknown) cQnid resultMap
+          flip HsConstraint vars <$> M.findWithDefault (Right unknownTypeClass) cQnid resultMap
 
-    resultMap :: LazyMap.Map QNameId (Either String HsTypeClass)
+    resultMap :: LazyMap.Map QualifiedName (Either String HsTypeClass)
       -- CARE: DONT USE STRICT METHODS ON THIS MAP
       --       (COMPILER WONT COMPLAIN)
     resultMap = LazyMap.mapWithKey helper secondMap
   return $ LazyMap.elems $ resultMap
 
 getInstances :: forall m m0 r w s
-              . ( ContainsType QNameIndex s
-                , m ~ MultiRWST r w s m0
+              . ( m ~ MultiRWST r w s m0
                 , Monad m0
                 )
              => [HsTypeClass]
@@ -129,13 +124,11 @@ getInstances tcs ds tDeclMap ms = sequence $ do
     -- which we can ignore, right?
   let name = convertQName (Just mn) ds qname
   return $ do
-    qnid <- getOrCreateQNameId name
     let instClass = maybe (Left $ "unknown type class: "++show name) Right
-                  $ find ((qnid==).tclass_name) tcs
+                  $ find ((name==).tclass_name) tcs
     let
       sAction :: forall m1
-               . ( MonadMultiState QNameIndex m1
-                 , MonadMultiState ConvData m1
+               . ( MonadMultiState ConvData m1
                  )
               => EitherT String m1 HsInstance
       sAction = do
@@ -153,22 +146,20 @@ getInstances tcs ds tDeclMap ms = sequence $ do
         -- either (Left . (("instance for "++name++": ")++)) Right
     withMultiStateA (ConvData 0 M.empty) $ runEitherT sAction
 
-constrTransform :: ( MonadMultiState QNameIndex m
-                   , MonadMultiState ConvData m
-                   )
-                => Maybe ModuleName
-                -> [QualifiedName]
-                -> TypeDeclMap
-                -> (QNameId -> Maybe HsTypeClass)
-                -> Asst
-                -> EitherT String m HsConstraint
+constrTransform
+  :: (MonadMultiState ConvData m)
+  => Maybe ModuleName
+  -> [QualifiedName]
+  -> TypeDeclMap
+  -> (QualifiedName -> Maybe HsTypeClass)
+  -> Asst
+  -> EitherT String m HsConstraint
 constrTransform mn ds tDeclMap tcLookupF (ClassA qname types) = do
   let ctypes = convertTypeInternal [] mn ds tDeclMap `mapM` types
   let qn = convertQName mn ds qname
-  qnid <- getOrCreateQNameId qn
   maybe
     (left $ "unknown type class: " ++ show qn)
     (\tc -> HsConstraint tc <$> ctypes)
-    (tcLookupF qnid)
+    (tcLookupF qn)
 constrTransform mn ds tDeclMap tcLookupF (ParenA c) = constrTransform mn ds tDeclMap tcLookupF c
 constrTransform _ _ _ _ c = left $ "unknown HsConstraint: " ++ show c

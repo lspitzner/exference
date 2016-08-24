@@ -73,14 +73,16 @@ haskellSrcExtsParseMode s = P.ParseMode (s++".hs")
             , MultiParamTypeClasses ]
     exts2 = map EnableExtension exts1
 
-convertTypeNoDecl :: ( ContainsType T.QNameIndex s
-               , Monad m
-               )
-            => [T.HsTypeClass]
-            -> Maybe ModuleName
-            -> [T.QualifiedName]
-            -> Type
-            -> EitherT String (MultiRWST r w s m) (T.HsType, T.TypeVarIndex)
+convertTypeNoDecl
+  :: Monad m
+  => [T.HsTypeClass]
+  -> Maybe ModuleName
+  -> [T.QualifiedName]
+  -> Type
+  -> EitherT
+       String
+       (MultiRWST r w s m)
+       (T.HsType, T.TypeVarIndex)
 convertTypeNoDecl tcs mn ds t =
   mapEitherT conv $ convertTypeNoDeclInternal tcs mn ds t
  where
@@ -90,37 +92,33 @@ convertTypeNoDecl tcs mn ds t =
            | (eith, ConvData _ index) <- withMultiStateAS (ConvData 0 M.empty) m
            ]
 
-convertTypeNoDeclInternal :: ( MonadMultiState T.QNameIndex m
-                       , MonadMultiState ConvData m
-                       )
-                    => [T.HsTypeClass]
-                    -> Maybe ModuleName -- default (for unqualified stuff)
+convertTypeNoDeclInternal
+  :: (MonadMultiState ConvData m)
+  => [T.HsTypeClass]
+  -> Maybe ModuleName -- default (for unqualified stuff)
                       -- Nothing uses a broad search for lookups
-                    -> [T.QualifiedName] -- list of fully qualified data types
+  -> [T.QualifiedName] -- list of fully qualified data types
                                          -- (to keep things unique)
-                    -> Type
-                    -> EitherT String m T.HsType
+  -> Type
+  -> EitherT String m T.HsType
 convertTypeNoDeclInternal tcs defModuleName ds ty = helper ty
  where
   helper (TyFun a b)      = T.TypeArrow
                               <$> helper a
                               <*> helper b
   helper (TyTuple _ ts)   | n <- length ts
-                          = foldl T.TypeApp . T.TypeCons
-                            <$> TU.getOrCreateQNameId (T.TupleCon n)
-                            <*> mapM helper ts
+                          = foldl T.TypeApp (T.TypeCons $ T.TupleCon n)
+                            <$> mapM helper ts
   helper (TyApp a b)      = T.TypeApp
                               <$> helper a
                               <*> helper b
   helper (TyVar vname)    = do
                               i <- getVar vname
                               return $ T.TypeVar i
-  helper (TyCon name)     = T.TypeCons
-                          <$> TU.getOrCreateQNameId
-                              (convertQName defModuleName ds name)
-  helper (TyList t)       = T.TypeApp . T.TypeCons
-                          <$> TU.getOrCreateQNameId T.ListCon
-                          <*> helper t
+  helper (TyCon name)     = return
+                          $ T.TypeCons
+                          $ convertQName defModuleName ds name
+  helper (TyList t)       = T.TypeApp (T.TypeCons T.ListCon) <$> helper t
   helper (TyParen t)      = helper t
   helper TyInfix{}        = left "infix operator"
   helper TyKind{}         = left "kind annotation"
@@ -175,60 +173,50 @@ parseQualifiedName :: String -> T.QualifiedName
 parseQualifiedName s = let (prebracket, operator) = span (/='(') s
   in liftA2 T.QualifiedName init last $ wordsBy (=='.') prebracket ++ words operator
 
-convertConstraint :: ( MonadMultiState T.QNameIndex m
-                     , MonadMultiState ConvData m
-                     )
-                  => [T.HsTypeClass]
-                  -> Maybe ModuleName
-                  -> [T.QualifiedName]
-                  -> Asst
-                  -> EitherT String m T.HsConstraint
+convertConstraint
+  :: (MonadMultiState ConvData m)
+  => [T.HsTypeClass]
+  -> Maybe ModuleName
+  -> [T.QualifiedName]
+  -> Asst
+  -> EitherT String m T.HsConstraint
 convertConstraint tcs defModuleName@(Just _) ds (ClassA qname types)
   | str    <- convertQName defModuleName ds qname
   , ctypes <- mapM (convertTypeNoDeclInternal tcs defModuleName ds) types
   = do
-      strId <- TU.getOrCreateQNameId str
-      unknown <- TU.unknownTypeClass
       ts <- ctypes
-      return $ T.HsConstraint ( fromMaybe unknown
-                              $ find ((==strId) . T.tclass_name)
+      return $ T.HsConstraint ( fromMaybe TU.unknownTypeClass
+                              $ find ((==str) . T.tclass_name)
                               $ tcs)
                               ts
 convertConstraint tcs Nothing ds (ClassA (UnQual (Symbol "[]")) types)
   | ctypes <- mapM (convertTypeNoDeclInternal tcs Nothing ds) types
   = do
       ts <- ctypes
-      unknown <- TU.unknownTypeClass
-      listId <- TU.getOrCreateQNameId T.ListCon
       return $ T.HsConstraint
-                 ( fromMaybe unknown
-                 $ find ((==listId) . T.tclass_name)
+                 ( fromMaybe TU.unknownTypeClass
+                 $ find ((==T.ListCon) . T.tclass_name)
                  $ tcs )
                  ts
 convertConstraint tcs Nothing ds (ClassA (UnQual (Ident name)) types)
   | ctypes <- mapM (convertTypeNoDeclInternal tcs Nothing ds) types
   = do
       ts <- ctypes
-      unknown <- TU.unknownTypeClass
-      tcsTuples <- tcs `forM` \tc ->
-        [ (qn, tc)
-        | qn <- TU.lookupQNameId $ T.tclass_name tc
-        ]
-      let searchF (Just (T.QualifiedName _ n)) = n==name
-          searchF _                            = False
-      let tc = fromMaybe unknown $ snd <$> find (searchF . fst) tcsTuples
+      let tcsTuples = (\tc -> (T.tclass_name tc, tc)) <$> tcs
+      let searchF (T.QualifiedName _ n) = n==name
+          searchF _                     = False
+      let tc = fromMaybe TU.unknownTypeClass
+             $ snd <$> find (searchF . fst) tcsTuples
       return $ T.HsConstraint tc ts
 convertConstraint tcs _ ds (ClassA q@(Qual {}) types)
   | ctypes <- mapM (convertTypeNoDeclInternal tcs Nothing ds) types
   , name <- convertQName Nothing ds q
   = do
       ts <- ctypes
-      unknown <- TU.unknownTypeClass
-      nameId <- TU.getOrCreateQNameId name
       return $ T.HsConstraint
-                 ( fromMaybe unknown
+                 ( fromMaybe TU.unknownTypeClass
                  $ find (\(T.HsTypeClass n _ _)
-                         -> n==nameId) tcs
+                         -> n==name) tcs
                  )
                  ts
 convertConstraint _ Nothing _ cls@ClassA{} = error $ "convertConstraint" ++ show cls
@@ -243,22 +231,15 @@ tyVarTransform :: MonadMultiState ConvData m
 tyVarTransform (KindedVar _ _) = left $ "KindedVar"
 tyVarTransform (UnkindedVar n) = getVar n
 
-findInvalidNames :: ( MonadMultiState T.QNameIndex m
-                    , Applicative m
-                    )
-                 => [T.QualifiedName]
-                 -> T.HsType
-                 -> m [T.QualifiedName]
-findInvalidNames _ T.TypeVar {}          = return []
-findInvalidNames _ T.TypeConstant {}     = return []
-findInvalidNames valids (T.TypeCons qid) = do
-  (T.QNameIndex _ _ indexB) <- mGet
-  case M.lookup qid indexB of
-    Just n@(T.QualifiedName _ _) -> return [ n | n `notElem` valids ]
-    _                            -> return []
+findInvalidNames :: [T.QualifiedName] -> T.HsType -> [T.QualifiedName]
+findInvalidNames _ T.TypeVar {}          = []
+findInvalidNames _ T.TypeConstant {}     = []
+findInvalidNames valids (T.TypeCons qn) = case qn of
+    n@(T.QualifiedName _ _) -> [ n | n `notElem` valids ]
+    _                       -> []
 findInvalidNames valids (T.TypeArrow t1 t2)   =
-  (++) <$> findInvalidNames valids t1 <*> findInvalidNames valids t2
+  findInvalidNames valids t1 ++ findInvalidNames valids t2
 findInvalidNames valids (T.TypeApp t1 t2)     =
-  (++) <$> findInvalidNames valids t1 <*> findInvalidNames valids t2
+  findInvalidNames valids t1 ++ findInvalidNames valids t2
 findInvalidNames valids (T.TypeForall _ _ t1) =
   findInvalidNames valids t1
