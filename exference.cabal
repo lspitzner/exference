@@ -55,6 +55,7 @@ data-files:
 flag build-executables
   description: build the executables, not just the library
   default: True
+  manual: True
 
 Flag linkNodes
   description: nodes keep a reference to the precessor node, allowing returning
