@@ -1,0 +1,81 @@
+% Exference-LE.tex
+\begin{hcarentry}{Exference}
+\report{Lennart Spitzner}%11/16
+\status{actively maintained}
+\makeheader
+
+Exference is a tool aimed at supporting developers writing Haskell code by
+generating expressions from a type, e.g.\\
+{\small
+Input:
+%
+\begin{verbatim}
+  (Show b) => (a -> b) -> [a] -> [String]
+\end{verbatim}
+%
+Output:
+%
+\begin{verbatim}
+  \ f1 -> fmap (show . f1)
+\end{verbatim}
+%
+Input:
+%
+\begin{verbatim}
+     (Monad m, Monad n)
+  => ([a] -> b -> c) -> m [n a] -> m (n b)
+  -> m (n c)
+\end{verbatim}
+%
+Output:
+%
+\begin{verbatim}
+  \ f1 -> liftA2 (\ hs i ->
+    liftA2 (\ n os -> f1 os n) i (sequenceA hs))
+\end{verbatim}
+}
+
+The algorithm does a proof search specialized to the Haskell type system.
+In contrast to Djinn, the well known tool with the same general purpose,
+Exference supports a larger subset of the Haskell type system - most
+prominently type classes. The cost of this feature is that Exference makes
+no promise regarding termination (because the problem becomes an undecidable
+one; a draft of a proof can be found in the pdf below). Of course the
+implementation applies a time-out.
+
+There are two primary use-cases for Exference:
+
+\begin{compactitem}
+\item
+  In combination with typed holes: The programmer can insert typed holes
+  into the source code, retrieve the expected type from ghc and forward
+  this type to Exference. If a solution, i.e.~an expression, is found
+  and if it has the right semantics, it can be used to fill the typed
+  hole.
+\item
+  As a type-class-aware search engine. For example, Exference is able to
+  answer queries such as |Int -> Float|, where the common search engines like
+  hoogle or hayoo are not of much use.
+\end{compactitem}
+
+The current implementation is functional and works well. The most
+important aspect that still could use improvement is the performance, but it
+would probably take a slightly improved approach for the core algorithm (and
+thus a major rewrite of this project) to make significant gains.
+
+The project is actively maintained; apart from occasional bug-fixing and
+general maintenance/refactoring there are no major new features planned
+currently.
+
+Try it out by on IRC(freenode): exferenceBot is in \#haskell and \#exference.
+
+\FurtherReading
+{\small
+\begin{compactitem}
+  \item
+    \url{https://github.com/lspitzner/exference}
+  \item
+    \url{https://github.com/lspitzner/exference/raw/master/exference.pdf}
+\end{compactitem}
+}
+\end{hcarentry}
