@@ -179,16 +179,14 @@ unifyRightOffset ut1 (HsTypeOffset ut2 offset) = unify' $ UniState1 [TypeEq ut1 
     unify' (UniState1 [] x) = Just x
     unify' (UniState1 (x:xr) ss) = uniStep x >>= (
       \r -> unify' $ case r of
-        Left (substInternal, Subst substExtI substExtT) ->
-          let f = applySubst substInternal
-          in UniState1
-            [ TypeEq a (f b) | TypeEq a b <- xr]
-            (IntMap.insert substExtI substExtT $ IntMap.map f ss)
+        Left (substInternal, Subst substExtI substExtT) -> UniState1
+          [ TypeEq a (applySubst substInternal b) | TypeEq a b <- xr]
+          (IntMap.insert substExtI substExtT ss)
         Right eqs -> UniState1 (eqs++xr) ss
       )
     uniStep :: TypeEq -> Maybe (Either (Subst, Subst) [TypeEq])
     uniStep (TypeEq (TypeVar i1) (TypeVar i2)) | i1==offset+i2 = Just (Right [])
-    uniStep (TypeEq (t1) (TypeVar i2)) = if occursIn i2 t1
+    uniStep (TypeEq (t1) (TypeVar i2)) = if occursIn (i2+offset) t1
       then Nothing
       else Just $ Left (Subst i2 t1, Subst (i2+offset) t1)
     uniStep (TypeEq (TypeVar _) _) = Nothing

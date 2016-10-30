@@ -49,7 +49,7 @@ import Control.Arrow ( first, second, (***) )
 import Control.Monad ( when, unless, guard, mzero, replicateM
                      , replicateM_, forM, join, forM_, liftM )
 import Control.Applicative ( (<$>), (<*>), (*>), (<|>), empty )
-import Data.List ( partition, sortBy, groupBy, unfoldr )
+import Data.List ( partition, sortBy, groupBy, unfoldr, intercalate )
 import Data.Ord ( comparing )
 import Data.Function ( on )
 import Data.Functor ( ($>) )
@@ -196,23 +196,24 @@ findExpressions (ExferenceInput rawType
     (Q.singleton 0.0 rootSearchNode)
   t = forallify rawType
   rootSearchNode = SearchNode
-    (Seq.singleton (VarBinding 0 t, 0))
-    []
-    initialScopes
-    IntMap.empty
-    (V.fromList funcs) -- TODO: lift this further up?
-    deconss'
-    (mkQueryClassEnv sClassEnv [])
-    (ExpHole 0)
-    1 -- TODO: change to 0?
-    (largestId t)
-    0
-    0.0
+    { _searchNodeGoals           = (Seq.singleton (VarBinding 0 t, 0))
+    , _searchNodeConstraintGoals = []
+    , _searchNodeProvidedScopes  = initialScopes
+    , _searchNodeVarUses         = IntMap.empty
+    , _searchNodeFunctions       = (V.fromList funcs) -- TODO: lift this further up?
+    , _searchNodeDeconss         = deconss'
+    , _searchNodeQueryClassEnv   = (mkQueryClassEnv sClassEnv [])
+    , _searchNodeExpression      = (ExpHole 0)
+    , _searchNodeNextVarId       = 1 -- TODO: change to 0?
+    , _searchNodeMaxTVarId       = (largestId t)
+    , _searchNodeNextNVarId      = 0
+    , _searchNodeDepth           = 0.0
 #if LINK_NODES
-    Nothing
+    , _searchNodePreviousNode    = Nothing
 #endif
-    ""
-    Nothing
+    , _searchNodeLastStepReason  = ""
+    , _searchNodeLastStepBinding = Nothing
+    }
 #if BUILD_SEARCH_TREE
   initNodeName = unsafePerformIO $ makeStableName $! rootSearchNode
 #endif
@@ -352,10 +353,13 @@ stateStep multiPM allowConstrs h = do
     id
       -- $ trace (showSearchNode' qNameIndex _s ++ " " ++ show (rateNode h _s))
       $ return ()
-    -- trace (unwords [ show (view  depth                     _s)
-    --                , show (views goals          rateGoals  _s)
-    --                , show (views providedScopes rateScopes _s)
-    --                , show (view  expression                _s))])
+    -- trace (unlines [ show (view  depth _s)
+    --                , show (view  goals _s)
+    --                , show (view  constraintGoals _s)
+    --                , show (view  providedScopes _s)
+    --                , showExpression (view  expression                _s)
+    --                , view lastStepReason _s
+    --                ]) $ return ()
 
   -- This paragraph is evil, and hopefully temporary. (Scoping issues make it necessary.)
   contxt <- use queryClassEnv
@@ -589,7 +593,14 @@ addScopePatternMatch multiPM goalType vid sid bindings = case bindings of
             mapFunc1 substs = do -- m
               vars <- replicateM (length matchRs) builderAllocVar
               varUses . singular (ix v) += 1
-              builderSetReason $ "pattern matching on " ++ showVar v
+              builderAppendReason $ "pattern matching on " ++ showVar v
+                ++ "\n" ++ intercalate "\n" 
+                  [ show bindings
+                  , show offset
+                  , show (matchParam, matchId, matchRs)
+                  , show (vtResult, matchParam, offset)
+                  , show unifyResult
+                  ]
               let newProvTypes = map (snd . applySubsts substs) resultTypes
                   newBinds = zipWith (\x y -> splitBinding (VarBinding x y))
                                      vars
@@ -624,7 +635,7 @@ addScopePatternMatch multiPM goalType vid sid bindings = case bindings of
                   maxTVarId %= max (maximum $ map largestId newProvTypes)
                 return ( (matchId, zip vars newProvTypes, ExpHole newVid)
                        , (newVid, reverse newBinds, newSid) )
-              builderSetReason $ "pattern matching on " ++ showVar v
+              builderAppendReason $ "pattern matching on " ++ showVar v
               expression %= fillExprHole vid (ExpCaseMatch expVar $ map fst mData)
               liftM concat $ map snd mData `forM` \(newVid, newBinds, newSid) ->
                 addScopePatternMatch multiPM goalType newVid newSid (newBinds++bindingRest)

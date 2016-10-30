@@ -81,13 +81,18 @@ import Data.HList.ContainsType
 
 import Debug.Hood.Observe
 
+import Data.List ( intercalate )
+
 
 
 data VarBinding = VarBinding {-# UNPACK #-} !TVarId HsType
- deriving Generic
+ deriving (Generic)
 type VarPBinding = (TVarId, HsType, [HsType], [TVarId], [HsConstraint])
                 -- var, result, params, forallTypes, constraints
 
+
+instance Show VarBinding where
+  show (VarBinding vid ty) = showVar vid ++ " :-> " ++ show ty
 
 varBindingApplySubsts :: Substs -> VarBinding -> VarBinding
 varBindingApplySubsts substs (VarBinding v t) =
@@ -116,6 +121,11 @@ data Scope = Scope [VarPBinding] [ScopeId]
 data Scopes = Scopes ScopeId (IntMap.IntMap Scope)
   deriving Generic
               -- next id     scopes
+
+instance Show Scope where
+  show (Scope bindings sids) = "Scope " ++ show bindings ++ " " ++ show sids
+instance Show Scopes where
+  show (Scopes _sid intmap) = "Scopes\n" ++ intercalate ("\n") (fmap ("  " ++) $ fmap show $ IntMap.toAscList intmap)
 
 initialScopes :: Scopes
 initialScopes = Scopes 1 (IntMap.singleton 0 $ Scope [] [])

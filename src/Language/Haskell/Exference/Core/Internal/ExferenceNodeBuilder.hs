@@ -5,6 +5,7 @@ module Language.Haskell.Exference.Core.Internal.ExferenceNodeBuilder
   ( SearchNodeBuilder
   , modifyNodeBy
   , builderSetReason
+  , builderAppendReason
   , builderGetTVarOffset
   , builderAddScope
   , builderApplySubst
@@ -54,6 +55,10 @@ builderSetReason r = do
 #if LINK_NODES
   previousNode <~ liftM Just get
 #endif
+
+builderAppendReason :: MonadState SearchNode m => String -> m ()
+builderAppendReason r = do
+  lastStepReason %= (++ (", " ++ r))
 
 builderGetTVarOffset :: MonadState SearchNode m => m TVarId
 builderGetTVarOffset = liftM (+1) $ use maxTVarId
