@@ -79,6 +79,8 @@ import System.IO ( hSetBuffering, BufferMode(..), stdout, stderr )
 
 import Debug.Hood.Observe
 
+import Debug.Trace
+
 
 
 data Flag = Verbose Int
@@ -250,7 +252,7 @@ main = runO $ do
                             let hsE = convert qualification $ simplifyExpression e
                             lift $ putStrLn $ prettyPrint hsE
                             when (not $ null constrs) $ do
-                              let constrStrs = mapM (showHsConstraint tVarIndex)
+                              let constrStrs = map (showHsConstraint tVarIndex)
                                              $ S.toList
                                              $ S.fromList
                                              $ constrs
@@ -322,7 +324,7 @@ main = runO $ do
                             let hsE = convert qualification $ simplifyExpression e
                             lift $ putStrLn $ prettyPrint hsE
                             when (not $ null constrs) $ do
-                              let constrStrs = mapM (showHsConstraint tVarIndex)
+                              let constrStrs = map (showHsConstraint tVarIndex)
                                              $ S.toList
                                              $ S.fromList
                                              $ constrs
