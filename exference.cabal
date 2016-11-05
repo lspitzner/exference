@@ -111,6 +111,7 @@ Library
                    FlexibleContexts
                    ScopedTypeVariables
                    DeriveDataTypeable
+                   TemplateHaskell
   hs-source-dirs: src
   Build-Depends:
     base >=3 && <5,
@@ -192,3 +193,4 @@ Executable exference
               FlexibleContexts
               ScopedTypeVariables
               CPP
+              TemplateHaskell
