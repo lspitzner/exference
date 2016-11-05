@@ -136,7 +136,10 @@ Library
     safe,
     lens >= 4.12 && < 4.15,
     split,
-    multistate >= 0.6.2
+    multistate >= 0.6.2,
+
+    template-haskell <2.11.0.0
+    -- 2.11.0.0 causes problems on ghc-7.8.4.
 
 
 Executable exference
