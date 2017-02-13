@@ -17,15 +17,15 @@ Description:
   that they -so far- match a given input type. At each step we do the backwards
   step of the inference algorithm step. If you are lucky, this search
   yields one or more expressions.
-
+  .
   Djinn is a similar tool that guarantees to always terminate. But the
   cost of that property is that Djinn does not properly handle polymorphic
   queries - and those are the interesting ones, really :)
-
+  .
   Exference supports type classes, handles undeclared types well
   (Foo -> Foo yields id for unknown Foo), does _not_ check kinds,
   can pattern-match on newtypes, supports RankNTypes.
-
+  .
   Exference reads an environment of function types, data types, type classes
   and instances. The user can add to this environment, but keep in mind that
   each addition enlarges the search space.
@@ -78,7 +78,7 @@ data-files:
 
 source-repository head {
   type: git
-  location: git@github.com:lspitzner/multistate.git
+  location: git@github.com:lspitzner/exference.git
 }
 
 
