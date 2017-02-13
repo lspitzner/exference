@@ -19,7 +19,7 @@ import qualified Data.Map.Strict as M
 import qualified Data.IntMap.Strict as IntMap
 import Data.Maybe
 
-import Debug.Hood.Observe
+-- import Debug.Hood.Observe
 import Debug.Trace
 
 

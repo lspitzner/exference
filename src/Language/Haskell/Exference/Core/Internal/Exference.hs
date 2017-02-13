@@ -45,7 +45,7 @@ import System.Mem.StableName ( StableName, makeStableName )
 import System.IO.Unsafe ( unsafePerformIO )
 
 import Data.Maybe ( maybeToList, listToMaybe, fromMaybe, catMaybes, mapMaybe, isNothing )
-import Control.Arrow ( first, second, (***) )
+import Control.Arrow ( first, second, (***), (&&&) )
 import Control.Monad ( when, unless, guard, mzero, replicateM
                      , replicateM_, forM, join, forM_, liftM )
 import Control.Applicative ( (<$>), (<*>), (*>), (<|>), empty )
@@ -68,7 +68,7 @@ import qualified GHC.Conc.Sync
 import Data.Data ( Data )
 
 -- import Data.DeriveTH
-import Debug.Hood.Observe
+-- import Debug.Hood.Observe
 import Debug.Trace
 
 import Prelude hiding ( sum )
@@ -229,7 +229,7 @@ findExpressions (ExferenceInput rawType
     ) = ExferenceChunkElement
       newBindingUsages
 #if BUILD_SEARCH_TREE
-      buildSearchTree newSearchTreeBuilder initNodeName
+      (buildSearchTree newSearchTreeBuilder initNodeName)
 #endif
       [ (e, remainingConstraints, ExferenceStats n' d $ Q.size newNodes)
       | solution <- potentialSolutions
@@ -291,12 +291,15 @@ findExpressions (ExferenceInput rawType
     states %= Q.union (Q.fromList filteredNew)
 #if BUILD_SEARCH_TREE
     st %=
-      ((++) [ unsafePerformIO $ do
-          n1 <- makeStableName $! ns
-          n2 <- makeStableName $! s
-          return (n1,n2,view expression ns)
-        | ns<-rNodes] &&&
-      (:) (unsafePerformIO (makeStableName $! s)))
+      ( ((++) [ unsafePerformIO $ do
+               n1 <- makeStableName $! ns
+               n2 <- makeStableName $! s
+               return (n1,n2,view expression ns)
+             | ns<-rNodes
+             ])
+      ***
+        ((:) (unsafePerformIO (makeStableName $! s)))
+      )
 #endif
     worst %= minimum . (: map fst filteredNew)
     gets $ transformSolutions potentialSolutions

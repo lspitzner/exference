@@ -2,6 +2,33 @@ Name:          exference
 Version:       1.6.0.0
 Cabal-Version: >= 1.8
 Build-Type:    Simple
+license:       BSD3
+license-file:  LICENSE
+Maintainer:    Lennart Spitzner <lsp@informatik.uni-kiel.de>
+Author:        Lennart Spitzner
+Homepage:      https://github.com/lspitzner/exference
+Bug-reports:   https://github.com/lspitzner/exference/issues
+Stability:     stable
+Category:      Language
+Synopsis:      Tool to search/generate (haskell) expressions with a given type
+Description:
+  Type inference takes an expression and tells you its type. This process
+  can be inversed: We recursively create random expression trees while checking
+  that they -so far- match a given input type. At each step we do the backwards
+  step of the inference algorithm step. If you are lucky, this search
+  yields one or more expressions.
+
+  Djinn is a similar tool that guarantees to always terminate. But the
+  cost of that property is that Djinn does not properly handle polymorphic
+  queries - and those are the interesting ones, really :)
+
+  Exference supports type classes, handles undeclared types well
+  (Foo -> Foo yields id for unknown Foo), does _not_ check kinds,
+  can pattern-match on newtypes, supports RankNTypes.
+
+  Exference reads an environment of function types, data types, type classes
+  and instances. The user can add to this environment, but keep in mind that
+  each addition enlarges the search space.
 
 data-files:
   environment/all.ratings
@@ -49,6 +76,10 @@ data-files:
   environment/Void.hs
   environment/Word.hs
 
+source-repository head {
+  type: git
+  location: git@github.com:lspitzner/multistate.git
+}
 
 
 
@@ -61,23 +92,35 @@ Flag linkNodes
   description: nodes keep a reference to the precessor node, allowing returning
                the path thad lead to a solution.
   default: False
+  manual: True
 
 Flag buildSearchTree
   description: use dirty hacks to create the search tree that can be observed
                afterwards. needs link-nodes flag.
   default: False
+  manual: True
+
+Flag exference-dev
+  default: False
+  manual: True
 
 Library
   --ghc-options: -fllvm
   ghc-options: -O2
-               -j
                -Wall
-               -Werror
                -fno-warn-unused-imports
                -fno-warn-orphans
                -fno-spec-constr
-               -auto-all
-               -caf-all
+  if impl(ghc > 8.0) {
+    ghc-options: {
+      -fno-warn-redundant-constraints
+    }
+  }
+  if flag(exference-dev) {
+    ghc-options: -Werror
+                 -auto-all
+                 -caf-all
+  }
   If flag(linkNodes) || flag(buildSearchTree)
     cpp-options: -DLINK_NODES
   If flag(buildSearchTree)
@@ -114,32 +157,32 @@ Library
                    TemplateHaskell
   hs-source-dirs: src
   Build-Depends:
-    base >=3 && <5,
-    base-orphans >=0.5.1 && <0.6,
-    containers,
-    pretty >= 1.1,
-    deepseq >=1.4.1.1 && <1.5,
-    deepseq-generics >=0.1.1.2 && < 0.3,
-    unordered-containers >= 0.2.5 && < 0.3,
-    hashable >=1.2.4.0 && <1.3,
-    pqueue >=1.3.1 && < 1.4,
-    mmorph >= 1.0.4 && < 1.1,
-    transformers,
-    mtl,
-    vector,
-    either,
-    haskell-src-exts >=1.17.1 && <1.18,
-    hood,
-    process >=1.2.3.0 && <1.3,
-    parsec,
-    directory,
-    bifunctors,
-    safe,
-    lens >= 4.12 && < 4.15,
-    split,
-    multistate >= 0.6.2,
+    base                 >=4.7.0.2 && <5,
+    base-orphans         >=0.5.1   && <0.6,
+    containers           >=0.5.0.0 && <0.6,
+    pretty               >=1.1     && <1.2,
+    deepseq              >=1.3.0.1 && <1.5,
+    deepseq-generics     >=0.1.1.2 && < 0.3,
+    unordered-containers >=0.2.5   && < 0.3,
+    hashable             >=1.2.4.0 && <1.3,
+    pqueue               >=1.3.1   && < 1.4,
+    mmorph               >=1.0.4   && < 1.1,
+    transformers         >=0.3     && <0.6,
+    mtl                  >=2.1     && <2.3,
+    vector               >=0.11    && <0.13.0.0,
+    either               >=4.4     && <4.5,
+    haskell-src-exts     >=1.17.1  && <1.18,
+    hood                 >=0.3     && <0.4,
+    process              >=1.2.3.0 && <1.5,
+    parsec               >=3.1.11  && <3.2,
+    directory            >=1.2     && <1.3,
+    bifunctors           >=5.4.1   && <5.5,
+    safe                 >=0.3.10  && <0.4,
+    lens                 >=4.12    && <4.15,
+    split                >=0.2.3.1 && <0.3,
+    multistate           >=0.6.2   && <0.8,
 
-    template-haskell <2.11.0.0
+    template-haskell     >=2.8.0.0 && <2.12.0.0
     -- 2.11.0.0 causes problems on ghc-7.8.4.
 
 
@@ -169,16 +212,22 @@ Executable exference
   hs-source-dirs: src-exference
   ghc-options: -rtsopts
                -O2
-               -j
                -Wall
-               -Werror
                -fno-warn-unused-imports
                -fno-warn-orphans
                -threaded
                -fno-spec-constr
-               -auto-all
-               -caf-all
                -- -fllvm
+  if impl(ghc > 8.0) {
+    ghc-options: {
+      -fno-warn-redundant-constraints
+    }
+  }
+  if flag(exference-dev) {
+    ghc-options: -Werror
+                 -auto-all
+                 -caf-all
+  }
   If flag(buildSearchTree) {
     ghc-options:
                -with-rtsopts "-H4G -M6G -N"

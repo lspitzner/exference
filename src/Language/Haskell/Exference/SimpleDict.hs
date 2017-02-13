@@ -29,7 +29,7 @@ import qualified Data.IntMap.Strict as IntMap
 
 import Control.Arrow ( second )
 
-import Debug.Hood.Observe
+-- import Debug.Hood.Observe
 
 
 

@@ -43,7 +43,7 @@ import Control.Monad.Trans.MultiRWS
 
 import Control.Lens ( ala )
 
-import Debug.Hood.Observe
+-- import Debug.Hood.Observe
 import Debug.Trace
 
 

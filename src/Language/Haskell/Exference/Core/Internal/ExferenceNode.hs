@@ -79,7 +79,7 @@ import Control.Monad.Trans.MultiRWS
 import Control.Monad.Trans.MultiState ( runMultiStateTNil )
 import Data.HList.ContainsType
 
-import Debug.Hood.Observe
+-- import Debug.Hood.Observe
 
 import Data.List ( intercalate )
 
@@ -332,12 +332,9 @@ showSearchNode
 
 showNodeDevelopment :: SearchNode -> String
 #if LINK_NODES
-showNodeDevelopment s = case previousNode s of
+showNodeDevelopment s = case _searchNodePreviousNode s of
   Nothing -> showSearchNode s
-  Just p  -> do
-    pStr <- showNodeDevelopment p
-    cStr <- showSearchNode s
-    return $ pStr ++ "\n" ++ cStr
+  Just p  -> showNodeDevelopment p ++ "\n" ++ showSearchNode s
 #else
 showNodeDevelopment _ = "[showNodeDevelopment: exference-core was not compiled with -fLinkNodes]"
 #endif

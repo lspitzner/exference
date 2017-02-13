@@ -66,7 +66,7 @@ import Language.Haskell.Exts.Extension ( Language (..)
 
 -- import Data.PPrint
 
-import Debug.Hood.Observe
+-- import Debug.Hood.Observe
 import Debug.Trace
 
 

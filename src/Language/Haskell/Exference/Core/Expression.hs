@@ -30,7 +30,7 @@ import GHC.Generics
 import Control.Monad.Trans.MultiRWS
 import Data.HList.ContainsType
 
-import Debug.Hood.Observe
+-- import Debug.Hood.Observe
 import Data.Map ( Map )
 import qualified Data.Map as M
 
