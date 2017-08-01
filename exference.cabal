@@ -4,7 +4,8 @@ Cabal-Version: >= 1.8
 Build-Type:    Simple
 license:       BSD3
 license-file:  LICENSE
-Maintainer:    Lennart Spitzner <lsp@informatik.uni-kiel.de>
+Maintainer:    Lennart Spitzner <hexagoxel@hexagoxel.de>
+Copyright:     Copyright (C) 2014-2017 Lennart Spitzner
 Author:        Lennart Spitzner
 Homepage:      https://github.com/lspitzner/exference
 Bug-reports:   https://github.com/lspitzner/exference/issues
